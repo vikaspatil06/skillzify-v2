@@ -1,0 +1,1 @@
+{"dependencies":{"express":"^4.22.3"},"description":"Skillzify v2 – advanced student learning website with AI compiler (developer-side AI backend)","engines":{"node":">=18"},"main":"server.js","name":"skillzify-v2","scripts":{"start":"node server.js"},"version":"2.1.0"}

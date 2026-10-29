@@ -71,16 +71,16 @@
               <button class="btn btn-sm btn-ghost" id="explain-code-btn">Explain my code</button>
             </div>
             <div class="ai-box" id="ai-output">
-              <p class="hint">Run code with an error and click <strong>Explain last error</strong> — the built-in explainer knows 12 common Python error patterns. Add an API key below for deeper AI explanations.</p>
+              <p class="hint">Run code with an error and click <strong>Explain last error</strong> — the built-in explainer knows 12 common Python error patterns, and the backend AI goes deeper automatically.</p>
             </div>
-            <details class="settings" open>
-              <summary>⚙️ AI setup — make explanations smart</summary>
-              <p class="hint"><strong>Step 1.</strong> Pick a provider (Gemini is free):</p>
+            <details class="settings">
+              <summary>⚙️ AI settings (optional)</summary>
+              <p class="hint">AI explanations run through the site's backend automatically — nothing to set up. The fields below are an optional fallback: use your own key if the backend is ever unreachable.</p>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
                 <button class="btn btn-sm" id="ai-preset-gemini" type="button">✨ Gemini (free)</button>
                 <button class="btn btn-sm btn-ghost" id="ai-preset-openai" type="button">OpenAI</button>
               </div>
-              <p class="hint"><strong>Step 2.</strong> <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free Gemini API key →</a> (sign in with Google → "Create API key"). <strong>Step 3.</strong> Paste it below, hit <strong>Save key</strong>, then <strong>Test key</strong>.</p>
+              <p class="hint"><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free Gemini API key →</a>, paste it below, hit <strong>Save key</strong>, then <strong>Test key</strong>.</p>
               <label class="field-lbl" for="ai-key">API key</label>
               <input type="password" id="ai-key" placeholder="AIza..." autocomplete="off">
               <label class="field-lbl" for="ai-base">Base URL</label>

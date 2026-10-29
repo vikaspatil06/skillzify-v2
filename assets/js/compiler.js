@@ -242,10 +242,10 @@
     if (/try:/.test(code)) feats.push("handles errors");
     renderAiBox("<h4>📝 What your code does</h4><p>Your program has <strong>" + lines +
       "</strong> line(s) of code" + (feats.length ? " and " + feats.join(", ") + "." : ".") +
-      '</p><p class="hint">Add an API key in Settings for a detailed AI walkthrough.</p>');
+      '</p><p class="hint">The backend AI can give a deeper walkthrough automatically.</p>');
   }
 
-  /* ---------- Remote AI (OpenAI-compatible) ---------- */
+  /* ---------- Remote AI: backend first, own key as fallback ---------- */
   function normBase(b) {
     b = (b || "").replace(/\/+$/, "");
     // Forgive the common mistake of pasting the bare Google endpoint:
@@ -253,7 +253,29 @@
     return b;
   }
   function aiExplainRemote(code, errText) {
+    renderAiBox('<p class="hint">🤖 Asking AI…</p>');
+    fetch("api/explain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: code, error: errText || "" })
+    }).then(function (r) {
+      if (!r.ok) throw 0;
+      return r.json();
+    }).then(function (data) {
+      if (!data.explanation) throw 0;
+      renderAiBox("<h4>🤖 AI explanation</h4><p>" +
+        window.Skillzify.esc(data.explanation).replace(/\n/g, "<br>") + "</p>");
+    }).catch(function () {
+      aiExplainViaKey(code, errText); // no backend / not configured → own key → offline
+    });
+  }
+  function aiExplainViaKey(code, errText) {
     var key = window.Skillzify.storeGet(AI_KEY, "");
+    if (!key) {
+      renderAiBox((errText ? heuristicExplain(errText, code) : "") +
+        '<p class="hint">💡 Tip: the built-in explainer handled this one. For deeper AI explanations the site owner can enable the backend, or add your own key below.</p>');
+      return;
+    }
     var base = normBase(window.Skillzify.storeGet(AI_BASE_KEY, "") || "https://generativelanguage.googleapis.com/v1beta/openai");
     var model = window.Skillzify.storeGet(AI_MODEL_KEY, "") || "gemini-3.8-flash";
     var prompt = errText

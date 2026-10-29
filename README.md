@@ -33,6 +33,26 @@ npx serve .
 
 > The compiler downloads the Pyodide runtime (~10 MB) from a CDN on first use, so an internet connection is needed the first time you press **Run**.
 
+### 🤖 Backend (developer-side AI)
+
+"Explain last error" / "Explain my code" call `POST /api/explain` on the same
+origin first. That endpoint lives in `server.js` and uses the **developer's**
+Gemini key from the `GEMINI_API_KEY` environment variable — visitors never
+need their own key, and the key never reaches the browser or the repo.
+
+```bash
+cd skillzify-v2
+npm install
+GEMINI_API_KEY=your-key-here npm start
+# then open http://localhost:8080
+```
+
+Without `GEMINI_API_KEY`, the site still works: the frontend falls back to a
+visitor's own optional key, then to the offline explainer. To deploy free,
+push to [Render](https://render.com) as a Node web service (`npm start`) and
+set `GEMINI_API_KEY` in its environment variables. `.env` is gitignored —
+never commit a real key (the repo is public).
+
 ## 📁 Project structure
 
 ```
