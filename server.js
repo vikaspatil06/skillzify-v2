@@ -58,7 +58,7 @@ app.post("/api/explain", async (req, res) => {
       code + "\n\nERROR:\n" + errText
     : "Explain this Python code using the walkthrough structure above.\n\nCODE:\n" + code;
 
-  async function callGemini(prompt, attempt) {
+  async function callGemini(prompt, attempt, maxTokens) {
     const r = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(MODEL) + ":generateContent",
       {
@@ -67,26 +67,42 @@ app.post("/api/explain", async (req, res) => {
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: tutorStyle }] },
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 600, temperature: 0.4 },
+          generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 },
         }),
       }
     );
     // Google sometimes 503s under load ("try again later") — one retry helps.
     if ((r.status === 503 || r.status === 429) && attempt < 1) {
       await new Promise((ok) => setTimeout(ok, 2500));
-      return callGemini(prompt, attempt + 1);
+      return callGemini(prompt, attempt + 1, maxTokens);
     }
     return r;
   }
 
   try {
-    const r = await callGemini(prompt, 0);
+    let r = await callGemini(prompt, 0, 1500);
     if (!r.ok) return res.status(502).json({ error: "AI provider error (HTTP " + r.status + ")." });
-    const data = await r.json();
-    const parts =
-      data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
+    let data = await r.json();
+    let cand = data.candidates && data.candidates[0];
+    let finishReason = cand && cand.finishReason;
+    console.log("[explain] finishReason:", finishReason || "(none)");
+    // If the model stopped because it ran out of output budget, retry once with more room.
+    if (finishReason === "MAX_TOKENS") {
+      console.log("[explain] hit token budget — retrying with a larger one");
+      r = await callGemini(prompt, 0, 4000);
+      if (!r.ok) return res.status(502).json({ error: "AI provider error (HTTP " + r.status + ")." });
+      data = await r.json();
+      cand = data.candidates && data.candidates[0];
+      finishReason = cand && cand.finishReason;
+      console.log("[explain] retry finishReason:", finishReason || "(none)");
+    }
+    const parts = cand && cand.content && cand.content.parts;
     const text = parts ? parts.map((p) => p.text || "").join("") : "";
-    res.json({ explanation: text || "(empty response)" });
+    if (!text.trim()) {
+      console.log("[explain] empty model text; finishReason was:", finishReason || "(none)");
+      return res.status(502).json({ error: "AI returned an empty explanation (finish: " + (finishReason || "unknown") + ")." });
+    }
+    res.json({ explanation: text });
   } catch (e) {
     res.status(502).json({ error: "Could not reach the AI provider." });
   }
