@@ -246,10 +246,16 @@
   }
 
   /* ---------- Remote AI (OpenAI-compatible) ---------- */
+  function normBase(b) {
+    b = (b || "").replace(/\/+$/, "");
+    // Forgive the common mistake of pasting the bare Google endpoint:
+    if (/^https:\/\/generativelanguage\.googleapis\.com$/i.test(b)) b += "/v1beta/openai";
+    return b;
+  }
   function aiExplainRemote(code, errText) {
     var key = window.Skillzify.storeGet(AI_KEY, "");
-    var base = (window.Skillzify.storeGet(AI_BASE_KEY, "") || "https://api.openai.com/v1").replace(/\/+$/, "");
-    var model = window.Skillzify.storeGet(AI_MODEL_KEY, "") || "gpt-4o-mini";
+    var base = normBase(window.Skillzify.storeGet(AI_BASE_KEY, "") || "https://generativelanguage.googleapis.com/v1beta/openai");
+    var model = window.Skillzify.storeGet(AI_MODEL_KEY, "") || "gemini-3.8-flash";
     var prompt = errText
       ? "A student ran this Python code and got this error. Explain the error in simple terms and how to fix it:\n\nCODE:\n" + code + "\n\nERROR:\n" + errText
       : "Explain this Python code to a beginner student, briefly, concept by concept:\n\n" + code;
@@ -296,7 +302,7 @@
     var presetGemini = document.getElementById("ai-preset-gemini");
     if (presetGemini) presetGemini.addEventListener("click", function () {
       baseEl.value = "https://generativelanguage.googleapis.com/v1beta/openai";
-      modelEl.value = "gemini-2.0-flash";
+      modelEl.value = "gemini-3.8-flash";
       setStatus("✨ Gemini preset loaded — now paste your free API key below.");
     });
     var presetOpenai = document.getElementById("ai-preset-openai");
@@ -315,8 +321,8 @@
     var testBtn = document.getElementById("ai-test");
     if (testBtn) testBtn.addEventListener("click", function () {
       var key = keyEl.value.trim();
-      var base = (baseEl.value.trim() || "https://generativelanguage.googleapis.com/v1beta/openai").replace(/\/+$/, "");
-      var model = modelEl.value.trim() || "gemini-2.0-flash";
+      var base = normBase(baseEl.value.trim() || "https://generativelanguage.googleapis.com/v1beta/openai");
+      var model = modelEl.value.trim() || "gemini-3.8-flash";
       if (!key) { setStatus("⚠️ Paste your API key first."); return; }
       setStatus("🔄 Testing your key…");
       fetch(base + "/chat/completions", {
