@@ -40,10 +40,18 @@ app.post("/api/explain", async (req, res) => {
   const errText = String((req.body && req.body.error) || "").slice(0, 2000);
   if (!code.trim() && !errText.trim()) return res.status(400).json({ error: "Nothing to explain." });
 
+  const tutorStyle =
+    "You are a friendly Python tutor for a beginner student. " +
+    "Format your answer exactly like this:\n" +
+    "1. One line starting with '🎯 In short: ' stating what the program does.\n" +
+    "2. A '🔍 Walkthrough:' section explaining the important parts step by step " +
+    "(group repetitive lines; explain WHY each part exists, not just WHAT it says).\n" +
+    "3. A '💡 Key concepts:' section listing each Python idea used with one short line each.\n" +
+    "Keep the whole answer concise. Use short bullet points.";
   const prompt = errText
-    ? "A student ran this Python code and got this error. Explain the error in simple terms and how to fix it:\n\nCODE:\n" +
+    ? "A student ran this Python code and got this error. First explain the error in simple terms and exactly how to fix it, then give the walkthrough structure above for the code.\n\nCODE:\n" +
       code + "\n\nERROR:\n" + errText
-    : "Explain this Python code to a beginner student, briefly, concept by concept:\n\n" + code;
+    : "Explain this Python code using the walkthrough structure above.\n\nCODE:\n" + code;
 
   async function callGemini(prompt, attempt) {
     const r = await fetch(
@@ -52,13 +60,7 @@ app.post("/api/explain", async (req, res) => {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
         body: JSON.stringify({
-          systemInstruction: {
-            parts: [
-              {
-                text: "You are a friendly Python tutor for students. Keep answers concise, use simple language, and format with short bullet points.",
-              },
-            ],
-          },
+          systemInstruction: { parts: [{ text: tutorStyle }] },
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { maxOutputTokens: 600, temperature: 0.4 },
         }),

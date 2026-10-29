@@ -222,16 +222,10 @@
 
   function explainLastError() {
     if (!lastError) { renderAiBox('<p class="hint">Run some code first — when it errors, I\'ll explain it here.</p>'); return; }
-    renderAiBox(heuristicExplain(lastError, lastCode) +
-      '<p class="hint">💡 Tip: add an OpenAI-compatible API key in Settings below for deeper, code-aware explanations.</p>');
+    aiExplainRemote(lastCode, lastError); // backend AI → own key → offline heuristic
   }
 
-  function explainCode() {
-    var code = editor ? editor.getValue() : "";
-    if (!code.trim()) { renderAiBox('<p class="hint">Write some code first, then ask for an explanation.</p>'); return; }
-    var key = window.Skillzify.storeGet(AI_KEY, "");
-    if (key) { aiExplainRemote(code, null); return; }
-    // Offline summary
+  function offlineCodeSummary(code) {
     var lines = code.split("\n").filter(function (l) { return l.trim() && !l.trim().startsWith("#"); }).length;
     var feats = [];
     if (/def /.test(code)) feats.push("defines function(s)");
@@ -240,9 +234,19 @@
     if (/import /.test(code)) feats.push("imports modules");
     if (/input\(/.test(code)) feats.push("reads user input");
     if (/try:/.test(code)) feats.push("handles errors");
-    renderAiBox("<h4>📝 What your code does</h4><p>Your program has <strong>" + lines +
+    return "<h4>📝 What your code does</h4><p>Your program has <strong>" + lines +
       "</strong> line(s) of code" + (feats.length ? " and " + feats.join(", ") + "." : ".") +
-      '</p><p class="hint">The backend AI can give a deeper walkthrough automatically.</p>');
+      '</p><p class="hint">Start the backend (or add your own key in Settings) for a full AI walkthrough.</p>';
+  }
+
+  function offlineExplain(code, errText) {
+    return errText ? heuristicExplain(errText, code) : offlineCodeSummary(code);
+  }
+
+  function explainCode() {
+    var code = editor ? editor.getValue() : "";
+    if (!code.trim()) { renderAiBox('<p class="hint">Write some code first, then ask for an explanation.</p>'); return; }
+    aiExplainRemote(code, null); // backend AI → own key → offline summary
   }
 
   /* ---------- Remote AI: backend first, own key as fallback ---------- */
@@ -271,11 +275,7 @@
   }
   function aiExplainViaKey(code, errText) {
     var key = window.Skillzify.storeGet(AI_KEY, "");
-    if (!key) {
-      renderAiBox((errText ? heuristicExplain(errText, code) : "") +
-        '<p class="hint">💡 Tip: the built-in explainer handled this one. For deeper AI explanations the site owner can enable the backend, or add your own key below.</p>');
-      return;
-    }
+    if (!key) { renderAiBox(offlineExplain(code, errText)); return; }
     var base = normBase(window.Skillzify.storeGet(AI_BASE_KEY, "") || "https://generativelanguage.googleapis.com/v1beta/openai");
     var model = window.Skillzify.storeGet(AI_MODEL_KEY, "") || "gemini-3.8-flash";
     var prompt = errText
@@ -288,7 +288,7 @@
       body: JSON.stringify({
         model: model,
         messages: [
-          { role: "system", content: "You are a friendly Python tutor for students. Keep answers concise, use simple language, and format with short bullet points." },
+          { role: "system", content: "You are a friendly Python tutor for a beginner student. Format every answer like this: 1. One line starting with 'In short:' stating what the program does. 2. A Walkthrough section explaining the important parts step by step (group repetitive lines; explain WHY each part exists). 3. A Key concepts section listing each Python idea used with one short line each. Keep it concise, use short bullet points." },
           { role: "user", content: prompt }
         ],
         max_tokens: 600,
@@ -424,11 +424,7 @@
       printLine("Console cleared.", "dim");
     });
     document.getElementById("explain-error-btn").addEventListener("click", explainLastError);
-    document.getElementById("explain-code-btn").addEventListener("click", function () {
-      var key = window.Skillzify.storeGet(AI_KEY, "");
-      if (key) aiExplainRemote(editor ? editor.getValue() : "", lastError || null);
-      else explainCode();
-    });
+    document.getElementById("explain-code-btn").addEventListener("click", explainCode);
 
     initSettings();
     loadPyodideRuntime();
