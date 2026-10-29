@@ -285,20 +285,64 @@
 
   /* ---------- Settings ---------- */
   function initSettings() {
-    document.getElementById("ai-key").value = window.Skillzify.storeGet(AI_KEY, "");
-    document.getElementById("ai-base").value = window.Skillzify.storeGet(AI_BASE_KEY, "");
-    document.getElementById("ai-model").value = window.Skillzify.storeGet(AI_MODEL_KEY, "");
+    var keyEl = document.getElementById("ai-key");
+    var baseEl = document.getElementById("ai-base");
+    var modelEl = document.getElementById("ai-model");
+    var statusEl = document.getElementById("ai-status");
+    keyEl.value = window.Skillzify.storeGet(AI_KEY, "");
+    baseEl.value = window.Skillzify.storeGet(AI_BASE_KEY, "");
+    modelEl.value = window.Skillzify.storeGet(AI_MODEL_KEY, "");
+    function setStatus(msg) { if (statusEl) statusEl.textContent = msg; }
+    var presetGemini = document.getElementById("ai-preset-gemini");
+    if (presetGemini) presetGemini.addEventListener("click", function () {
+      baseEl.value = "https://generativelanguage.googleapis.com/v1beta/openai";
+      modelEl.value = "gemini-2.0-flash";
+      setStatus("✨ Gemini preset loaded — now paste your free API key below.");
+    });
+    var presetOpenai = document.getElementById("ai-preset-openai");
+    if (presetOpenai) presetOpenai.addEventListener("click", function () {
+      baseEl.value = "https://api.openai.com/v1";
+      modelEl.value = "gpt-4o-mini";
+      setStatus("OpenAI preset loaded — paste your API key below.");
+    });
     document.getElementById("ai-save").addEventListener("click", function () {
-      window.Skillzify.storeSet(AI_KEY, document.getElementById("ai-key").value.trim());
-      window.Skillzify.storeSet(AI_BASE_KEY, document.getElementById("ai-base").value.trim());
-      window.Skillzify.storeSet(AI_MODEL_KEY, document.getElementById("ai-model").value.trim());
+      window.Skillzify.storeSet(AI_KEY, keyEl.value.trim());
+      window.Skillzify.storeSet(AI_BASE_KEY, baseEl.value.trim());
+      window.Skillzify.storeSet(AI_MODEL_KEY, modelEl.value.trim());
+      setStatus("🔑 Saved. Hit “Test key” to verify it works.");
       window.Skillzify.toast("AI settings saved in this browser 🔑", "success");
+    });
+    var testBtn = document.getElementById("ai-test");
+    if (testBtn) testBtn.addEventListener("click", function () {
+      var key = keyEl.value.trim();
+      var base = (baseEl.value.trim() || "https://generativelanguage.googleapis.com/v1beta/openai").replace(/\/+$/, "");
+      var model = modelEl.value.trim() || "gemini-2.0-flash";
+      if (!key) { setStatus("⚠️ Paste your API key first."); return; }
+      setStatus("🔄 Testing your key…");
+      fetch(base + "/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+        body: JSON.stringify({
+          model: model,
+          messages: [{ role: "user", content: "Reply with exactly: OK" }],
+          max_tokens: 10
+        })
+      }).then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status + " — check the key, base URL and model, then try again.");
+        return r.json();
+      }).then(function () {
+        setStatus("✅ Key works! “Explain last error” and “Explain my code” are now fully smart.");
+        window.Skillzify.toast("API key verified ✅", "success");
+      }).catch(function (err) {
+        setStatus("❌ " + err.message);
+      });
     });
     document.getElementById("ai-clear").addEventListener("click", function () {
       ["ai-key", "ai-base", "ai-model"].forEach(function (id) { document.getElementById(id).value = ""; });
       window.Skillzify.storeSet(AI_KEY, "");
       window.Skillzify.storeSet(AI_BASE_KEY, "");
       window.Skillzify.storeSet(AI_MODEL_KEY, "");
+      setStatus("");
       window.Skillzify.toast("API key removed.", "success");
     });
   }
