@@ -439,11 +439,58 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
   * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
 
-/* ---------- Responsive ---------- */
+/* ============================================================
+   Mobile usability
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; }
+body { overflow-x: clip; } /* safety net: never allow sideways scrolling */
+button, a, .quiz-opt, .quiz-opt *, .node, .track-tab, .auth-tabs button {
+  touch-action: manipulation; /* remove tap delay */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent iOS Safari auto-zoom when tapping inputs (needs >= 16px) */
+@media (max-width: 1024px) {
+  select, input[type="text"], input[type="email"], input[type="password"], textarea { font-size: 16px; }
+  .CodeMirror { font-size: 16px; }
+}
+
 @media (max-width: 720px) {
-  .lm-panel { width: 100%; padding: 24px 20px 40px; }
-  .learn-hero { flex-direction: column; align-items: stretch; }
-  .xp-card { justify-content: space-between; }
-  .node { width: 68px; height: 68px; font-size: 1.4rem; }
-  .node-row { margin: 22px 0; }
+  /* --- nav --- */
+  .nav-inner { gap: 10px; }
+  .brand { font-size: 1.05rem; }
+  .brand img { height: 32px; }
+  .nav-links { max-height: calc(100dvh - var(--nav-h)); overflow-y: auto; }
+
+  /* --- page rhythm --- */
+  .page-hero { padding: 40px 0 4px; }
+  .panel { padding: 16px; }
+  .lesson { padding: 20px 16px; }
+  .dash-card { padding: 20px; }
+  .form-card { padding: 26px 20px; margin: 24px auto; }
+  .cta-banner { padding: 40px 22px; }
+  .hero-cta .btn { flex: 1 1 150px; } /* big, thumb-friendly CTAs */
+  .code-window pre { font-size: 0.8rem; padding: 14px; }
+
+  /* --- compiler: toolbar becomes select on its own row, big Run/Clear --- */
+  .toolbar #snippet-select { flex: 1 1 100% !important; min-width: 0 !important; }
+  .toolbar #run-btn, .toolbar #clear-btn { flex: 1 1 0; padding: 13px 10px; font-size: 0.95rem; }
+  .toolbar .kbd { display: none; } /* no Ctrl key on phones */
+  .CodeMirror { height: 300px; } /* editor doesn't hog the whole screen */
+  .console { font-size: 0.82rem; }
+
+  /* --- learn path --- */
+  .track-head { flex-wrap: wrap; row-gap: 6px; }
+  .node-label { max-width: 170px; }
+  .xp-card { padding: 14px 18px; gap: 12px; }
+  .xp-bar { width: 110px; }
+  .xp-num { font-size: 1.6rem; }
+  .quiz-opt { padding: 13px 14px; } /* easier to tap */
+  .lm-panel h2 { font-size: 1.35rem; }
+  .blank-row { flex-wrap: wrap; }
+  .blank-row .btn { flex: 1 1 100%; }
+
+  /* --- misc --- */
+  .toast { width: calc(100% - 32px); max-width: none; text-align: center; }
+  .footer-brand img { height: 38px; }
 }
