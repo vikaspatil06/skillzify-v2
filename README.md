@@ -5,7 +5,7 @@ An advanced, browser-first Python learning platform for students — rebuilt fro
 ## ✨ Features
 
 - **Landing page** (`index.html`) — hero, feature cards, animated stats, testimonials, dark/light theme toggle
-- **Python learning tracks** (`learn.html`) — 13 lessons across Beginner / Intermediate / Advanced, each with explanation, copyable code example, and "Try in compiler" handoff; progress checkboxes persist to `localStorage` with progress bars
+- **Python learning path** (`learn.html`) — 16 lessons across Beginner / Intermediate / Advanced rendered as a Duolingo-style visual journey: lesson nodes on a winding animated SVG path (locked 🔒 / current ✨ / completed ✓), sequential unlocking (lesson N+1 unlocks after N; tracks unlock in order with locked-track teasers). Each lesson opens in a slide-over panel with rich explanation, key takeaways, syntax-highlighted code (Copy + "Try in compiler" handoff via `localStorage`), a 2-question multiple-choice quiz with instant feedback, and a mini coding challenge (predict-the-output or fill-the-blank). Completing both triggers confetti, an XP gain popup, and streak update. **XP & levels** (Novice → Python Master) persist to `localStorage`; progress stays in `skillzify_progress` so the dashboard keeps working. Keyboard: `Esc` closes, `←/→` navigate lessons. Respects `prefers-reduced-motion`.
 - **AI Compiler** (`compiler.html`) — real Python 3.11 via Pyodide (CDN), CodeMirror editor, run timing, console output, `input()` support via a program-input box, sample snippets, and an **AI Explain** panel:
   - Offline heuristic explainer covering 12 common Python error patterns
   - Optional OpenAI-compatible API key (stored in `localStorage` only, never hardcoded) for deeper explanations
@@ -58,7 +58,8 @@ skillzify-v2/
 
 ## 🗺️ Roadmap
 
-- [ ] Quiz mode per lesson with XP scoring
+- [x] Quiz mode per lesson with XP scoring
+- [x] Progressive unlocking + visual learning path
 - [ ] More tracks: JavaScript, DSA in Python
 - [ ] Shareable code snippets (URL-encoded)
 - [ ] PWA support for offline lessons

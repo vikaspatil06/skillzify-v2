@@ -308,3 +308,142 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
   .hero { padding: 64px 0 48px; }
   #account-link { display: none; }
 }
+
+/* ============================================================
+   Learn path — advanced progressive learning system
+   ============================================================ */
+.learn-hero { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; }
+.xp-card {
+  background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius);
+  padding: 18px 26px; display: flex; align-items: center; gap: 18px;
+  box-shadow: var(--shadow); position: relative; overflow: visible;
+}
+.xp-num { font-size: 1.9rem; font-weight: 800; background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent; font-variant-numeric: tabular-nums; }
+.xp-lvl { font-size: 0.85rem; color: var(--muted); font-weight: 600; margin-top: 2px; }
+.xp-bar { width: 160px; height: 8px; background: var(--bg-soft); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+.xp-bar > span { display: block; height: 100%; background: var(--gradient); border-radius: 999px; transition: width 0.5s ease; }
+.xp-pop {
+  position: absolute; top: -8px; right: 14px; font-weight: 800; font-size: 1rem; color: var(--warning);
+  animation: xp-float 1.6s ease-out forwards; pointer-events: none; white-space: nowrap;
+}
+@keyframes xp-float { 0% { opacity: 0; transform: translateY(8px) scale(0.8); } 20% { opacity: 1; transform: translateY(0) scale(1.1); } 100% { opacity: 0; transform: translateY(-34px) scale(1); } }
+
+/* ---------- Track path ---------- */
+.track-section { margin: 52px 0 8px; }
+.track-head { display: flex; align-items: center; gap: 14px; margin-bottom: 4px; }
+.track-head .t-icon { font-size: 1.9rem; }
+.track-head h2 { font-size: 1.45rem; }
+.track-head .t-desc { color: var(--muted); font-size: 0.92rem; }
+.track-head .t-pct { margin-left: auto; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+.path { position: relative; padding: 40px 0 16px; }
+.path-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+.path-svg .p-base { fill: none; stroke: var(--card-border); stroke-width: 10; stroke-linecap: round; }
+.path-svg .p-prog { fill: none; stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
+.node-row { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; margin: 30px 0; transform: translateX(var(--ox, 0px)); }
+.node {
+  width: 80px; height: 80px; border-radius: 50%; border: 3px solid var(--card-border);
+  background: var(--card); color: var(--text); font-size: 1.7rem; font-weight: 800; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease; box-shadow: var(--shadow);
+}
+.node:hover:not(:disabled) { transform: scale(1.09); }
+.node:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.node.is-done { background: linear-gradient(135deg, #fbbf24, #f59e0b); border-color: #fbbf24; color: #3a2b00; }
+.node.is-current { background: var(--gradient); border-color: transparent; color: #fff; animation: node-pulse 2.2s infinite; }
+.node.is-locked { background: var(--bg-soft); color: var(--muted); cursor: not-allowed; filter: grayscale(0.7); opacity: 0.65; }
+@keyframes node-pulse { 0% { box-shadow: 0 0 0 0 rgba(108,123,255,0.55); } 70% { box-shadow: 0 0 0 20px rgba(108,123,255,0); } 100% { box-shadow: 0 0 0 0 rgba(108,123,255,0); } }
+.node-label { margin-top: 10px; font-size: 0.83rem; color: var(--muted); font-weight: 600; text-align: center; max-width: 230px; line-height: 1.4; }
+.node-row.is-current .node-label { color: var(--text); }
+.mini-xp { color: var(--warning); font-weight: 800; }
+.track-locked {
+  background: var(--card); border: 1px dashed var(--card-border); border-radius: var(--radius);
+  padding: 44px 28px; text-align: center; color: var(--muted); margin: 12px 0 40px;
+}
+.track-locked .big { font-size: 2.6rem; margin-bottom: 12px; }
+.track-locked h3 { color: var(--text); margin-bottom: 8px; }
+
+/* ---------- Lesson modal ---------- */
+.lm-backdrop {
+  position: fixed; inset: 0; z-index: 500; display: flex; justify-content: flex-end;
+  background: rgba(4, 8, 24, 0.62); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+}
+.lm-backdrop.open { opacity: 1; pointer-events: auto; }
+.lm-backdrop[hidden] { display: none; }
+.lm-panel {
+  background: var(--bg); border-left: 1px solid var(--card-border);
+  width: min(700px, 100%); height: 100%; overflow-y: auto; padding: 30px 34px 40px;
+  transform: translateX(48px); transition: transform 0.3s ease; position: relative;
+}
+.lm-backdrop.open .lm-panel { transform: none; }
+.lm-close { position: sticky; top: 0; margin-left: auto; display: flex; z-index: 3; }
+.lm-kicker { font-size: 0.82rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin: 6px 0 10px; }
+.lm-panel h2 { font-size: 1.55rem; letter-spacing: -0.01em; margin-bottom: 12px; padding-right: 44px; }
+.lm-explain { color: var(--muted); font-size: 0.98rem; }
+.lm-points { margin: 14px 0 6px; }
+.lm-sec { margin: 30px 0 4px; font-size: 1.15rem; }
+.cw-title { margin-left: auto; font-size: 0.75rem; color: #5b648c; font-family: monospace; }
+.tok-n { color: #fbbf24; }
+
+/* ---------- Quiz ---------- */
+.quiz-q { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 18px; margin: 14px 0; }
+.quiz-q h4 { margin-bottom: 10px; font-size: 0.98rem; }
+.quiz-opt {
+  display: block; width: 100%; text-align: left; background: var(--bg-soft);
+  border: 1px solid var(--card-border); color: var(--text); border-radius: 10px;
+  padding: 10px 14px; margin: 8px 0; cursor: pointer; font-size: 0.92rem; font-family: inherit;
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+.quiz-opt:hover:not(:disabled) { border-color: var(--primary); transform: translateX(3px); }
+.quiz-opt.correct { background: rgba(52,211,153,0.15); border-color: var(--success); }
+.quiz-opt.wrong { background: rgba(248,113,113,0.12); border-color: var(--danger); }
+.quiz-opt:disabled { cursor: default; }
+.quiz-why { font-size: 0.85rem; color: var(--muted); margin-top: 10px; display: none; line-height: 1.5; }
+.quiz-why.show { display: block; }
+
+/* ---------- Challenge ---------- */
+.challenge { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 18px; margin: 14px 0; transition: border-color 0.3s ease; }
+.challenge.done { border-color: var(--success); }
+.ch-prompt { font-weight: 600; margin: 8px 0 12px; }
+.blank-row { display: flex; gap: 10px; margin-top: 12px; }
+.blank-row input { flex: 1; }
+.blank-row .btn { flex-shrink: 0; }
+.ch-feedback { margin-top: 10px; font-weight: 600; font-size: 0.92rem; min-height: 1.4em; }
+.ch-ok { color: var(--success); }
+.ch-bad { color: var(--danger); }
+.ch-hint { margin-top: 10px; font-size: 0.86rem; color: var(--muted); }
+.ch-hint summary { cursor: pointer; font-weight: 600; }
+
+/* ---------- Modal footer ---------- */
+.lm-complete {
+  position: sticky; bottom: 0; margin-top: 28px; padding: 22px 0 6px;
+  background: linear-gradient(transparent, var(--bg) 45%);
+  display: flex; gap: 12px; align-items: center;
+}
+.lm-complete .btn { flex: 1; }
+.lm-nav { display: flex; gap: 8px; }
+
+/* ---------- Confetti ---------- */
+.confetti-layer { position: fixed; inset: 0; pointer-events: none; z-index: 1000; overflow: hidden; }
+.confetti-piece { position: fixed; top: -24px; border-radius: 2px; animation: confetti-fall 1.9s ease-in forwards; }
+@keyframes confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(112vh) rotate(720deg); opacity: 0.6; }
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .node.is-current { animation: none; }
+  .confetti-piece, .xp-pop { display: none; }
+  html { scroll-behavior: auto; }
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 720px) {
+  .lm-panel { width: 100%; padding: 24px 20px 40px; }
+  .learn-hero { flex-direction: column; align-items: stretch; }
+  .xp-card { justify-content: space-between; }
+  .node { width: 68px; height: 68px; font-size: 1.4rem; }
+  .node-row { margin: 22px 0; }
+}

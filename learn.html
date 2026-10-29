@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Skillzify Python learning tracks — beginner, intermediate and advanced lessons with live code examples.">
+  <meta name="description" content="Skillzify Python learning path — 16 interactive lessons across beginner, intermediate and advanced tracks with quizzes, coding challenges and XP.">
   <title>Learn Python — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
   <link rel="stylesheet" href="assets/css/style.css">
@@ -36,8 +36,13 @@
 <main>
   <section class="page-hero">
     <div class="container">
-      <h1 class="section-title">📚 Python Learning Tracks</h1>
-      <p class="section-sub">13 hands-on lessons. Read the concept, study the code, then hit <strong>Try in compiler</strong> to run it live. Tick the checkbox when a lesson clicks — your progress saves automatically.</p>
+      <div class="learn-hero">
+        <div>
+          <h1 class="section-title">🗺️ Your Python Journey</h1>
+          <p class="section-sub">Follow the path, node by node. Each lesson unlocks the next — finish the quiz and the mini challenge to earn XP and move forward. Your progress saves automatically in your browser.</p>
+        </div>
+        <div class="xp-card" id="xp-card" aria-live="polite"></div>
+      </div>
     </div>
   </section>
 
@@ -48,10 +53,17 @@
         <p class="hint" style="margin-top:0">Saved in your browser — no account needed.</p>
         <div id="progress-box"></div>
       </div>
-      <div class="track-tabs" id="track-tabs"></div>
-      <div id="lesson-list"></div>
+      <div id="tracks"></div>
     </div>
   </section>
+
+  <div class="lm-backdrop" id="lm-backdrop" hidden>
+    <aside class="lm-panel" id="lm-panel" role="dialog" aria-modal="true" aria-labelledby="lm-title">
+      <button class="lm-close icon-btn" id="lm-close" aria-label="Close lesson">✕</button>
+      <div id="lm-body"></div>
+    </aside>
+  </div>
+  <div class="confetti-layer" id="confetti-layer" aria-hidden="true"></div>
 </main>
 
 <footer>
