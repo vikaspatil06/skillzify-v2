@@ -1,0 +1,17 @@
+# Render Blueprint — one-click deploy of Skillzify v2 (site + AI backend).
+# The Gemini key is entered in Render's dashboard at deploy time
+# (sync: false) and never touches this public repo.
+services:
+  - type: web
+    name: skillzify-v2
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash
+      - key: GEMINI_API_KEY
+        sync: false
