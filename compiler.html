@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Skillzify AI Compiler — run Python 3.11 in your browser with an AI explainer for errors.">
+  <title>AI Compiler — Skillzify</title>
+  <link rel="icon" href="assets/logo-light.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html"><img data-logo src="assets/logo-light.png" alt="Skillzify logo"><span>Skillzify</span></a>
+    <div class="nav-links" id="nav-links">
+      <a href="index.html">Home</a>
+      <a href="learn.html">Learn</a>
+      <a href="compiler.html">Compiler</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+    </div>
+    <div class="nav-actions">
+      <span id="account-link"></span>
+      <button class="icon-btn" data-theme-toggle aria-label="Toggle dark/light theme">☀️</button>
+      <button class="icon-btn hamburger" id="hamburger" aria-label="Open menu">☰</button>
+    </div>
+  </div>
+</nav>
+<div class="toast" id="toast" role="status"></div>
+
+<main>
+  <section class="page-hero">
+    <div class="container">
+      <h1 class="section-title">🤖 AI Python Compiler</h1>
+      <p class="section-sub">Real Python 3.11 running entirely in your browser (Pyodide). Write code, press Run, and let the AI explainer decode any errors.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:24px">
+    <div class="container">
+      <div class="compiler-grid">
+        <!-- Editor column -->
+        <div class="panel">
+          <div class="toolbar">
+            <select id="snippet-select" style="width:auto;flex:1;min-width:180px" aria-label="Sample snippets"></select>
+            <button class="btn btn-sm" id="run-btn" disabled>▶ Run <span class="kbd">Ctrl+↵</span></button>
+            <button class="btn btn-sm btn-ghost" id="clear-btn">Clear</button>
+            <span class="status-pill" id="status-pill">Starting…</span>
+          </div>
+          <textarea id="code-fallback" style="display:none"></textarea>
+          <div id="editor-host"></div>
+          <label class="field-lbl" for="program-input">⌨️ Program input <span class="hint" style="display:inline">— one line per input() call</span></label>
+          <textarea id="program-input" rows="3" placeholder='e.g.&#10;Vikas&#10;20'></textarea>
+          <h3 style="margin-top:20px">📟 Console output</h3>
+          <div class="console" id="console"><div class="dim">Press Run to execute your code…</div></div>
+        </div>
+
+        <!-- AI column -->
+        <div>
+          <div class="panel">
+            <h3>✨ AI Explain</h3>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-sm" id="explain-error-btn">Explain last error</button>
+              <button class="btn btn-sm btn-ghost" id="explain-code-btn">Explain my code</button>
+            </div>
+            <div class="ai-box" id="ai-output">
+              <p class="hint">Run code with an error and click <strong>Explain last error</strong> — the built-in explainer knows 12 common Python error patterns. Add an API key below for deeper AI explanations.</p>
+            </div>
+            <details class="settings">
+              <summary>⚙️ AI settings (optional)</summary>
+              <p class="hint">Paste an <strong>OpenAI-compatible</strong> API key for real AI explanations. Stored only in your browser's localStorage — never sent anywhere except your chosen API endpoint.</p>
+              <label class="field-lbl" for="ai-key">API key</label>
+              <input type="password" id="ai-key" placeholder="sk-..." autocomplete="off">
+              <label class="field-lbl" for="ai-base">Base URL</label>
+              <input type="text" id="ai-base" placeholder="https://api.openai.com/v1">
+              <label class="field-lbl" for="ai-model">Model</label>
+              <input type="text" id="ai-model" placeholder="gpt-4o-mini">
+              <div style="display:flex;gap:8px;margin-top:12px">
+                <button class="btn btn-sm" id="ai-save">Save</button>
+                <button class="btn btn-sm btn-ghost" id="ai-clear">Remove key</button>
+              </div>
+            </details>
+          </div>
+          <div class="panel" style="margin-top:20px">
+            <h3>💡 Tips</h3>
+            <ul class="list-check" style="margin-top:0">
+              <li><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> runs your code</li>
+              <li><span class="kbd">input()</span> reads lines from "Program input"</li>
+              <li>Only the Python standard library is available</li>
+              <li>Runs are saved to your dashboard history</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <img data-logo src="assets/logo-light.png" alt="Skillzify logo">
+        <p>Learn. Build. Shine. — an advanced, browser-first Python learning platform for students.</p>
+      </div>
+      <div>
+        <h4>Learn</h4>
+        <a href="learn.html">Beginner track</a>
+        <a href="learn.html">Intermediate track</a>
+        <a href="learn.html">Advanced track</a>
+      </div>
+      <div>
+        <h4>Platform</h4>
+        <a href="compiler.html">AI Compiler</a>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="auth.html">Login / Register</a>
+      </div>
+      <div>
+        <h4>Company</h4>
+        <a href="about.html">About us</a>
+        <a href="contact.html">Contact</a>
+      </div>
+    </div>
+    <div class="footer-bottom">© <span data-year>2026</span> Skillzify · Learn. Build. Shine.</div>
+  </div>
+</footer>
+
+<script src="assets/js/app.js"></script>
+<script src="assets/js/auth.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="assets/js/compiler.js"></script>
+</body>
+</html>

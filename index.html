@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Skillzify — Learn. Build. Shine. An advanced, browser-first Python learning platform for students with an AI-powered compiler.">
+  <title>Skillzify — Learn. Build. Shine.</title>
+  <link rel="icon" href="assets/logo-light.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html"><img data-logo src="assets/logo-light.png" alt="Skillzify logo"><span>Skillzify</span></a>
+    <div class="nav-links" id="nav-links">
+      <a href="index.html">Home</a>
+      <a href="learn.html">Learn</a>
+      <a href="compiler.html">Compiler</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+    </div>
+    <div class="nav-actions">
+      <span id="account-link"></span>
+      <button class="icon-btn" data-theme-toggle aria-label="Toggle dark/light theme">☀️</button>
+      <button class="icon-btn hamburger" id="hamburger" aria-label="Open menu">☰</button>
+    </div>
+  </div>
+</nav>
+<div class="toast" id="toast" role="status"></div>
+
+<main>
+  <!-- HERO -->
+  <section class="hero">
+    <div class="container hero-grid">
+      <div>
+        <img data-logo src="assets/logo-light.png" alt="Skillzify" class="hero-logo">
+        <div class="tagline">Learn. Build. Shine.</div>
+        <h1>Master Python the <span class="grad">modern way</span></h1>
+        <p class="lead">Interactive lessons, a real in-browser Python compiler, and an AI explainer that turns confusing errors into "aha!" moments — all free, all in your browser.</p>
+        <div class="hero-cta">
+          <a href="learn.html" class="btn">Start learning →</a>
+          <a href="compiler.html" class="btn btn-ghost">▶ Try the compiler</a>
+        </div>
+      </div>
+      <div class="hero-card">
+        <div class="code-window">
+          <div class="cw-bar"><span class="cw-dot" style="background:#f87171"></span><span class="cw-dot" style="background:#fbbf24"></span><span class="cw-dot" style="background:#34d399"></span></div>
+<pre><code><span class="tok-c"># your first Skillzify program</span>
+<span class="tok-k">def</span> <span class="tok-f">greet</span>(name):
+    <span class="tok-k">return</span> <span class="tok-s">f"Hello, {name}! 👋"</span>
+
+<span class="tok-k">for</span> student <span class="tok-k">in</span> [<span class="tok-s">"you"</span>, <span class="tok-s">"future dev"</span>]:
+    <span class="tok-f">print</span>(<span class="tok-f">greet</span>(student))</code></pre>
+        </div>
+        <p class="hint">✨ This exact code runs in our <a href="compiler.html">AI compiler</a> — no install needed.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="section">
+    <div class="container">
+      <div class="center">
+        <h2 class="section-title">Everything you need to go from zero to hired</h2>
+        <p class="section-sub">A complete learning loop: study the concept, run the code, understand the errors, track your streak.</p>
+      </div>
+      <div class="grid-4">
+        <div class="card">
+          <div class="icon">📚</div>
+          <h3>Learn Python</h3>
+          <p>13 bite-size lessons across beginner, intermediate and advanced tracks — each with live code you can copy or run instantly.</p>
+          <a class="card-link" href="learn.html">Browse lessons →</a>
+        </div>
+        <div class="card">
+          <div class="icon">🤖</div>
+          <h3>AI Compiler</h3>
+          <p>A real Python 3.11 runtime in your browser with an AI explainer that decodes errors into plain-English fixes.</p>
+          <a class="card-link" href="compiler.html">Open compiler →</a>
+        </div>
+        <div class="card">
+          <div class="icon">🗂️</div>
+          <h3>Study Materials</h3>
+          <p>Curated lesson tracks with copy-paste examples — your personal Python playbook, from print() to decorators.</p>
+          <a class="card-link" href="learn.html">View materials →</a>
+        </div>
+        <div class="card">
+          <div class="icon">📈</div>
+          <h3>Progress Tracking</h3>
+          <p>Lesson checkmarks, per-track progress bars, run history and a daily streak counter on your dashboard.</p>
+          <a class="card-link" href="dashboard.html">My dashboard →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS -->
+  <section class="section" style="padding-top:0">
+    <div class="container">
+      <div class="stats">
+        <div class="stat"><div class="num" data-count="13">0</div><div class="lbl">Interactive lessons</div></div>
+        <div class="stat"><div class="num" data-count="3">0</div><div class="lbl">Learning tracks</div></div>
+        <div class="stat"><div class="num" data-count="12">0</div><div class="lbl">Error patterns explained</div></div>
+        <div class="stat"><div class="num" data-count="100">0</div><div class="lbl">% free, forever</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TESTIMONIALS -->
+  <section class="section" style="padding-top:0">
+    <div class="container">
+      <div class="center">
+        <h2 class="section-title">Loved by learners</h2>
+        <p class="section-sub">Students using Skillzify to crack their Python journey.</p>
+      </div>
+      <div class="testimonials">
+        <div class="testi">
+          <div class="stars">★★★★★</div>
+          <p>"The AI explainer turned my NameErrors from scary red text into actual understanding. I finally get why my code breaks."</p>
+          <div class="who">— Priya S., CSE student</div>
+        </div>
+        <div class="testi">
+          <div class="stars">★★★★★</div>
+          <p>"Running Python straight in the browser with input() support is magic. I practice on my phone between lectures."</p>
+          <div class="who">— Arjun M., first-year engineer</div>
+        </div>
+        <div class="testi">
+          <div class="stars">★★★★★</div>
+          <p>"The streak counter is dangerously motivating. 21 days and counting — decorators finally clicked for me."</p>
+          <div class="who">— Sneha K., aspiring developer</div>
+        </div>
+      </div>
+      <div class="cta-banner">
+        <h2>Ready to write your first line?</h2>
+        <p>Join Skillzify free — no install, no signup required to start.</p>
+        <a href="learn.html" class="btn">Start learning now →</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <img data-logo src="assets/logo-light.png" alt="Skillzify logo">
+        <p>Learn. Build. Shine. — an advanced, browser-first Python learning platform for students.</p>
+      </div>
+      <div>
+        <h4>Learn</h4>
+        <a href="learn.html">Beginner track</a>
+        <a href="learn.html">Intermediate track</a>
+        <a href="learn.html">Advanced track</a>
+      </div>
+      <div>
+        <h4>Platform</h4>
+        <a href="compiler.html">AI Compiler</a>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="auth.html">Login / Register</a>
+      </div>
+      <div>
+        <h4>Company</h4>
+        <a href="about.html">About us</a>
+        <a href="contact.html">Contact</a>
+      </div>
+    </div>
+    <div class="footer-bottom">© <span data-year>2026</span> Skillzify · Learn. Build. Shine.</div>
+  </div>
+</footer>
+
+<script src="assets/js/app.js"></script>
+<script src="assets/js/auth.js"></script>
+<script>
+// Animated stat counters
+document.addEventListener("DOMContentLoaded", function () {
+  var els = document.querySelectorAll("[data-count]");
+  var seen = false;
+  function animate() {
+    if (seen) return; seen = true;
+    els.forEach(function (el) {
+      var target = parseInt(el.dataset.count, 10), t0 = performance.now();
+      (function tick(t) {
+        var p = Math.min((t - t0) / 1200, 1);
+        el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3)));
+        if (p < 1) requestAnimationFrame(tick);
+      })(t0);
+    });
+  }
+  var io = new IntersectionObserver(function (e) { if (e[0].isIntersecting) { animate(); io.disconnect(); } });
+  if (els.length) io.observe(els[0]);
+});
+</script>
+</body>
+</html>

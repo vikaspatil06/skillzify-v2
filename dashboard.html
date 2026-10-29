@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Your Skillzify learning dashboard — progress, streaks and run history.">
+  <title>Dashboard — Skillzify</title>
+  <link rel="icon" href="assets/logo-light.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html"><img data-logo src="assets/logo-light.png" alt="Skillzify logo"><span>Skillzify</span></a>
+    <div class="nav-links" id="nav-links">
+      <a href="index.html">Home</a>
+      <a href="learn.html">Learn</a>
+      <a href="compiler.html">Compiler</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+    </div>
+    <div class="nav-actions">
+      <span id="account-link"></span>
+      <button class="icon-btn" data-theme-toggle aria-label="Toggle dark/light theme">☀️</button>
+      <button class="icon-btn hamburger" id="hamburger" aria-label="Open menu">☰</button>
+    </div>
+  </div>
+</nav>
+<div class="toast" id="toast" role="status"></div>
+
+<main>
+  <section class="page-hero">
+    <div class="container">
+      <h1 class="section-title">📊 My Dashboard</h1>
+      <p class="section-sub" id="dash-hello">Your learning at a glance.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:24px">
+    <div class="container" id="dash-root">
+      <div class="dash-grid">
+        <div class="dash-card">
+          <h3>Overall progress</h3>
+          <div class="ring-wrap" style="margin-top:12px">
+            <svg width="96" height="96" viewBox="0 0 96 96">
+              <circle cx="48" cy="48" r="42" fill="none" stroke="var(--bg-soft)" stroke-width="10"/>
+              <circle id="dash-ring-fg" cx="48" cy="48" r="42" fill="none" stroke="url(#grad)" stroke-width="10"
+                      stroke-linecap="round" stroke-dasharray="264" stroke-dashoffset="264"
+                      transform="rotate(-90 48 48)" style="transition:stroke-dashoffset .6s ease"/>
+              <defs><linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#6c7bff"/><stop offset="1" stop-color="#22d3ee"/>
+              </linearGradient></defs>
+            </svg>
+            <div>
+              <div class="big" id="dash-overall-num">0%</div>
+              <div class="hint" id="dash-overall-sub">0 of 0 lessons</div>
+            </div>
+          </div>
+        </div>
+        <div class="dash-card">
+          <h3>🔥 Day streak</h3>
+          <div class="big" id="dash-streak" style="margin-top:12px">0🔥</div>
+          <p class="hint">Run code in the compiler on consecutive days to grow your streak.</p>
+          <a href="compiler.html" class="btn btn-sm" style="margin-top:10px">Keep it going →</a>
+        </div>
+        <div class="dash-card">
+          <h3>🎯 Next step</h3>
+          <p class="hint" id="dash-next" style="margin-top:12px">Continue where you left off.</p>
+          <a href="learn.html" class="btn btn-sm" style="margin-top:10px">Continue learning →</a>
+        </div>
+      </div>
+
+      <div class="dash-grid" style="grid-template-columns:1fr 1fr;margin-top:20px">
+        <div class="dash-card">
+          <h3>Progress by track</h3>
+          <div id="dash-tracks" style="margin-top:8px"></div>
+        </div>
+        <div class="dash-card">
+          <h3>Recent compiler runs</h3>
+          <div id="dash-runs" style="margin-top:8px"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <img data-logo src="assets/logo-light.png" alt="Skillzify logo">
+        <p>Learn. Build. Shine. — an advanced, browser-first Python learning platform for students.</p>
+      </div>
+      <div>
+        <h4>Learn</h4>
+        <a href="learn.html">Beginner track</a>
+        <a href="learn.html">Intermediate track</a>
+        <a href="learn.html">Advanced track</a>
+      </div>
+      <div>
+        <h4>Platform</h4>
+        <a href="compiler.html">AI Compiler</a>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="auth.html">Login / Register</a>
+      </div>
+      <div>
+        <h4>Company</h4>
+        <a href="about.html">About us</a>
+        <a href="contact.html">Contact</a>
+      </div>
+    </div>
+    <div class="footer-bottom">© <span data-year>2026</span> Skillzify · Learn. Build. Shine.</div>
+  </div>
+</footer>
+
+<script src="assets/js/app.js"></script>
+<script src="assets/js/auth.js"></script>
+<script src="assets/js/learn.js"></script>
+<script src="assets/js/dashboard.js"></script>
+<script>
+// "Next step" hint: first incomplete lesson
+document.addEventListener("DOMContentLoaded", function () {
+  var L = window.SkillzifyLearn, p = L.getProgress();
+  var next = L.LESSONS.filter(function (l) { return !p[l.id]; })[0];
+  var el = document.getElementById("dash-next");
+  if (el) el.textContent = next
+    ? "Up next: " + next.title + " (" + next.track + " track)."
+    : "All lessons complete — you're a Python star! 🌟";
+});
+</script>
+</body>
+</html>

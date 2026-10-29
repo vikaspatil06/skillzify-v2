@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="About Skillzify — Learn. Build. Shine.">
+  <title>About — Skillzify</title>
+  <link rel="icon" href="assets/logo-light.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html"><img data-logo src="assets/logo-light.png" alt="Skillzify logo"><span>Skillzify</span></a>
+    <div class="nav-links" id="nav-links">
+      <a href="index.html">Home</a>
+      <a href="learn.html">Learn</a>
+      <a href="compiler.html">Compiler</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+    </div>
+    <div class="nav-actions">
+      <span id="account-link"></span>
+      <button class="icon-btn" data-theme-toggle aria-label="Toggle dark/light theme">☀️</button>
+      <button class="icon-btn hamburger" id="hamburger" aria-label="Open menu">☰</button>
+    </div>
+  </div>
+</nav>
+<div class="toast" id="toast" role="status"></div>
+
+<main>
+  <section class="page-hero">
+    <div class="container center">
+      <img data-logo src="assets/logo-light.png" alt="Skillzify" style="height:84px;margin-bottom:16px">
+      <h1 class="section-title">About Skillzify</h1>
+      <p class="section-sub" style="margin-left:auto;margin-right:auto">Learn. Build. Shine. — we believe the best way to learn programming is to write code from day one, with friendly guidance when things break.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:24px">
+    <div class="container">
+      <div class="two-col">
+        <div>
+          <h2 class="section-title" style="font-size:1.6rem">Our story</h2>
+          <p style="color:var(--muted);margin-top:12px">Skillzify started as a simple Python learning site and has grown into a browser-first learning platform. Skillzify v2 rebuilds everything from scratch: faster pages, a real Python runtime in the browser, and an AI explainer that turns error messages into lessons.</p>
+          <p style="color:var(--muted);margin-top:12px">No installs. No accounts required to start. Just open the site and write your first line of Python.</p>
+          <ul class="list-check">
+            <li>100% free and open learning content</li>
+            <li>Runs fully in the browser — works offline after first load*</li>
+            <li>Your data stays yours — progress lives in your browser</li>
+          </ul>
+          <p class="hint">*The compiler downloads the Python runtime (~10 MB) on first use; lessons and UI work offline once cached by the browser.</p>
+        </div>
+        <div>
+          <h2 class="section-title" style="font-size:1.6rem">How it works</h2>
+          <div class="grid-3" style="grid-template-columns:1fr;margin-top:16px">
+            <div class="card"><div class="icon">📖</div><h3>1. Learn</h3><p>Follow structured tracks from print() to decorators, with copy-paste examples.</p></div>
+            <div class="card"><div class="icon">⚡</div><h3>2. Build</h3><p>Run everything instantly in the in-browser compiler — including input() programs.</p></div>
+            <div class="card"><div class="icon">🌟</div><h3>3. Shine</h3><p>Track streaks and progress on your dashboard, and explain every error with AI.</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cta-banner">
+        <h2>Have questions or ideas?</h2>
+        <p>We'd love to hear from you.</p>
+        <a href="contact.html" class="btn">Contact us →</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <img data-logo src="assets/logo-light.png" alt="Skillzify logo">
+        <p>Learn. Build. Shine. — an advanced, browser-first Python learning platform for students.</p>
+      </div>
+      <div>
+        <h4>Learn</h4>
+        <a href="learn.html">Beginner track</a>
+        <a href="learn.html">Intermediate track</a>
+        <a href="learn.html">Advanced track</a>
+      </div>
+      <div>
+        <h4>Platform</h4>
+        <a href="compiler.html">AI Compiler</a>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="auth.html">Login / Register</a>
+      </div>
+      <div>
+        <h4>Company</h4>
+        <a href="about.html">About us</a>
+        <a href="contact.html">Contact</a>
+      </div>
+    </div>
+    <div class="footer-bottom">© <span data-year>2026</span> Skillzify · Learn. Build. Shine.</div>
+  </div>
+</footer>
+
+<script src="assets/js/app.js"></script>
+<script src="assets/js/auth.js"></script>
+</body>
+</html>
