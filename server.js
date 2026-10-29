@@ -9,6 +9,11 @@
    ============================================================ */
 "use strict";
 
+/* Load .env file if present (local dev convenience). Never commit .env. */
+try {
+  require("dotenv").config();
+} catch (e) { /* dotenv optional on hosts that set env vars directly */ }
+
 const express = require("express");
 const path = require("path");
 
