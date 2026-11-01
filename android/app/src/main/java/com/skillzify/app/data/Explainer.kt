@@ -68,7 +68,7 @@ object Explainer {
         for (r in rules) {
             val m = r.re.find(errText)
             if (m != null) {
-                return Explanation(r.title, r.tips, m.groups.getOrNull(1)?.value)
+                return Explanation(r.title, r.tips, m.groups.toList().getOrNull(1)?.value)
             }
         }
         return Explanation(
