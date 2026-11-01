@@ -14,7 +14,7 @@
 
 Instead, report them privately:
 
-- **Email:** patil.vikas6306@gmail.com
+- **Email:** skillzifyind2024@gmail.com
 - **Subject:** `[SECURITY] skillzify-v2 — <short description>`
 
 Include:
