@@ -57,6 +57,49 @@
     document.getElementById("dash-hello").textContent =
       user ? "Welcome back, " + user.name.split(" ")[0] + "! Keep the streak alive 🔥" :
              "Your learning at a glance — log in to sync your name here.";
+
+    renderUpgrades();
+  }
+
+  function renderUpgrades() {
+    var A = window.SkillzifyActivity; if (!A) return;
+    A.checkAchievements();
+
+    // Mastery bar (per-track completed lessons, GitHub language-bar style)
+    try {
+      var L = window.SkillzifyLearn;
+      var prog = JSON.parse(localStorage.getItem("skillzify_progress") || "{}");
+      var tracks = [["beginner", "Beginner", "#6c7bff"], ["intermediate", "Intermediate", "#22d3ee"], ["advanced", "Advanced", "#f0a35e"]];
+      var counts = tracks.map(function (t) {
+        var lessons = L ? L.LESSONS.filter(function (l) { return l.track === t[0]; }) : [];
+        var done = lessons.filter(function (l) { return prog[l.id]; }).length;
+        return { name: t[1], color: t[2], done: done, total: lessons.length };
+      });
+      var tot = counts.reduce(function (s, c) { return s + c.done; }, 0) || 1;
+      document.getElementById("dash-mastery-bar").innerHTML = counts.map(function (c) {
+        return '<span style="width:' + (c.done / tot * 100) + '%;background:' + c.color + '" title="' + c.name + ": " + c.done + '"></span>';
+      }).join("");
+      document.getElementById("dash-mastery-legend").innerHTML = counts.map(function (c) {
+        return '<span><i style="background:' + c.color + '"></i>' + c.name + " — " + c.done + "/" + c.total + "</span>";
+      }).join("");
+    } catch (e) {}
+
+    // Mini heatmap
+    var hm = document.getElementById("dash-heatmap");
+    if (hm) A.renderHeatmap(hm);
+
+    // Achievements preview
+    var ach = A.achievements().filter(function (a) { return a.unlocked; }).slice(0, 6);
+    document.getElementById("dash-achievements").innerHTML = ach.length ? ach.map(function (a) {
+      return '<div class="ach on" title="' + a.desc + '"><span class="ach-ico">' + a.icon + '</span><span class="ach-name">' + a.name + "</span></div>";
+    }).join("") + '<p style="grid-column:1/-1"><a href="profile.html">All achievements →</a></p>'
+      : '<p class="muted">Complete a lesson to earn your first badge. <a href="learn.html">Start →</a></p>';
+
+    // Feed
+    var feed = A.feed(6), icons = { lesson: "📚", run: "▶️", snippet: "📝", achievement: "🏆", star: "⭐" };
+    document.getElementById("dash-feed").innerHTML = feed.length ? feed.map(function (e) {
+      return '<div class="feed-item"><span>' + (icons[e.type] || "•") + "</span><span>" + window.Skillzify.esc(e.text) + "</span></div>";
+    }).join("") : '<p class="muted">No activity yet.</p>';
   }
 
   document.addEventListener("DOMContentLoaded", renderDashboard);
