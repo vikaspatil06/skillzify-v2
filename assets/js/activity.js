@@ -131,9 +131,9 @@
     opts = opts || {};
     var days = dayCounts();
     var weeks = [], today = new Date(); today.setHours(0, 0, 0, 0);
-    var start = new Date(today); start.setDate(start.getDate() - (53 * 7 + today.getDay()));
-    // align start to Sunday
-    start.setDate(start.getDate() - start.getDay());
+    // Start on the Sunday 52 weeks before this Sunday, so the last column is the current week.
+    var start = new Date(today);
+    start.setDate(start.getDate() - start.getDay() - 52 * 7);
     var total = 0;
     for (var w = 0; w < 53; w++) {
       var col = [];
