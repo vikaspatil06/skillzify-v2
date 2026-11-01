@@ -1,0 +1,51 @@
+name: Build Skillzify APK
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'android/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Restore app icon
+        run: cat tools/ic_logo.png.b64.part* | base64 -d > app/src/main/res/drawable/ic_logo.png
+
+      - name: Set up Gradle 8.10.2
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: 8.10.2
+
+      - name: Build arm64 debug APK
+        run: gradle assembleArm64Debug --no-daemon --console=plain
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: skillzify-apk
+          path: app/build/outputs/apk/arm64/debug/*.apk
+
+      - name: Create GitHub release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-v1.0.${{ github.run_number }}
+          name: Skillzify Android v1.0 (build ${{ github.run_number }})
+          files: app/build/outputs/apk/arm64/debug/*.apk
