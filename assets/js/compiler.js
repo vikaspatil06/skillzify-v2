@@ -160,6 +160,7 @@
     runs = runs.slice(0, 30);
     window.Skillzify.storeSet(RUNS_KEY, runs);
     bumpStreak();
+    if (window.SkillzifyActivity) window.SkillzifyActivity.log("run", "Ran code (" + (ok ? "success" : "error") + ", " + ms + "ms)");
   }
 
   function bumpStreak() {
@@ -425,8 +426,72 @@
     });
     document.getElementById("explain-error-btn").addEventListener("click", explainLastError);
     document.getElementById("explain-code-btn").addEventListener("click", explainCode);
+    document.getElementById("save-snippet-btn").addEventListener("click", saveSnippetUI);
 
     initSettings();
     loadPyodideRuntime();
+    renderSnippetLibrary();
+    // deep-link: compiler.html#snippet-<id>
+    if (location.hash.indexOf("#snippet-") === 0) {
+      var sid = location.hash.slice(9);
+      var sn = (window.SkillzifyActivity ? window.SkillzifyActivity.snippets() : []).filter(function (s) { return s.id === sid; })[0];
+      if (sn) { if (editor) editor.setValue(sn.code); else document.getElementById("code-fallback").value = sn.code; }
+    }
   });
-})();
+
+  /* ---------- Gists-like snippets ---------- */
+  function currentCode() { return editor ? editor.getValue() : document.getElementById("code-fallback").value; }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+  function saveSnippetUI() {
+    var A = window.SkillzifyActivity; if (!A) return;
+    var code = currentCode().trim();
+    if (!code) { window.Skillzify.toast("Write some code first ✍️", "error"); return; }
+    var title = prompt("Name this snippet:", code.split("\n")[0].slice(0, 40) || "Untitled snippet");
+    if (title == null) return;
+    A.saveSnippet(title.trim() || "Untitled snippet", "", code);
+    renderSnippetLibrary();
+    window.Skillzify.toast("Snippet saved 📝", "success");
+  }
+
+  function renderSnippetLibrary() {
+    var A = window.SkillzifyActivity; if (!A) return;
+    var host = document.getElementById("snippet-library"); if (!host) return;
+    var snips = A.snippets();
+    if (!snips.length) { host.innerHTML = '<p class="muted small">No snippets yet — write code above and hit 💾 Save.</p>'; return; }
+    host.innerHTML = snips.map(function (s) {
+      var starred = A.isStarred("snippet", s.id);
+      return '<div class="snippet-card"><h4>' + esc(s.title) + '</h4>' +
+        '<div class="muted small">' + new Date(s.created).toLocaleDateString() + '</div>' +
+        '<pre>' + esc(s.code.slice(0, 220)) + (s.code.length > 220 ? "…" : "") + '</pre>' +
+        '<div class="snippet-actions">' +
+        '<button class="btn btn-sm" data-load="' + s.id + '">Open</button>' +
+        '<button class="btn btn-sm btn-ghost" data-star-snip="' + s.id + '">' + (starred ? "🌟" : "⭐") + '</button>' +
+        '<button class="btn btn-sm btn-ghost" data-pin-snip="' + s.id + '">📌</button>' +
+        '<button class="btn btn-sm btn-ghost" data-del-snip="' + s.id + '">🗑️</button>' +
+        '</div></div>';
+    }).join("");
+    host.querySelectorAll("[data-load]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var s = snips.filter(function (x) { return x.id === b.getAttribute("data-load"); })[0];
+        if (s) { if (editor) editor.setValue(s.code); else document.getElementById("code-fallback").value = s.code; window.scrollTo({ top: 0, behavior: "smooth" }); }
+      });
+    });
+    host.querySelectorAll("[data-star-snip]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var s = snips.filter(function (x) { return x.id === b.getAttribute("data-star-snip"); })[0];
+        if (s) { A.toggleStar("snippet", s.id, s.title); renderSnippetLibrary(); }
+      });
+    });
+    host.querySelectorAll("[data-pin-snip]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var s = snips.filter(function (x) { return x.id === b.getAttribute("data-pin-snip"); })[0];
+        if (s) { A.togglePin("snippet", s.id, s.title); window.Skillzify.toast("Pinned 📌 — see your profile", "success"); }
+      });
+    });
+    host.querySelectorAll("[data-del-snip]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (confirm("Delete this snippet?")) { A.deleteSnippet(b.getAttribute("data-del-snip")); renderSnippetLibrary(); }
+      });
+    });
+  }
