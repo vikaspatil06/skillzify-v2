@@ -703,7 +703,9 @@
       "<pre><code>" + highlightPython(lesson.code) + "</code></pre></div>" +
       '<div class="lesson-actions">' +
       '<button class="btn btn-sm btn-ghost" id="lm-copy">⧉ Copy code</button>' +
-      '<button class="btn btn-sm" id="lm-try">▶ Try in compiler</button></div>' +
+      '<button class="btn btn-sm" id="lm-try">▶ Try in compiler</button>' +
+      '<button class="btn btn-sm btn-ghost" id="lm-star" aria-label="Star lesson">⭐</button>' +
+      '<button class="btn btn-sm btn-ghost" id="lm-pin" aria-label="Pin lesson">📌</button></div>' +
       '<h3 class="lm-sec">🧠 Quick quiz</h3><p class="hint" style="margin-top:0">Answer all correctly to proceed. Wrong answers just cost you bonus XP — keep trying!</p>' +
       '<div id="lm-quiz">' + quizHTML(lesson) + "</div>" +
       '<h3 class="lm-sec">🎯 Mini challenge</h3><div class="challenge" id="lm-challenge">' + challengeHTML(lesson.challenge) + "</div>" +
@@ -715,6 +717,24 @@
 
     document.getElementById("lm-copy").addEventListener("click", function (e) { copyCode(e.currentTarget, lesson.code); });
     document.getElementById("lm-try").addEventListener("click", function () { tryInCompiler(lesson.code); });
+    (function () {
+      var A = window.SkillzifyActivity; if (!A) return;
+      var starBtn = document.getElementById("lm-star"), pinBtn = document.getElementById("lm-pin");
+      function paint() {
+        starBtn.textContent = A.isStarred("lesson", lesson.id) ? "🌟 Starred" : "⭐ Star";
+        pinBtn.textContent = A.isPinned("lesson", lesson.id) ? "📌 Pinned" : "📌 Pin";
+      }
+      paint();
+      starBtn.addEventListener("click", function () {
+        var on = A.toggleStar("lesson", lesson.id, lesson.title);
+        A.log("star", (on ? "Starred lesson: " : "Unstarred lesson: ") + lesson.title);
+        paint(); window.Skillzify.toast(on ? "Starred ⭐" : "Unstarred", "success");
+      });
+      pinBtn.addEventListener("click", function () {
+        var on = A.togglePin("lesson", lesson.id, lesson.title);
+        paint(); window.Skillzify.toast(on ? "Pinned 📌" : "Unpinned", "success");
+      });
+    })();
     bindQuiz(lesson);
     bindChallenge(lesson);
     document.getElementById("lm-prev").addEventListener("click", function () { if (gi > 0) openLesson(gi - 1); });
@@ -809,6 +829,7 @@
     var p = getProgress(); p[lesson.id] = true; saveProgress(p);
     var st = getState(); delete st[lesson.id]; saveState(st);
     bumpStreak();
+    if (window.SkillzifyActivity) window.SkillzifyActivity.log("lesson", "Completed lesson: " + lesson.title);
     confetti();
     xpPop(gain);
     renderAll();
