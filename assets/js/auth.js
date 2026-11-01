@@ -1,107 +1,123 @@
 /* ============================================================
-   Skillzify v2 — auth.js (DEMO AUTH)
-   ----------------------------------------------------------------
-   This is a LOCAL demo authentication layer that stores users in
-   the browser's localStorage. It is intentionally simple so the
-   site works with zero backend (file:// or any static server).
+   Skillzify v2 — auth.js (Firebase Authentication)
+   Project: skillzify-1d0f2 (same Firebase project as the
+   Android app). Email/Password sign-in.
 
-   >>> TO PLUG IN REAL FIREBASE AUTH <<<
-   1. Create a Firebase project and enable Email/Password auth.
-   2. Replace the functions below (registerUser, loginUser,
-      logoutUser, currentUser) with Firebase Auth calls, e.g.:
-
-        import { initializeApp } from
-          "https://www.gstatic.com/firebasejs/11.3.1/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword,
-                 signInWithEmailAndPassword, signOut,
-                 onAuthStateChanged } from
-          "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js";
-
-        const firebaseConfig = {
-          apiKey: "<YOUR_API_KEY>",        // <-- paste your key here
-          authDomain: "<YOUR_AUTH_DOMAIN>",
-          projectId: "<YOUR_PROJECT_ID>",
-          // ... rest of your Firebase config
-        };
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-
-      NEVER commit real API keys to a public repo.
+   The Firebase web API key below is PUBLIC BY DESIGN — it also
+   ships inside android/app/google-services.json in this public
+   repo. Access is controlled by Firebase authorized domains,
+   not by the key. Never put private keys here.
    ============================================================ */
 (function () {
   "use strict";
 
-  var USERS_KEY = "skillzify_users";
-  var SESSION_KEY = "skillzify_session";
+  var firebaseConfig = {
+    apiKey: "AIzaSyBHqH96tS4MpeCVKy8HcnQAzIKMSehJx-U",
+    authDomain: "skillzify-1d0f2.firebaseapp.com",
+    projectId: "skillzify-1d0f2",
+    storageBucket: "skillzify-1d0f2.firebasestorage.app",
+    messagingSenderId: "221538535243"
+  };
 
-  function getUsers() {
-    return window.Skillzify.storeGet(USERS_KEY, {});
-  }
-  function saveUsers(u) {
-    window.Skillzify.storeSet(USERS_KEY, u);
+  var auth = null, fbUser = null, ready = false;
+  var readyCbs = [];
+
+  function onReady(cb) { if (ready) { try { cb(); } catch (e) {} } else readyCbs.push(cb); }
+
+  try {
+    if (window.firebase) {
+      if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      auth = firebase.auth();
+      auth.onAuthStateChanged(function (u) {
+        fbUser = u || null;
+        if (!ready) {
+          ready = true;
+          var cbs = readyCbs; readyCbs = [];
+          cbs.forEach(function (cb) { try { cb(); } catch (e) {} });
+        }
+        refreshAccountUI();
+        if (fbUser && /auth\.html$/.test(location.pathname)) location.href = "dashboard.html";
+      });
+    } else { ready = true; }
+  } catch (e) { ready = true; }
+
+  function toUser(u) {
+    if (!u) return null;
+    return {
+      uid: u.uid,
+      email: u.email || "",
+      name: u.displayName || (u.email ? u.email.split("@")[0] : "Learner"),
+      created: (u.metadata && u.metadata.creationTime) ? new Date(u.metadata.creationTime).getTime() : null
+    };
   }
 
-  // Lightweight obfuscation only — NOT real password hashing.
-  // For production, use Firebase Auth or a real backend.
-  function obfuscate(s) {
-    return btoa(unescape(encodeURIComponent("sz$" + s)));
+  function currentUser() { return toUser(fbUser); }
+
+  function friendly(err) {
+    var code = (err && err.code) || "";
+    var map = {
+      "auth/email-already-in-use": "An account with this email already exists. Try logging in.",
+      "auth/invalid-email": "Please enter a valid email address.",
+      "auth/weak-password": "Password must be at least 6 characters.",
+      "auth/user-not-found": "No account found with this email. Try registering.",
+      "auth/wrong-password": "Incorrect password. Try again.",
+      "auth/invalid-credential": "Invalid email or password.",
+      "auth/too-many-requests": "Too many attempts — please wait a bit and try again.",
+      "auth/network-request-failed": "Network error. Check your connection and try again.",
+      "auth/operation-not-allowed": "Email/password sign-in is not enabled yet.",
+      "auth/unauthorized-domain": "This site is not authorized for sign-in yet."
+    };
+    return map[code] || "Something went wrong. Please try again.";
   }
 
-  function validEmail(e) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-  }
+  function validEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e || ""); }
 
   function registerUser(name, email, password) {
     name = (name || "").trim();
     email = (email || "").trim().toLowerCase();
-    if (!name) return { ok: false, error: "Please enter your name." };
-    if (!validEmail(email)) return { ok: false, error: "Please enter a valid email address." };
+    if (!name) return Promise.resolve({ ok: false, error: "Please enter your name." });
+    if (!validEmail(email)) return Promise.resolve({ ok: false, error: "Please enter a valid email address." });
     if (!password || password.length < 6)
-      return { ok: false, error: "Password must be at least 6 characters." };
-    var users = getUsers();
-    if (users[email]) return { ok: false, error: "An account with this email already exists. Try logging in." };
-    users[email] = { name: name, email: email, pass: obfuscate(password), created: Date.now() };
-    saveUsers(users);
-    window.Skillzify.storeSet(SESSION_KEY, email);
-    return { ok: true, user: { name: name, email: email } };
+      return Promise.resolve({ ok: false, error: "Password must be at least 6 characters." });
+    if (!auth) return Promise.resolve({ ok: false, error: "Sign-in service unavailable. Check your connection." });
+    return auth.createUserWithEmailAndPassword(email, password).then(function (cred) {
+      return cred.user.updateProfile({ displayName: name }).catch(function () {});
+    }).then(function () {
+      fbUser = auth.currentUser;
+      return { ok: true, user: toUser(fbUser) };
+    }).catch(function (err) { return { ok: false, error: friendly(err) }; });
   }
 
   function loginUser(email, password) {
     email = (email || "").trim().toLowerCase();
-    var users = getUsers();
-    var u = users[email];
-    if (!u || u.pass !== obfuscate(password || ""))
-      return { ok: false, error: "Invalid email or password." };
-    window.Skillzify.storeSet(SESSION_KEY, email);
-    return { ok: true, user: { name: u.name, email: u.email } };
+    if (!validEmail(email)) return Promise.resolve({ ok: false, error: "Please enter a valid email address." });
+    if (!auth) return Promise.resolve({ ok: false, error: "Sign-in service unavailable. Check your connection." });
+    return auth.signInWithEmailAndPassword(email, password || "").then(function () {
+      fbUser = auth.currentUser;
+      return { ok: true, user: toUser(fbUser) };
+    }).catch(function (err) { return { ok: false, error: friendly(err) }; });
   }
 
   function logoutUser() {
-    try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+    if (auth) { try { auth.signOut(); } catch (e) {} }
+    fbUser = null;
+    refreshAccountUI();
   }
 
-  function currentUser() {
-    var email = window.Skillzify.storeGet(SESSION_KEY, null);
-    if (!email) return null;
-    var u = getUsers()[email];
-    return u ? { name: u.name, email: u.email } : null;
-  }
-
-  /* ---------- Nav account area ---------- */
+  /* ---------- Nav account area (UI unchanged) ---------- */
   function refreshAccountUI() {
     var slot = document.getElementById("account-link");
     if (!slot) return;
     var user = currentUser();
     if (user) {
       slot.innerHTML =
-        '<span style="font-weight:700;font-size:.9rem">👋 ' +
+        '<span style="font-weight:700;font-size:.9rem">\uD83D\uDC4B ' +
         window.Skillzify.esc(user.name.split(" ")[0]) +
         '</span> <button class="btn btn-sm btn-ghost" id="logout-btn">Logout</button>';
       var btn = document.getElementById("logout-btn");
       if (btn) btn.addEventListener("click", function () {
         logoutUser();
         window.Skillzify.toast("Logged out. See you soon!", "success");
-        refreshAccountUI();
         if (location.pathname.indexOf("dashboard") !== -1) location.href = "index.html";
       });
     } else {
@@ -109,7 +125,7 @@
     }
   }
 
-  /* ---------- Auth page wiring ---------- */
+  /* ---------- Auth page wiring (UI unchanged) ---------- */
   function initAuthPage() {
     var loginTab = document.getElementById("tab-login");
     var regTab = document.getElementById("tab-register");
@@ -126,36 +142,45 @@
     loginTab.addEventListener("click", function () { show("login"); });
     regTab.addEventListener("click", function () { show("register"); });
 
+    function setBusy(form, busy) {
+      var btn = form.querySelector('button[type="submit"]');
+      if (btn) { btn.disabled = busy; btn.style.opacity = busy ? ".6" : ""; }
+    }
+
     loginForm.addEventListener("submit", function (e) {
       e.preventDefault();
-      var r = loginUser(
+      setBusy(loginForm, true);
+      loginUser(
         document.getElementById("login-email").value,
         document.getElementById("login-pass").value
-      );
-      if (r.ok) {
-        window.Skillzify.toast("Welcome back, " + r.user.name.split(" ")[0] + "! 🎉", "success");
-        setTimeout(function () { location.href = "dashboard.html"; }, 700);
-      } else {
-        window.Skillzify.toast(r.error, "error");
-      }
+      ).then(function (r) {
+        setBusy(loginForm, false);
+        if (r.ok) {
+          window.Skillzify.toast("Welcome back, " + r.user.name.split(" ")[0] + "! \uD83C\uDF89", "success");
+          setTimeout(function () { location.href = "dashboard.html"; }, 700);
+        } else {
+          window.Skillzify.toast(r.error, "error");
+        }
+      });
     });
 
     regForm.addEventListener("submit", function (e) {
       e.preventDefault();
-      var r = registerUser(
+      setBusy(regForm, true);
+      registerUser(
         document.getElementById("reg-name").value,
         document.getElementById("reg-email").value,
         document.getElementById("reg-pass").value
-      );
-      if (r.ok) {
-        window.Skillzify.toast("Account created — let's start learning! 🚀", "success");
-        setTimeout(function () { location.href = "learn.html"; }, 700);
-      } else {
-        window.Skillzify.toast(r.error, "error");
-      }
+      ).then(function (r) {
+        setBusy(regForm, false);
+        if (r.ok) {
+          window.Skillzify.toast("Account created — let's start learning! \uD83D\uDE80", "success");
+          setTimeout(function () { location.href = "learn.html"; }, 700);
+        } else {
+          window.Skillzify.toast(r.error, "error");
+        }
+      });
     });
-
-    if (currentUser()) location.href = "dashboard.html";
   }
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -167,6 +192,7 @@
     registerUser: registerUser,
     loginUser: loginUser,
     logoutUser: logoutUser,
-    currentUser: currentUser
+    currentUser: currentUser,
+    onReady: onReady
   };
 })();
