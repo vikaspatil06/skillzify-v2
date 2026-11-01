@@ -39,7 +39,7 @@
   <section class="page-hero">
     <div class="container">
       <h1 class="section-title">✉️ Contact us</h1>
-      <p class="section-sub">Questions, feedback, or lesson requests — drop us a message. (Demo: messages are saved in your browser.)</p>
+      <p class="section-sub">Questions, feedback, or lesson requests — fill this in and your email app will open with the message ready to send to us.</p>
     </div>
   </section>
 
@@ -113,20 +113,23 @@
 <script src="assets/js/palette.js"></script>
 <script src="assets/js/auth.js"></script>
 <script>
-// Contact form → localStorage + success toast
+// Contact form → opens the visitor's email app addressed to us (mailto fallback)
 document.getElementById("contact-form").addEventListener("submit", function (e) {
   e.preventDefault();
+  var name = document.getElementById("c-name").value.trim();
+  var email = document.getElementById("c-email").value.trim();
+  var subject = document.getElementById("c-subject").value.trim();
+  var message = document.getElementById("c-msg").value.trim();
+  // keep a local copy too (offline record)
   var msgs = window.Skillzify.storeGet("skillzify_messages", []);
-  msgs.push({
-    name: document.getElementById("c-name").value.trim(),
-    email: document.getElementById("c-email").value.trim(),
-    subject: document.getElementById("c-subject").value.trim(),
-    message: document.getElementById("c-msg").value.trim(),
-    t: Date.now()
-  });
+  msgs.push({ name: name, email: email, subject: subject, message: message, t: Date.now() });
   window.Skillzify.storeSet("skillzify_messages", msgs);
+  var body = "Name: " + name + "\nEmail: " + email + "\n\n" + message;
+  window.location.href = "mailto:skillzifyind2024@gmail.com"
+    + "?subject=" + encodeURIComponent("[Skillzify] " + subject)
+    + "&body=" + encodeURIComponent(body);
   e.target.reset();
-  window.Skillzify.toast("Message sent! We'll get back to you soon. ✉️", "success");
+  window.Skillzify.toast("Opening your email app — just hit send ✉️", "success");
 });
 </script>
 </body>
