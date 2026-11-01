@@ -193,6 +193,8 @@
     loginUser: loginUser,
     logoutUser: logoutUser,
     currentUser: currentUser,
-    onReady: onReady
+    onReady: onReady,
+    refreshAccountUI: refreshAccountUI,
+    firebaseUser: function () { return fbUser; }
   };
 })();
