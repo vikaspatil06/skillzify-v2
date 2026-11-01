@@ -74,13 +74,30 @@
     var modal = document.getElementById("profile-modal");
     document.getElementById("edit-profile-btn").addEventListener("click", function () {
       var p = A.profile();
-      document.getElementById("pf-name").value = p.name || "";
+      var fbName = "";
+      try { var cu = window.SkillzifyAuth && window.SkillzifyAuth.currentUser(); fbName = (cu && cu.name) || ""; } catch (e) {}
+      document.getElementById("pf-name").value = p.name || fbName || "";
       document.getElementById("pf-bio").value = p.bio || "";
       modal.hidden = false;
     });
     document.getElementById("pf-cancel").addEventListener("click", function () { modal.hidden = true; });
     document.getElementById("pf-save").addEventListener("click", function () {
-      A.saveProfile({ name: document.getElementById("pf-name").value.trim(), bio: document.getElementById("pf-bio").value.trim() });
+      var newName = document.getElementById("pf-name").value.trim();
+      var newBio = document.getElementById("pf-bio").value.trim();
+      A.saveProfile({ name: newName, bio: newBio });
+      // Sync the name to Firebase so the nav + all devices show it
+      try {
+        var SA = window.SkillzifyAuth;
+        var fbu = SA && SA.firebaseUser && SA.firebaseUser();
+        if (fbu && newName) {
+          fbu.updateProfile({ displayName: newName }).then(function () {
+            if (SA.refreshAccountUI) SA.refreshAccountUI();
+            render();
+          }).catch(function () { render(); });
+        } else {
+          if (SA && SA.refreshAccountUI) SA.refreshAccountUI();
+        }
+      } catch (e) {}
       modal.hidden = true; render();
       S.toast("Profile updated ✨", "success");
     });
