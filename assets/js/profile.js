@@ -9,10 +9,7 @@
   function render() {
     var prof = A.profile();
     var user = null;
-    try {
-      var sessEmail = S.storeGet("skillzify_session", null); // session stores the email string
-      if (sessEmail) user = (S.storeGet("skillzify_users", [])).filter(function (u) { return u.email === sessEmail; })[0] || null;
-    } catch (e) {}
+    try { user = (window.SkillzifyAuth && window.SkillzifyAuth.currentUser()) || null; } catch (e) {}
     var name = prof.name || (user && user.name) || "Vikas";
     var seed = (user && user.email) || name;
 
@@ -23,8 +20,6 @@
     try { xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0; } catch (e) {}
     try { done = Object.keys(JSON.parse(localStorage.getItem("skillzify_progress") || "{}")).length; } catch (e) {}
     var st = A.streak(), runs = A.runCount();
-    var joined = null;
-    try { joined = JSON.parse(localStorage.getItem("skillzify_users") || "[]"); } catch (e) {}
     var since = "recently";
     if (user && user.created) since = new Date(user.created).toLocaleDateString(undefined, { month: "short", year: "numeric" });
     document.getElementById("profile-meta").textContent = "🗓️ Learning since " + since + " · " + done + "/16 lessons";
