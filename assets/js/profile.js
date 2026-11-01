@@ -9,8 +9,11 @@
   function render() {
     var prof = A.profile();
     var user = null;
-    try { var sess = S.storeGet("skillzify_session", null); if (sess) user = (S.storeGet("skillzify_users", [])).filter(function(u){return u.email===sess.email;})[0] || null; } catch (e) {}
-    var name = prof.name || (user && user.name) || "Learner";
+    try {
+      var sessEmail = S.storeGet("skillzify_session", null); // session stores the email string
+      if (sessEmail) user = (S.storeGet("skillzify_users", [])).filter(function (u) { return u.email === sessEmail; })[0] || null;
+    } catch (e) {}
+    var name = prof.name || (user && user.name) || "Vikas";
     var seed = (user && user.email) || name;
 
     document.getElementById("profile-avatar").innerHTML = A.identicon(seed, 96);
