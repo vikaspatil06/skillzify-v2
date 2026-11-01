@@ -6,7 +6,7 @@
   <meta name="description" content="Your Skillzify learning dashboard — progress, streaks and run history.">
   <title>Dashboard — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=3">
+  <link rel="stylesheet" href="assets/css/style.css?v=4">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -20,6 +20,7 @@
       <a href="index.html">Home</a>
       <a href="learn.html">Learn</a>
       <a href="compiler.html">Compiler</a>
+      <a href="reference.html">Reference</a>
       <a href="dashboard.html">Dashboard</a>
       <a href="about.html">About</a>
       <a href="contact.html">Contact</a>
@@ -85,6 +86,29 @@
           <div id="dash-runs" style="margin-top:8px"></div>
         </div>
       </div>
+      <div class="dash-grid" style="grid-template-columns:1fr 1fr;margin-top:20px">
+        <div class="dash-card">
+          <h3>📊 Topic mastery</h3>
+          <p class="muted small">Where your XP lives, GitHub-language-bar style.</p>
+          <div class="mastery-bar" id="dash-mastery-bar"></div>
+          <div class="mastery-legend" id="dash-mastery-legend"></div>
+        </div>
+        <div class="dash-card">
+          <h3>🟩 This week's activity</h3>
+          <div id="dash-heatmap" style="overflow-x:auto;margin-top:8px"></div>
+          <p style="margin-top:10px"><a href="profile.html">Full profile →</a></p>
+        </div>
+      </div>
+      <div class="dash-grid" style="grid-template-columns:1fr 1fr;margin-top:20px">
+        <div class="dash-card">
+          <h3>🏆 Latest achievements</h3>
+          <div id="dash-achievements" class="ach-grid"></div>
+        </div>
+        <div class="dash-card">
+          <h3>📰 Recent activity</h3>
+          <div id="dash-feed" class="feed"></div>
+        </div>
+      </div>
     </div>
   </section>
 </main>
@@ -119,6 +143,8 @@
 </footer>
 
 <script src="assets/js/app.js"></script>
+<script src="assets/js/activity.js"></script>
+<script src="assets/js/palette.js"></script>
 <script src="assets/js/auth.js"></script>
 <script src="assets/js/learn.js"></script>
 <script src="assets/js/dashboard.js"></script>
