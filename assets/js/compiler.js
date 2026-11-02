@@ -250,12 +250,22 @@
 
   function bumpStreak() {
     var s = window.Skillzify.storeGet("skillzify_streak", { last: null, count: 0 });
-    var today = new Date().toDateString();
-    if (s.last === today) return;
-    var yesterday = new Date(Date.now() - 864e5).toDateString();
-    s.count = (s.last === yesterday) ? s.count + 1 : 1;
-    s.last = today;
+    // Accept both legacy toDateString() and synced yyyy-MM-dd formats.
+    function isoDay(d) { var m = d.getMonth() + 1, dy = d.getDate(); return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (dy < 10 ? "0" + dy : dy); }
+    function normDay(v) {
+      if (!v) return null;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+      var t = new Date(v);
+      return isNaN(t.getTime()) ? null : isoDay(t);
+    }
+    var todayIso = isoDay(new Date());
+    var yestIso = isoDay(new Date(Date.now() - 864e5));
+    var lastIso = normDay(s.last);
+    if (lastIso === todayIso) return;
+    s.count = (lastIso === yestIso) ? s.count + 1 : 1;
+    s.last = todayIso;
     window.Skillzify.storeSet("skillzify_streak", s);
+    if (window.SkillzifySync) window.SkillzifySync.markDirty();
   }
 
   /* ---------- AI Explain (offline heuristics) ---------- */
