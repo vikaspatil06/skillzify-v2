@@ -215,7 +215,7 @@ class SyncRepository(private val store: Store) {
         try {
             listenerReg = userDoc(uid).addSnapshotListener { snap, _ ->
                 if (snap == null || !snap.exists()) return@addSnapshotListener
-                if (snap.metadata.hasPendingWrites()) return // our own write
+                if (snap.metadata.hasPendingWrites()) return@addSnapshotListener // our own write
                 scope.launch {
                     try {
                         pullOnly(snap.data)
