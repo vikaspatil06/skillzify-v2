@@ -997,10 +997,33 @@
   }
 
   /* ================= Lesson modal ================= */
-  var modalIdx = -1, quizState = [], challengeOk = false, modalOpen = false;
+  var modalIdx = -1, quizState = [], challengeOk = false, modalOpen = false, curQuiz = [];
 
-  function quizHTML(lesson) {
-    return lesson.quiz.map(function (q, qi) {
+  /* ---------- Randomized quizzes: fresh pick + shuffled options every open ---------- */
+  function shuffled(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+  function buildQuiz(lesson) {
+    var bank = lesson.quiz || [];
+    var picked = shuffled(bank).slice(0, Math.min(3, bank.length));
+    return picked.map(function (q) {
+      var order = shuffled(q.options.map(function (_, i) { return i; }));
+      return {
+        q: q.q,
+        options: order.map(function (i) { return q.options[i]; }),
+        answer: order.indexOf(q.answer),
+        why: q.why
+      };
+    });
+  }
+
+  function quizHTML() {
+    return curQuiz.map(function (q, qi) {
       var opts = q.options.map(function (o, oi) {
         return '<button class="quiz-opt" data-qi="' + qi + '" data-oi="' + oi + '">' +
           "<strong>" + "ABCD"[oi] + ".</strong> " + esc(o) + "</button>";
@@ -1038,7 +1061,8 @@
     if (gi < 0 || gi >= LESSONS.length || !isUnlocked(gi)) return;
     modalIdx = gi;
     var lesson = LESSONS[gi];
-    quizState = lesson.quiz.map(function () { return { correct: false, firstTry: true }; });
+    curQuiz = buildQuiz(lesson); // fresh random pick + shuffled options, every open
+    quizState = curQuiz.map(function () { return { correct: false, firstTry: true }; });
     challengeOk = isDone(lesson.id); // re-opening a done lesson: challenge pre-satisfied
     var track = TRACKS.filter(function (t) { return t.id === lesson.track; })[0];
     var num = gi + 1;
@@ -1056,8 +1080,8 @@
       '<button class="btn btn-sm" id="lm-try">▶ Try in compiler</button>' +
       '<button class="btn btn-sm btn-ghost" id="lm-star" aria-label="Star lesson">⭐</button>' +
       '<button class="btn btn-sm btn-ghost" id="lm-pin" aria-label="Pin lesson">📌</button></div>' +
-      '<h3 class="lm-sec">🧠 Quick quiz</h3><p class="hint" style="margin-top:0">Answer all correctly to proceed. Wrong answers just cost you bonus XP — keep trying!</p>' +
-      '<div id="lm-quiz">' + quizHTML(lesson) + "</div>" +
+      '<h3 class="lm-sec">🧠 Quick quiz</h3><p class="hint" style="margin-top:0">Answer all correctly to proceed. Questions are picked fresh every time — no two attempts are the same. Wrong answers just cost you bonus XP — keep trying!</p>' +
+      '<div id="lm-quiz">' + quizHTML() + "</div>" +
       '<h3 class="lm-sec">🎯 Mini challenge</h3><div class="challenge" id="lm-challenge">' + challengeHTML(lesson.challenge) + "</div>" +
       '<div class="lm-complete"><button class="btn" id="lm-complete" disabled>🔒 Finish the quiz &amp; challenge to complete</button>' +
       '<div class="lm-nav">' +
@@ -1085,7 +1109,7 @@
         paint(); window.Skillzify.toast(on ? "Pinned 📌" : "Unpinned", "success");
       });
     })();
-    bindQuiz(lesson);
+    bindQuiz();
     bindChallenge(lesson);
     document.getElementById("lm-prev").addEventListener("click", function () { if (gi > 0) openLesson(gi - 1); });
     document.getElementById("lm-next").addEventListener("click", function () { if (isUnlocked(gi + 1) && gi + 1 < LESSONS.length) openLesson(gi + 1); });
@@ -1109,10 +1133,10 @@
     setTimeout(function () { bd.hidden = true; }, 280);
   }
 
-  function bindQuiz(lesson) {
+  function bindQuiz() {
     document.querySelectorAll("#lm-quiz .quiz-opt").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        var qi = +btn.dataset.qi, oi = +btn.dataset.oi, q = lesson.quiz[qi], st = quizState[qi];
+        var qi = +btn.dataset.qi, oi = +btn.dataset.oi, q = curQuiz[qi], st = quizState[qi];
         if (st.correct) return;
         var box = btn.closest(".quiz-q");
         if (oi === q.answer) {
