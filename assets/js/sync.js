@@ -223,12 +223,50 @@
   /* ---------- status ---------- */
   var statusCbs = [];
   var lastStatus = { text: "Sync offline", at: 0 };
+  function ensurePill() {
+    try {
+      var el = document.getElementById("skillzify-sync-pill");
+      if (!el && document.body) {
+        el = document.createElement("div");
+        el.id = "skillzify-sync-pill";
+        el.style.cssText = "position:fixed;bottom:12px;right:12px;z-index:9999;" +
+          "font-size:11px;padding:5px 12px;border-radius:20px;background:rgba(20,20,25,.82);" +
+          "color:#fff;font-family:system-ui,sans-serif;cursor:pointer;user-select:none;" +
+          "border:1px solid rgba(255,255,255,.15);";
+        el.title = "Cloud sync status — click to sync now";
+        el.onclick = function () { try { syncCycle(); } catch (e) {} };
+        document.body.appendChild(el);
+      }
+      return el;
+    } catch (e) { return null; }
+  }
   function setStatus(text) {
     lastStatus = { text: text, at: Date.now() };
     statusCbs.forEach(function (cb) { try { cb(lastStatus.text, lastStatus.at); } catch (e) {} });
     try {
       var els = document.querySelectorAll("[data-sync-status]");
       for (var i = 0; i < els.length; i++) els[i].textContent = text;
+      var pill = ensurePill();
+      if (pill) pill.textContent = "☁️ " + text;
+    } catch (e) {}
+  }
+  function showToast(msg) {
+    try {
+      var t = document.getElementById("skillzify-sync-toast");
+      if (!t && document.body) {
+        t = document.createElement("div");
+        t.id = "skillzify-sync-toast";
+        t.style.cssText = "position:fixed;top:14px;left:50%;transform:translateX(-50%);" +
+          "z-index:10000;background:#1a73e8;color:#fff;font-size:13px;padding:8px 18px;" +
+          "border-radius:8px;font-family:system-ui,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.35);" +
+          "transition:opacity .4s;opacity:0;pointer-events:none;";
+        document.body.appendChild(t);
+      }
+      if (!t) return;
+      t.textContent = msg;
+      t.style.opacity = "1";
+      if (t._timer) clearTimeout(t._timer);
+      t._timer = setTimeout(function () { t.style.opacity = "0"; }, 2600);
     } catch (e) {}
   }
   function fmtTime(ts) {
@@ -285,19 +323,80 @@
     } catch (e) {}
   }
 
+  /* ---------- real-time listener: pull-only on external changes ----------
+     The listener NEVER pushes — it only merges cloud -> local. Local
+     changes push via syncCycle/markDirty. hasPendingWrites skips the
+     echo of our own writes, so this cannot loop. */
+  var unsubSnap = null;
+  function pullOnly(data) {
+    var cloud = [data.profile || null, data.progress || null, data.exercises || null];
+    writeLocalProfile(mergeProfile(readLocalProfile(), cloud[0]));
+    writeLocalProgress(mergeProgress(readLocalProgress(), cloud[1]));
+    writeLocalExercises(mergeExercises(readLocalExercises(), cloud[2]));
+    setStatus("Synced ✓ " + fmtTime(Date.now()));
+    showToast("☁️ Synced from your other device — refresh the page to see it");
+    try {
+      if (typeof CustomEvent === "function")
+        window.dispatchEvent(new CustomEvent("skillzify-sync", { detail: { at: Date.now() } }));
+    } catch (e) {}
+  }
+  function startListener() {
+    try {
+      var d = db(), u = uid();
+      if (!d || !u) return;
+      stopListener();
+      unsubSnap = userDoc(d, u).onSnapshot(function (snap) {
+        try {
+          if (!snap || !snap.exists) return;
+          if (snap.metadata && snap.metadata.hasPendingWrites) return; // our own write
+          pullOnly(snap.data());
+        } catch (e) {}
+      }, function () {});
+    } catch (e) {}
+  }
+  function stopListener() {
+    try { if (unsubSnap) { unsubSnap(); unsubSnap = null; } } catch (e) {}
+  }
+
+  /* ---------- logout: push pending changes, then wipe local user data ----------
+     Called BEFORE signOut so nothing is lost. The auth-state listener below
+     also wipes as a safety net if logout happens another way. */
+  function clearLocalUserData() {
+    [LS.PROGRESS, LS.XP, LS.STREAK, LS.ATTEMPTS, LS.PROFILE, LS.PROFILE_TS].forEach(function (k) {
+      try { localStorage.removeItem(k); } catch (e) {}
+    });
+  }
+  function handleLogout() {
+    stopListener();
+    if (pushTimer) { try { clearTimeout(pushTimer); } catch (e) {} pushTimer = null; }
+    var d, u;
+    try { d = db(); u = uid(); } catch (e) { d = null; u = null; }
+    if (!d || !u) { clearLocalUserData(); setStatus("Sync offline"); return Promise.resolve(); }
+    try {
+      return syncCycle().then(function () {
+        clearLocalUserData(); setStatus("Sync offline");
+      }).catch(function () {
+        clearLocalUserData(); setStatus("Sync offline");
+      });
+    } catch (e) { clearLocalUserData(); setStatus("Sync offline"); return Promise.resolve(); }
+  }
+
   /* ---------- public API ---------- */
   var inited = false;
   function init() {
     if (inited) return;
     inited = true;
+    try { ensurePill(); } catch (e) {}
     try {
       if (!root.firebase || !root.firebase.auth) { setStatus("Sync offline"); return; }
       root.firebase.auth().onAuthStateChanged(function (u) {
         try {
-          if (u) { syncCycle(); }
+          if (u) { syncCycle(); startListener(); }
           else {
+            stopListener();
             if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
-            setStatus("Sync offline"); // stop syncing; keep local data
+            clearLocalUserData(); // safety net: never leave progress visible after logout
+            setStatus("Sync offline"); // stop syncing; keep cloud data
           }
         } catch (e) { setStatus("Sync offline"); }
       });
@@ -323,6 +422,7 @@
     init: init,
     markDirty: markDirty,
     onStatus: onStatus,
+    handleLogout: handleLogout,
     syncNow: function () { try { return syncCycle(); } catch (e) { return Promise.resolve(false); } },
     getStatus: function () { return lastStatus.text; }
   };
