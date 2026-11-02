@@ -12,15 +12,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,6 +90,70 @@ fun DashboardTab(vm: AppViewModel) {
                 Modifier.weight(1f)
             )
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            StatCard("🏋️", "${vm.solvedExerciseCount()}/${vm.exercises.size}", "Exercises", Modifier.weight(1f))
+            StatCard(
+                "☁️",
+                vm.syncStatus.replace("Syncing…", "…").replace("Synced ✓", "✓").replace("Synced", "✓"),
+                "Cloud sync",
+                Modifier.weight(1f)
+            )
+        }
+
+        // Profile editing
+        var editingProfile by remember { mutableStateOf(false) }
+        var editName by remember { mutableStateOf("") }
+        var editBio by remember { mutableStateOf("") }
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Card),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("👤 Profile", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    OutlinedButton(onClick = {
+                        editName = vm.profileName()
+                        editBio = vm.profileBio()
+                        editingProfile = true
+                    }) { Text("Edit", fontSize = 13.sp) }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(vm.profileName().ifBlank { "Learner" }, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                if (vm.profileBio().isNotBlank()) Text(vm.profileBio(), color = TextMuted, fontSize = 13.sp)
+            }
+        }
+        if (editingProfile) {
+            AlertDialog(
+                onDismissRequest = { editingProfile = false },
+                title = { Text("Edit profile") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = editName, onValueChange = { editName = it },
+                            label = { Text("Display name") }, singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = editBio, onValueChange = { editBio = it },
+                            label = { Text("Bio") }, modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        vm.saveProfile(editName, editBio)
+                        editingProfile = false
+                    }) { Text("Save") }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { editingProfile = false }) { Text("Cancel") }
+                }
+            )
+        }
 
         Card(
             colors = CardDefaults.cardColors(containerColor = Card),
@@ -112,6 +182,43 @@ fun DashboardTab(vm: AppViewModel) {
 
         Text("📊 Track progress", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         vm.catalog.tracks.forEach { t ->
+
+        // Topic accuracy (Practice Mode)
+        val accuracy = vm.topicAccuracy()
+        if (accuracy.isNotEmpty()) {
+            Text("🎯 Practice accuracy by topic", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            accuracy.toList().sortedByDescending { (_, st) ->
+                val (s, total) = st
+                if (total == 0) 0f else s / total.toFloat()
+            }.forEach { (topic, st) ->
+                val (s, total) = st
+                val pct = if (total == 0) 0 else s * 100 / total
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Card),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                topic.replaceFirstChar { it.uppercase() } +
+                                    if (pct < 60 && total > 0) " ⚠️ weak spot" else "",
+                                fontWeight = FontWeight.SemiBold, fontSize = 14.sp
+                            )
+                            Text("$s/$total", color = TextMuted, fontSize = 13.sp)
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { pct / 100f },
+                            modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(99.dp))
+                        )
+                    }
+                }
+            }
+        }
             val pct = vm.trackProgress(t.id)
             Card(
                 colors = CardDefaults.cardColors(containerColor = Card),
