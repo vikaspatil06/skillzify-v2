@@ -1,0 +1,266 @@
+[
+  {
+    "id": "print",
+    "name": "print()",
+    "category": "Built-in Functions",
+    "syntax": "print(*objects, sep=' ', end='\\n')",
+    "desc": "Displays output on the screen. The first function every Pythonista learns.",
+    "example": "print(\"Hello, world!\")\nprint(\"a\", \"b\", \"c\", sep=\"-\")  # a-b-c"
+  },
+  {
+    "id": "input",
+    "name": "input()",
+    "category": "Built-in Functions",
+    "syntax": "input(prompt='')",
+    "desc": "Reads a line of text from the user. Always returns a string.",
+    "example": "name = input(\"Your name? \")\nprint(\"Hi,\", name)"
+  },
+  {
+    "id": "len",
+    "name": "len()",
+    "category": "Built-in Functions",
+    "syntax": "len(obj)",
+    "desc": "Returns the number of items in a string, list, tuple, dict or set.",
+    "example": "len(\"python\")   # 6\nlen([1, 2, 3])  # 3"
+  },
+  {
+    "id": "type",
+    "name": "type()",
+    "category": "Built-in Functions",
+    "syntax": "type(obj)",
+    "desc": "Returns the type of an object — int, str, list, and friends.",
+    "example": "type(3.14)   # <class 'float'>\ntype(\"hi\")   # <class 'str'>"
+  },
+  {
+    "id": "range",
+    "name": "range()",
+    "category": "Built-in Functions",
+    "syntax": "range(stop) / range(start, stop, step)",
+    "desc": "Generates a sequence of numbers. The backbone of for loops.",
+    "example": "list(range(5))       # [0, 1, 2, 3, 4]\nlist(range(2, 10, 3))  # [2, 5, 8]"
+  },
+  {
+    "id": "enumerate",
+    "name": "enumerate()",
+    "category": "Built-in Functions",
+    "syntax": "enumerate(iterable, start=0)",
+    "desc": "Loop with automatic index counting. Cleaner than range(len(...)).",
+    "example": "for i, fruit in enumerate([\"a\", \"b\"]):\n    print(i, fruit)  # 0 a / 1 b"
+  },
+  {
+    "id": "zip",
+    "name": "zip()",
+    "category": "Built-in Functions",
+    "syntax": "zip(*iterables)",
+    "desc": "Pairs up items from multiple iterables, stopping at the shortest.",
+    "example": "for name, age in zip([\"A\", \"B\"], [20, 21]):\n    print(name, age)"
+  },
+  {
+    "id": "sorted",
+    "name": "sorted()",
+    "category": "Built-in Functions",
+    "syntax": "sorted(iterable, reverse=False)",
+    "desc": "Returns a new sorted list, leaving the original untouched.",
+    "example": "sorted([3, 1, 2])              # [1, 2, 3]\nsorted(\"cab\")                   # ['a', 'b', 'c']"
+  },
+  {
+    "id": "sum-min-max",
+    "name": "sum() / min() / max()",
+    "category": "Built-in Functions",
+    "syntax": "sum(it) / min(it) / max(it)",
+    "desc": "Quick stats over any iterable of numbers.",
+    "example": "sum([1, 2, 3])  # 6\nmax(\"abc\")     # 'c'"
+  },
+  {
+    "id": "abs-round-pow",
+    "name": "abs() / round() / pow()",
+    "category": "Built-in Functions",
+    "syntax": "abs(x) / round(x, n) / pow(x, y)",
+    "desc": "Everyday math helpers.",
+    "example": "abs(-7)        # 7\nround(3.14159, 2)  # 3.14\npow(2, 10)       # 1024"
+  },
+  {
+    "id": "int-float-str-bool",
+    "name": "int() / float() / str() / bool()",
+    "category": "Built-in Functions",
+    "syntax": "int(x) / float(x) / str(x) / bool(x)",
+    "desc": "Convert between types. Essential after input(), which returns strings.",
+    "example": "int(\"42\") + 8      # 50\nstr(3.14)           # '3.14'\nbool(\"\")            # False"
+  },
+  {
+    "id": "list-dict-set-tuple",
+    "name": "list() / dict() / set() / tuple()",
+    "category": "Built-in Functions",
+    "syntax": "list(it) / dict() / set(it) / tuple(it)",
+    "desc": "Build the four core containers, or convert between them.",
+    "example": "list(\"abc\")      # ['a', 'b', 'c']\nset([1, 1, 2])  # {1, 2}"
+  },
+  {
+    "id": "upper-lower",
+    "name": "upper() / lower()",
+    "category": "String Methods",
+    "syntax": "s.upper() / s.lower()",
+    "desc": "Change case. Great for normalising user input before comparing.",
+    "example": "\"Hello\".upper()  # 'HELLO'\n\"Hi\".lower()     # 'hi'"
+  },
+  {
+    "id": "strip",
+    "name": "strip()",
+    "category": "String Methods",
+    "syntax": "s.strip()",
+    "desc": "Removes whitespace (or given characters) from both ends.",
+    "example": "\"  hi  \".strip()  # 'hi'"
+  },
+  {
+    "id": "split-join",
+    "name": "split() / join()",
+    "category": "String Methods",
+    "syntax": "s.split(sep) / sep.join(list)",
+    "desc": "Break a string apart, or glue a list together. Two sides of one coin.",
+    "example": "\"a,b,c\".split(\",\")  # ['a', 'b', 'c']\n\"-\".join([\"a\", \"b\"])  # 'a-b'"
+  },
+  {
+    "id": "replace",
+    "name": "replace()",
+    "category": "String Methods",
+    "syntax": "s.replace(old, new)",
+    "desc": "Swap every occurrence of a substring. Strings are immutable — this returns a new one.",
+    "example": "\"hello\".replace(\"l\", \"L\")  # 'heLLo'"
+  },
+  {
+    "id": "find",
+    "name": "find()",
+    "category": "String Methods",
+    "syntax": "s.find(sub)",
+    "desc": "Index of the first match, or -1 when absent. Use 'in' for a simple check.",
+    "example": "\"python\".find(\"th\")  # 2\n\"hi\" in \"high\"         # True"
+  },
+  {
+    "id": "startswith-endswith",
+    "name": "startswith() / endswith()",
+    "category": "String Methods",
+    "syntax": "s.startswith(x) / s.endswith(x)",
+    "desc": "Clean True/False checks for prefixes and suffixes.",
+    "example": "\"file.txt\".endswith(\".txt\")  # True"
+  },
+  {
+    "id": "append-extend",
+    "name": "append() / extend()",
+    "category": "List Methods",
+    "syntax": "lst.append(x) / lst.extend(it)",
+    "desc": "append adds one item; extend adds every item of another iterable.",
+    "example": "a = [1, 2]\na.append(3)     # [1, 2, 3]\na.extend([4, 5])  # [1, 2, 3, 4, 5]"
+  },
+  {
+    "id": "insert-remove-pop",
+    "name": "insert() / remove() / pop()",
+    "category": "List Methods",
+    "syntax": "lst.insert(i, x) / lst.remove(x) / lst.pop(i)",
+    "desc": "insert at a position, remove by value, pop by index (returns the item).",
+    "example": "a = [1, 2, 3]\na.pop()     # 3, a is now [1, 2]\na.remove(1)   # a is now [2]"
+  },
+  {
+    "id": "sort-reverse",
+    "name": "sort() / reverse()",
+    "category": "List Methods",
+    "syntax": "lst.sort() / lst.reverse()",
+    "desc": "Sort or reverse in place (unlike sorted(), which returns a new list).",
+    "example": "a = [3, 1, 2]\na.sort()  # [1, 2, 3]"
+  },
+  {
+    "id": "index-count",
+    "name": "index() / count()",
+    "category": "List Methods",
+    "syntax": "lst.index(x) / lst.count(x)",
+    "desc": "Find where an item lives, or how many times it appears.",
+    "example": "[1, 2, 2, 3].count(2)  # 2"
+  },
+  {
+    "id": "get",
+    "name": "get()",
+    "category": "Dict Methods",
+    "syntax": "d.get(key, default)",
+    "desc": "Safe lookup — returns default instead of crashing on missing keys.",
+    "example": "{\"a\": 1}.get(\"b\", 0)  # 0"
+  },
+  {
+    "id": "keys-values-items",
+    "name": "keys() / values() / items()",
+    "category": "Dict Methods",
+    "syntax": "d.keys() / d.values() / d.items()",
+    "desc": "Views over a dict's keys, values, or (key, value) pairs. items() powers for-loops.",
+    "example": "for k, v in {\"a\": 1}.items():\n    print(k, v)  # a 1"
+  },
+  {
+    "id": "update",
+    "name": "update()",
+    "category": "Dict Methods",
+    "syntax": "d.update(other)",
+    "desc": "Merge another dict in, overwriting clashes.",
+    "example": "d = {\"a\": 1}\nd.update({\"b\": 2})  # {\"a\": 1, \"b\": 2}"
+  },
+  {
+    "id": "if-elif-else",
+    "name": "if / elif / else",
+    "category": "Keywords & Syntax",
+    "syntax": "if cond: ... elif cond: ... else: ...",
+    "desc": "Branch your logic. elif chains keep nested ifs flat.",
+    "example": "x = 7\nif x > 10:\n    print(\"big\")\nelif x > 5:\n    print(\"medium\")  # runs\nelse:\n    print(\"small\")"
+  },
+  {
+    "id": "for",
+    "name": "for",
+    "category": "Keywords & Syntax",
+    "syntax": "for item in iterable: ...",
+    "desc": "Loop over anything iterable — lists, strings, dicts, ranges.",
+    "example": "for ch in \"abc\":\n    print(ch)"
+  },
+  {
+    "id": "while",
+    "name": "while",
+    "category": "Keywords & Syntax",
+    "syntax": "while cond: ...",
+    "desc": "Loop until a condition flips. Remember to change something inside, or it never ends.",
+    "example": "n = 3\nwhile n > 0:\n    print(n)\n    n -= 1"
+  },
+  {
+    "id": "def-return",
+    "name": "def / return",
+    "category": "Keywords & Syntax",
+    "syntax": "def name(params): ... return value",
+    "desc": "Define reusable functions. return hands a value back to the caller.",
+    "example": "def square(n):\n    return n * n\n\nprint(square(5))  # 25"
+  },
+  {
+    "id": "try-except",
+    "name": "try / except",
+    "category": "Keywords & Syntax",
+    "syntax": "try: ... except Error: ...",
+    "desc": "Handle errors gracefully instead of crashing.",
+    "example": "try:\n    int(\"abc\")\nexcept ValueError:\n    print(\"not a number\")"
+  },
+  {
+    "id": "with-files",
+    "name": "with (files)",
+    "category": "Keywords & Syntax",
+    "syntax": "with open(path) as f: ...",
+    "desc": "The safe way to work with files — auto-closes, even on errors.",
+    "example": "with open(\"notes.txt\", \"w\") as f:\n    f.write(\"hello\")"
+  },
+  {
+    "id": "lambda",
+    "name": "lambda",
+    "category": "Keywords & Syntax",
+    "syntax": "lambda params: expression",
+    "desc": "Tiny anonymous functions for one-liners, e.g. with sorted().",
+    "example": "sorted([\"bb\", \"a\"], key=lambda s: len(s))"
+  },
+  {
+    "id": "list-comprehension",
+    "name": "list comprehension",
+    "category": "Keywords & Syntax",
+    "syntax": "[expr for x in it if cond]",
+    "desc": "Build lists in one expressive line. Very Pythonic.",
+    "example": "[x*x for x in range(6) if x % 2 == 0]\n# [0, 4, 16]"
+  }
+]
