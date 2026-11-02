@@ -116,7 +116,19 @@
 
   /* ---------------- AI Tutor ---------------- */
   function askTutor(ex, code, failInfo, box) {
-    box.innerHTML = '<p class="hint">🤖 Asking AI Tutor…</p>';
+    box.innerHTML = '<p class="hint">🤖 Waking up the AI Tutor…</p>';
+    var ctrl = null, timer = null, stageTimer = null;
+    try {
+      ctrl = new AbortController();
+      timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 60000);
+      stageTimer = setTimeout(function () {
+        box.innerHTML = '<p class="hint">🤖 Still working — the AI backend is slow to wake on the free tier. Hang on…</p>';
+      }, 9000);
+    } catch (e) {}
+    function clearTimers() {
+      if (timer) clearTimeout(timer);
+      if (stageTimer) clearTimeout(stageTimer);
+    }
     var payload = {
       mode: "tutor",
       code: "EXERCISE: " + ex.title + "\nPROMPT: " + ex.prompt + "\n\nSTUDENT CODE:\n" + (code || "(empty)"),
@@ -125,15 +137,18 @@
         " Act as a Socratic tutor: explain what is likely wrong and give ONE guiding hint toward the fix. " +
         "Do NOT write the full corrected code. Keep it short and encouraging."
     };
-    fetch("api/explain", {
+    var opts = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
-    }).then(function (r) { if (!r.ok) throw 0; return r.json(); })
+    };
+    if (ctrl) opts.signal = ctrl.signal;
+    fetch("api/explain", opts).then(function (r) { clearTimers(); if (!r.ok) throw 0; return r.json(); })
     .then(function (data) {
       if (!data.explanation) throw 0;
       box.innerHTML = '<h4>🤖 AI Tutor</h4><p>' + esc(data.explanation).replace(/\n/g, "<br>") + "</p>";
     }).catch(function () {
+      clearTimers();
       box.innerHTML = '<h4>🤖 AI Tutor</h4><p class="hint">The AI tutor is unreachable right now (backend offline). ' +
         'Try a hint above — Hint 3 almost gives it away. Your code and failing tests are still visible to you.</p>';
     });
@@ -512,6 +527,8 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     if (!$("practice-list")) return; // not on practice page
+    // Warm the AI backend now, so the tutor is fast when asked.
+    try { fetch("api/health", { method: "GET", cache: "no-store" }).catch(function () {}); } catch (e) {}
     initFilters();
     window.addEventListener("hashchange", route);
     route();
