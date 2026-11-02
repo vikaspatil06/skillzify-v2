@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YYR4JD16G8"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-YYR4JD16G8');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Skillzify Projects — guided real-world Python projects: file organizer, API client, web scraper, data analyzer.">
+  <title>Projects — Skillzify</title>
+  <link rel="icon" href="assets/logo-light.png">
+  <link rel="stylesheet" href="assets/css/style.css?v=4">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html"><img data-logo src="assets/logo-light.png" alt="Skillzify logo"><span>Skillzify</span></a>
+    <div class="nav-links" id="nav-links">
+      <a href="index.html">Home</a>
+      <a href="learn.html">Learn</a>
+      <a href="compiler.html">Compiler</a>
+      <a href="reference.html">Reference</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="profile.html">Profile</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+    </div>
+    <div class="nav-actions">
+      <span id="account-link"></span>
+      <button class="icon-btn" data-theme-toggle aria-label="Toggle dark/light theme">☀️</button>
+      <button class="icon-btn hamburger" id="hamburger" aria-label="Open menu">☰</button>
+    </div>
+  </div>
+</nav>
+<div class="toast" id="toast" role="status"></div>
+
+<main>
+  <section class="page-hero">
+    <div class="container">
+      <h1 class="section-title">🛠️ Real-World Projects</h1>
+      <p class="section-sub">Tutorials end; projects begin. Build these four, in order — each one uses everything before it.</p>
+    </div>
+  </section>
+  <section class="section" style="padding-top:24px">
+    <div class="container" style="max-width:860px">
+
+      <div class="card proj-card" style="margin-bottom:18px">
+        <div style="font-size:2rem">📁</div>
+        <h3>1. File Organizer <span class="badge">Beginner</span></h3>
+        <p class="hint">Skills: os, pathlib, loops, conditionals</p>
+        <p>Write a script that scans your Downloads folder and sorts files into subfolders by extension — images, documents, videos, everything else.</p>
+        <ol>
+          <li>List every file in a folder with <code>pathlib.Path.iterdir()</code>.</li>
+          <li>Map extensions to folder names with a dictionary (<code>{".jpg": "images", ".pdf": "docs"}</code>).</li>
+          <li>Create missing folders with <code>mkdir(exist_ok=True)</code> and move files with <code>shutil.move()</code>.</li>
+          <li><strong>Stretch:</strong> add a <code>--dry-run</code> flag that prints moves without doing them.</li>
+        </ol>
+        <pre class="code">from pathlib import Path
+import shutil
+
+downloads = Path.home() / "Downloads"
+kinds = {".jpg": "images", ".png": "images",
+         ".pdf": "docs", ".mp4": "videos"}
+
+for f in downloads.iterdir():
+    if f.is_file() and f.suffix in kinds:
+        dest = downloads / kinds[f.suffix]
+        dest.mkdir(exist_ok=True)
+        shutil.move(str(f), dest / f.name)
+print("Done! ✨")</pre>
+        <a class="btn btn-sm" href="compiler.html">Try it in the compiler →</a>
+      </div>
+
+      <div class="card proj-card" style="margin-bottom:18px">
+        <div style="font-size:2rem">🌤️</div>
+        <h3>2. Weather API Client <span class="badge">Intermediate</span></h3>
+        <p class="hint">Skills: requests, JSON, error handling, f-strings</p>
+        <p>Fetch live weather data from a free API and print a friendly report. Your first program that talks to the internet.</p>
+        <ol>
+          <li>Get a free key from <code>openweathermap.org</code> (or use the no-key <code>wttr.in</code> service).</li>
+          <li><code>requests.get(url, params={...})</code> — always pass a <code>timeout</code>.</li>
+          <li>Check <code>response.status_code</code>; parse with <code>response.json()</code>.</li>
+          <li>Handle failures gracefully: <code>try/except requests.RequestException</code>.</li>
+          <li><strong>Stretch:</strong> accept the city as a command-line argument via <code>sys.argv</code>.</li>
+        </ol>
+        <pre class="code">import requests
+
+city = "Pune"
+r = requests.get("https://wttr.in/" + city,
+                 params={"format": "j1"}, timeout=10)
+data = r.json()
+now = data["current_condition"][0]
+print(f"{city}: {now['weatherDesc'][0]['value']}, "
+      f"{now['temp_C']}°C (feels {now['FeelsLikeC']}°C)")</pre>
+        <p class="hint">⚠️ Needs <code>pip install requests</code> on your machine — the in-browser compiler can't reach the network.</p>
+      </div>
+
+      <div class="card proj-card" style="margin-bottom:18px">
+        <div style="font-size:2rem">🕷️</div>
+        <h3>3. Web Scraper <span class="badge">Intermediate</span></h3>
+        <p class="hint">Skills: requests, BeautifulSoup, lists, CSV output</p>
+        <p>Scrape headlines from a news site and save them to a CSV file. Respect <code>robots.txt</code> — scrape gently.</p>
+        <ol>
+          <li>Fetch the page HTML with <code>requests</code>.</li>
+          <li>Parse with <code>BeautifulSoup(html, "html.parser")</code>.</li>
+          <li>Select headlines with <code>soup.select("h2 a")</code> (inspect the page first!).</li>
+          <li>Write title + link rows with the <code>csv</code> module.</li>
+          <li><strong>Stretch:</strong> scrape 3 pages and de-duplicate with a <code>set</code>.</li>
+        </ol>
+        <pre class="code">import csv, requests
+from bs4 import BeautifulSoup
+
+html = requests.get("https://example.com/news", timeout=10).text
+soup = BeautifulSoup(html, "html.parser")
+
+rows = [(a.get_text(strip=True), a["href"])
+        for a in soup.select("h2 a") if a.get("href")]
+
+with open("headlines.csv", "w", newline="") as f:
+    csv.writer(f).writerows([("title", "link"), *rows])
+print(f"Saved {len(rows)} headlines.")</pre>
+        <p class="hint">⚠️ Needs <code>pip install beautifulsoup4</code> — and always check a site's terms before scraping.</p>
+      </div>
+
+      <div class="card proj-card" style="margin-bottom:18px">
+        <div style="font-size:2rem">📊</div>
+        <h3>4. CSV Data Analyzer <span class="badge">Advanced</span></h3>
+        <p class="hint">Skills: csv, collections.Counter, statistics, comprehensions</p>
+        <p>Analyze a real dataset (e.g. your exercise attempts exported as CSV): top categories, averages, trends.</p>
+        <ol>
+          <li>Read rows with <code>csv.DictReader</code> — dictionaries beat index juggling.</li>
+          <li>Count categories with <code>collections.Counter</code>.</li>
+          <li>Compute averages with <code>statistics.mean</code>; group with dict comprehensions.</li>
+          <li>Print a clean text report with f-strings and <code>max(..., key=...)</code> highlights.</li>
+          <li><strong>Stretch:</strong> draw a bar chart with <code>matplotlib</code>.</li>
+        </ol>
+        <pre class="code">import csv
+from collections import Counter
+from statistics import mean
+
+with open("scores.csv") as f:
+    rows = list(csv.DictReader(f))
+
+by_topic = {}
+for r in rows:
+    by_topic.setdefault(r["topic"], []).append(float(r["score"]))
+
+for topic, scores in sorted(by_topic.items()):
+    print(f"{topic:12} avg {mean(scores):5.1f}  "
+          f"n={len(scores)}")
+top = Counter(r["topic"] for r in rows).most_common(1)[0]
+print(f"\nMost practiced: {top[0]} ({top[1]} attempts)")</pre>
+        <a class="btn btn-sm" href="compiler.html">Try it in the compiler →</a>
+      </div>
+
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <img data-logo src="assets/logo-light.png" alt="Skillzify logo">
+        <p>Learn. Build. Shine. — an advanced, browser-first Python learning platform for students.</p>
+      </div>
+      <div>
+        <h4>Learn</h4>
+        <a href="learn.html">Beginner track</a>
+        <a href="learn.html">Intermediate track</a>
+        <a href="learn.html">Advanced track</a>
+      </div>
+      <div>
+        <h4>Platform</h4>
+        <a href="compiler.html">AI Compiler</a>
+        <a href="practice.html">Practice</a>
+        <a href="paths.html">Learning Paths</a>
+        <a href="projects.html">Projects</a>
+        <a href="dashboard.html">Dashboard</a>
+      </div>
+      <div>
+        <h4>Company</h4>
+        <a href="about.html">About us</a>
+        <a href="contact.html">Contact</a>
+      </div>
+    </div>
+    <div class="footer-bottom">© <span data-year>2026</span> Skillzify · Learn. Build. Shine.</div>
+  </div>
+</footer>
+
+<script src="assets/js/app.js"></script>
+<script src="assets/js/activity.js"></script>
+<script src="assets/js/palette.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
+<script src="assets/js/auth.js"></script>
+</body>
+</html>
