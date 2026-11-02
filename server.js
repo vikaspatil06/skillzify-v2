@@ -73,28 +73,44 @@ app.post("/api/explain", async (req, res) => {
     : "Explain this Python code using the walkthrough structure above.\n\nCODE:\n" + code;
 
   async function callGemini(prompt, attempt, maxTokens) {
-    const r = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(MODEL) + ":generateContent",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: style }] },
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 },
-        }),
+    // Fail fast: never let one slow Google response hang the request for minutes.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 25000);
+    try {
+      const r = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(MODEL) + ":generateContent",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: style }] },
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 },
+          }),
+          signal: ctrl.signal,
+        }
+      );
+      clearTimeout(timer);
+      // Google sometimes 503s under load ("try again later") — one retry helps.
+      if ((r.status === 503 || r.status === 429) && attempt < 1) {
+        await new Promise((ok) => setTimeout(ok, 2500));
+        return callGemini(prompt, attempt + 1, maxTokens);
       }
-    );
-    // Google sometimes 503s under load ("try again later") — one retry helps.
-    if ((r.status === 503 || r.status === 429) && attempt < 1) {
-      await new Promise((ok) => setTimeout(ok, 2500));
-      return callGemini(prompt, attempt + 1, maxTokens);
+      return r;
+    } catch (e) {
+      clearTimeout(timer);
+      // Timeout / network blip — one retry with a fresh clock.
+      if (attempt < 1) {
+        console.log("[explain] attempt failed (" + (e.name || "error") + ") — retrying once");
+        await new Promise((ok) => setTimeout(ok, 1500));
+        return callGemini(prompt, attempt + 1, maxTokens);
+      }
+      throw e;
     }
-    return r;
   }
 
   try {
-    let r = await callGemini(prompt, 0, 1500);
+    let r = await callGemini(prompt, 0, 1000);
     if (!r.ok) return res.status(502).json({ error: "AI provider error (HTTP " + r.status + ")." });
     let data = await r.json();
     let cand = data.candidates && data.candidates[0];
