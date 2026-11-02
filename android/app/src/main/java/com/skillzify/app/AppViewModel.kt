@@ -49,7 +49,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var pushJob: Job? = null
 
     init {
-        // Sync whenever auth state changes to signed-in.
+        // Sync whenever auth state changes to signed-in, then listen live.
         viewModelScope.launch {
             authRepo.userFlow.collect { user ->
                 if (user != null) {
@@ -58,7 +58,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     refreshFromStore()
                     syncStatus = syncRepo.lastStatus
                     if (!ok) syncStatus = "Sync offline"
+                    // Real-time: pull cloud changes as they happen (no re-login needed).
+                    syncRepo.startListening(user.uid, viewModelScope) {
+                        refreshFromStore()
+                        syncStatus = syncRepo.lastStatus
+                    }
                 } else {
+                    syncRepo.stopListening()
                     syncStatus = "Not synced"
                 }
             }
@@ -184,6 +190,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val next = prev.copy(hintsUsed = prev.hintsUsed + 1)
         store.saveAttempt(id, next)
         exerciseAttempts = exerciseAttempts + (id to next)
+        markDirty()
     }
 
     fun topicAccuracy(): Map<String, Pair<Int, Int>> {
