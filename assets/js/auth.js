@@ -102,9 +102,24 @@
   }
 
   function logoutUser() {
-    if (auth) { try { auth.signOut(); } catch (e) {} }
-    fbUser = null;
-    refreshAccountUI();
+    // Push pending progress to the cloud, then wipe local user data so the
+    // next visitor sees a clean slate. Sign out happens after the push.
+    function doSignOut() {
+      if (auth) { try { auth.signOut(); } catch (e) {} }
+      fbUser = null;
+      refreshAccountUI();
+      // Land on home with a clean slate (progress is wiped; cloud copy is safe).
+      try {
+        if (!/auth\.html$/.test(location.pathname)) location.href = "index.html";
+      } catch (e) {}
+    }
+    try {
+      if (window.SkillzifySync && window.SkillzifySync.handleLogout) {
+        window.SkillzifySync.handleLogout().then(doSignOut).catch(doSignOut);
+        return;
+      }
+    } catch (e) {}
+    doSignOut();
   }
 
   /* ---------- Nav account area (UI unchanged) ---------- */
