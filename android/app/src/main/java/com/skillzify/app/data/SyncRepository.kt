@@ -1,7 +1,10 @@
 package com.skillzify.app.data
 
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -197,5 +200,68 @@ class SyncRepository(private val store: Store) {
             lastStatus = "Sync offline"
             false
         }
+    }
+
+    /**
+     * Real-time listener: merges cloud -> local WITHOUT pushing back.
+     * Local changes push via syncNow/pushNow. hasPendingWrites skips the
+     * echo of our own writes, so this cannot loop. UI refreshes automatically
+     * because screens observe the Store's StateFlows.
+     */
+    private var listenerReg: ListenerRegistration? = null
+
+    fun startListening(uid: String, scope: CoroutineScope, onUpdate: () -> Unit = {}) {
+        stopListening()
+        try {
+            listenerReg = userDoc(uid).addSnapshotListener { snap, _ ->
+                if (snap == null || !snap.exists()) return@addSnapshotListener
+                if (snap.metadata.hasPendingWrites()) return // our own write
+                scope.launch {
+                    try {
+                        pullOnly(snap.data)
+                        lastStatus = "Synced"
+                        lastSyncAt = System.currentTimeMillis()
+                        onUpdate()
+                    } catch (e: Exception) { /* keep last status */ }
+                }
+            }
+        } catch (e: Exception) { /* listener unavailable */ }
+    }
+
+    fun stopListening() {
+        try { listenerReg?.remove() } catch (e: Exception) {}
+        listenerReg = null
+    }
+
+    /**
+     * Pull-only merge: cloud -> local Store, no push. Used by the real-time
+     * listener. Idempotent -- merging the same data twice is a no-op.
+     */
+    suspend fun pullOnly(data: Map<String, Any?>?) {
+        @Suppress("UNCHECKED_CAST")
+        val cloudProgress = data?.get("progress") as? Map<String, Any?>
+        @Suppress("UNCHECKED_CAST")
+        val cloudExercises = data?.get("exercises") as? Map<String, Any?>
+        @Suppress("UNCHECKED_CAST")
+        val cloudProfile = data?.get("profile") as? Map<String, Any?>
+
+        val merged = mergeProgress(
+            store.doneIds(), store.getXp(), store.getStreak(), store.getStreakLast(),
+            cloudProgress
+        )
+        store.applySyncedProgress(merged.lessons, merged.xp, merged.streakCount, merged.streakLast)
+
+        val cloudAtt = cloudAttempts(cloudExercises)
+        val ids = store.allAttemptIds() + cloudAtt.keys
+        val mergedAtt = ids.associateWith { id ->
+            mergeAttempt(store.getAttempt(id), cloudAtt[id] ?: ExerciseAttempt())
+        }
+        store.applySyncedAttempts(mergedAtt)
+
+        val cName = cloudProfile?.get("name") as? String ?: ""
+        val cBio = cloudProfile?.get("bio") as? String ?: ""
+        val cTs = (cloudProfile?.get("updatedAt") as? Number)?.toLong() ?: 0
+        val lTs = store.getProfileUpdatedAt()
+        if (cTs > lTs) store.applySyncedProfile(cName, cBio, cTs)
     }
 }
