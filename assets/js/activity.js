@@ -70,7 +70,7 @@
   /* ---------------- achievements ---------------- */
   var ACHIEVEMENTS = [
     { id: "first_steps",  icon: "🌱", name: "First Steps",   desc: "Complete your first lesson" },
-    { id: "scholar",      icon: "🎓", name: "Scholar",       desc: "Complete all 16 lessons" },
+    { id: "scholar",      icon: "🎓", name: "Scholar",       desc: "Complete all 32 lessons" },
     { id: "xp_100",       icon: "💯", name: "Century",       desc: "Earn 100 XP" },
     { id: "xp_500",       icon: "⚡", name: "Charged",       desc: "Earn 500 XP" },
     { id: "xp_1000",      icon: "🚀", name: "Rocket",        desc: "Earn 1,000 XP" },
@@ -82,7 +82,9 @@
     { id: "runner_50",    icon: "⚙️", name: "Engineer",      desc: "Run code 50 times" },
     { id: "snippet_saver",icon: "📝", name: "Curator",       desc: "Save your first snippet" },
     { id: "night_owl",    icon: "🦉", name: "Night Owl",     desc: "Code between midnight and 5 AM" },
-    { id: "early_bird",   icon: "🌅", name: "Early Bird",    desc: "Code between 5 and 8 AM" }
+    { id: "early_bird",   icon: "🌅", name: "Early Bird",    desc: "Code between 5 and 8 AM" },
+    { id: "ex_first",     icon: "🏋️", name: "Problem Solver", desc: "Solve your first exercise" },
+    { id: "ex_10",        icon: "💪", name: "Decathlete",    desc: "Solve 10 exercises" }
   ];
   function unlocked() { return get(ACH_KEY, {}); }
   function unlock(id) {
@@ -99,7 +101,16 @@
     try { var p = JSON.parse(localStorage.getItem("skillzify_progress") || "{}"); done = Object.keys(p).length; } catch (e) {}
     var s = streak(), runs = runCount(), snips = get(SNIP_KEY, []).length;
     if (done >= 1) unlock("first_steps");
-    if (done >= 16) unlock("scholar");
+    var totalLessons = (window.SkillzifyLearn && window.SkillzifyLearn.totalLessons) || 32;
+    if (done >= totalLessons) unlock("scholar");
+    var exSolved = 0;
+    try {
+      var atts = JSON.parse(localStorage.getItem("skillzify_exercise_attempts") || "{}");
+      var EXD = window.SkillzifyPracticeData || [];
+      EXD.forEach(function (ex) { if (atts[ex.id] && atts[ex.id].solved) exSolved++; });
+    } catch (e) {}
+    if (exSolved >= 1) unlock("ex_first");
+    if (exSolved >= 10) unlock("ex_10");
     if (xp >= 100) unlock("xp_100");
     if (xp >= 500) unlock("xp_500");
     if (xp >= 1000) unlock("xp_1000");
