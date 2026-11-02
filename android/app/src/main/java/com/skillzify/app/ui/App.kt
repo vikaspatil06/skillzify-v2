@@ -9,6 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Icon
@@ -41,7 +43,9 @@ private data class Tab(val route: String, val label: String, val icon: ImageVect
 
 private val tabs = listOf(
     Tab("learn", "Learn", Icons.Filled.School),
+    Tab("practice", "Practice", Icons.Filled.FitnessCenter),
     Tab("compiler", "Compiler", Icons.Filled.Terminal),
+    Tab("library", "Library", Icons.Filled.LibraryBooks),
     Tab("dashboard", "Dashboard", Icons.Filled.Dashboard)
 )
 
@@ -86,7 +90,9 @@ fun SkillzifyApp(vm: AppViewModel = viewModel()) {
             modifier = Modifier.padding(pad)
         ) {
             composable("learn") { LearnTab(vm, nav) }
+            composable("practice") { PracticeTab(vm, nav) }
             composable("compiler") { CompilerTab(vm) }
+            composable("library") { LibraryTab(vm, nav) }
             composable("dashboard") { DashboardTab(vm) }
             composable(
                 "lesson/{id}",
@@ -94,6 +100,27 @@ fun SkillzifyApp(vm: AppViewModel = viewModel()) {
             ) { entry ->
                 LessonDetail(vm, entry.arguments!!.getString("id")!!, nav)
             }
+            composable(
+                "exercise/{id}",
+                arguments = listOf(navArgument("id") { type = NavType.StringType })
+            ) { entry ->
+                ExerciseDetail(vm, entry.arguments!!.getString("id")!!, nav)
+            }
+            composable("paths") { PathsScreen(vm, nav) }
+            composable(
+                "path/{id}",
+                arguments = listOf(navArgument("id") { type = NavType.StringType })
+            ) { entry ->
+                PathDetail(vm, entry.arguments!!.getString("id")!!, nav)
+            }
+            composable("projects") { ProjectsScreen(vm, nav) }
+            composable(
+                "project/{id}",
+                arguments = listOf(navArgument("id") { type = NavType.StringType })
+            ) { entry ->
+                ProjectDetail(vm, entry.arguments!!.getString("id")!!, nav)
+            }
+            composable("reference") { ReferenceScreen(vm) }
         }
     }
 }
