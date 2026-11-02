@@ -53,6 +53,17 @@
 
   <section class="section" style="padding-top:24px">
     <div class="container" id="dash-root">
+      <div class="card" style="margin-bottom:18px">
+        <div class="daily-inner">
+          <div><h3 style="margin:0 0 6px">🚀 Keep going</h3>
+          <p class="hint" style="margin:0">Practice, follow a path, or build a project.</p></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <a class="btn btn-sm" href="practice.html">🏋️ Practice</a>
+            <a class="btn btn-sm btn-ghost" href="paths.html">🗺️ Paths</a>
+            <a class="btn btn-sm btn-ghost" href="projects.html">🛠️ Projects</a>
+          </div>
+        </div>
+      </div>
       <div class="dash-grid">
         <div class="dash-card">
           <h3>Overall progress</h3>
@@ -110,6 +121,28 @@
       </div>
       <div class="dash-grid" style="grid-template-columns:1fr 1fr;margin-top:20px">
         <div class="dash-card">
+          <h3>📅 Today's challenge</h3>
+          <div id="dash-daily"></div>
+        </div>
+        <div class="dash-card">
+          <h3>🔁 Review queue</h3>
+          <div id="dash-revision"></div>
+        </div>
+      </div>
+      <div class="dash-grid" style="grid-template-columns:1fr 1fr;margin-top:20px">
+        <div class="dash-card">
+          <h3>🎯 Exercise accuracy by topic</h3>
+          <p class="muted small">Solved exercises per topic — your weak spots, highlighted.</p>
+          <div id="dash-topic-acc" style="margin-top:8px"></div>
+        </div>
+        <div class="dash-card">
+          <h3>🎓 Certificates</h3>
+          <p class="muted small">Complete a full track to unlock its certificate.</p>
+          <div id="dash-certs" style="margin-top:8px"></div>
+        </div>
+      </div>
+      <div class="dash-grid" style="grid-template-columns:1fr 1fr;margin-top:20px">
+        <div class="dash-card">
           <h3>🏆 Latest achievements</h3>
           <div id="dash-achievements" class="ach-grid"></div>
         </div>
@@ -158,6 +191,7 @@
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="assets/js/auth.js"></script>
 <script src="assets/js/learn.js"></script>
+<script src="assets/js/practice-data.js"></script>
 <script src="assets/js/dashboard.js"></script>
 <script>
 // "Next step" hint: first incomplete lesson
