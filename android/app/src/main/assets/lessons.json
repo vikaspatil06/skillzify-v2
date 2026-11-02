@@ -82,6 +82,39 @@
           ],
           "answer": 1,
           "why": "Quoted text is a string (str) — one of Python's core data types."
+        },
+        {
+          "q": "What does this print? print(\"Py\", \"thon\")",
+          "options": [
+            "Python",
+            "Py+thon",
+            "Error",
+            "Py thon"
+          ],
+          "answer": 3,
+          "why": "print() separates multiple arguments with a space."
+        },
+        {
+          "q": "In this code, which line prints first? print(\"one\") then print(\"two\")",
+          "options": [
+            "one",
+            "two",
+            "Both together",
+            "Neither"
+          ],
+          "answer": 0,
+          "why": "Python runs code top to bottom, one line at a time."
+        },
+        {
+          "q": "What is wrong with print(Hello)?",
+          "options": [
+            "Nothing, it works",
+            "Missing parentheses",
+            "Hello must be in quotes to be a string",
+            "print must be uppercase"
+          ],
+          "answer": 2,
+          "why": "Without quotes, Python reads Hello as a variable name, which does not exist."
         }
       ],
       "challenge": {
@@ -131,6 +164,39 @@
           ],
           "answer": 1,
           "why": "Names can't start with a digit, can't contain '-', and can't be Python keywords like class."
+        },
+        {
+          "q": "What does this print? x = 5, then x = x + 2, then print(x)",
+          "options": [
+            "5",
+            "2",
+            "7",
+            "x + 2"
+          ],
+          "answer": 2,
+          "why": "x is reassigned: 5 + 2 = 7."
+        },
+        {
+          "q": "Which assignment fails?",
+          "options": [
+            "my-name = \"Asha\"",
+            "age = 20",
+            "_score = 99",
+            "name2 = \"x\""
+          ],
+          "answer": 0,
+          "why": "Hyphens are not allowed in names — Python reads it as subtraction."
+        },
+        {
+          "q": "After a = 10 and b = a, what is b?",
+          "options": [
+            "a",
+            "Error",
+            "0",
+            "10"
+          ],
+          "answer": 3,
+          "why": "b copies a's current value, which is 10."
         }
       ],
       "challenge": {
@@ -176,6 +242,39 @@
           ],
           "answer": 1,
           "why": "P-y-t-h-o-n = 6 characters."
+        },
+        {
+          "q": "What does this print? s = \"hello\", then print(s.upper())",
+          "options": [
+            "hello",
+            "Hello",
+            "HELLO",
+            "Error"
+          ],
+          "answer": 2,
+          "why": ".upper() returns a new all-caps string."
+        },
+        {
+          "q": "What does this print? x = 5, then print(f\"{x + 1}\")",
+          "options": [
+            "x + 1",
+            "5",
+            "Error",
+            "6"
+          ],
+          "answer": 3,
+          "why": "f-strings can evaluate any expression inside the braces."
+        },
+        {
+          "q": "After s = \"abc\" and s.upper(), what is s?",
+          "options": [
+            "abc",
+            "ABC",
+            "Error",
+            "None"
+          ],
+          "answer": 0,
+          "why": "String methods return new strings; they never change the original."
         }
       ],
       "challenge": {
@@ -225,6 +324,39 @@
           ],
           "answer": 0,
           "why": "elif is short for 'else if' — Python's own keyword."
+        },
+        {
+          "q": "What prints? x = 5, if x > 10: print(\"big\"), else: print(\"small\")",
+          "options": [
+            "small",
+            "big",
+            "Error",
+            "Nothing"
+          ],
+          "answer": 0,
+          "why": "5 > 10 is False, so the else branch runs."
+        },
+        {
+          "q": "In an if / elif / else chain, how many branches run?",
+          "options": [
+            "All true ones",
+            "The last one",
+            "Only the first true one",
+            "None"
+          ],
+          "answer": 2,
+          "why": "Python runs the first branch whose condition is true, then skips the rest."
+        },
+        {
+          "q": "What is wrong with: if score = 100: ?",
+          "options": [
+            "Nothing, it works",
+            "It uses = (assignment) instead of == (comparison)",
+            "score must be a string",
+            "if must be uppercase"
+          ],
+          "answer": 1,
+          "why": "= stores a value; == compares two values."
         }
       ],
       "challenge": {
@@ -274,6 +406,39 @@
           ],
           "answer": 1,
           "why": "break jumps straight out of the loop. (continue skips to the next iteration.)"
+        },
+        {
+          "q": "What does this print? for i in range(3): print(i)",
+          "options": [
+            "1 2 3",
+            "0 1 2 3",
+            "3 2 1",
+            "0 1 2"
+          ],
+          "answer": 3,
+          "why": "range(3) starts at 0 and stops before 3."
+        },
+        {
+          "q": "What makes while True: dangerous?",
+          "options": [
+            "It loops forever unless break runs",
+            "It is a syntax error",
+            "It runs only once",
+            "It skips the body"
+          ],
+          "answer": 0,
+          "why": "True never becomes False, so only break can stop it."
+        },
+        {
+          "q": "What prints? for i in range(5): if i == 2: continue, then print(i)",
+          "options": [
+            "0 1 2 3 4",
+            "2",
+            "0 1 3 4",
+            "0 1"
+          ],
+          "answer": 2,
+          "why": "continue skips the rest of that round, so 2 is never printed."
         }
       ],
       "challenge": {
@@ -323,6 +488,39 @@
           ],
           "answer": 1,
           "why": "It has a default value, so callers may omit it."
+        },
+        {
+          "q": "What does this print? def add(a, b): return a + b, then print(add(2, 3))",
+          "options": [
+            "a + b",
+            "2 3",
+            "5",
+            "None"
+          ],
+          "answer": 2,
+          "why": "add(2, 3) returns 5, which print displays."
+        },
+        {
+          "q": "What does a function without return give back?",
+          "options": [
+            "None",
+            "0",
+            "An error",
+            "The last variable"
+          ],
+          "answer": 0,
+          "why": "Falling off the end of a function returns None."
+        },
+        {
+          "q": "What does this print? def greet(name, greeting=\"Hello\"): return greeting + \" \" + name, then print(greet(\"Sam\"))",
+          "options": [
+            "Hello",
+            "Sam",
+            "Error",
+            "Hello Sam"
+          ],
+          "answer": 3,
+          "why": "greeting falls back to its default, \"Hello\"."
         }
       ],
       "challenge": {
@@ -372,6 +570,39 @@
           ],
           "answer": 1,
           "why": "Negative indices count from the end: -1 is the last item."
+        },
+        {
+          "q": "What does this print? d = {\"a\": 1}, d[\"b\"] = 2, print(len(d))",
+          "options": [
+            "1",
+            "2",
+            "Error",
+            "3"
+          ],
+          "answer": 1,
+          "why": "Assigning a new key adds it, so the dict now has 2 entries."
+        },
+        {
+          "q": "What happens with t = (1, 2) followed by t.append(3)?",
+          "options": [
+            "t becomes (1, 2, 3)",
+            "Nothing happens",
+            "t becomes [1, 2, 3]",
+            "Error — tuples have no append"
+          ],
+          "answer": 3,
+          "why": "Tuples are immutable and have no append method."
+        },
+        {
+          "q": "What is [10, 20, 30][1]?",
+          "options": [
+            "20",
+            "10",
+            "30",
+            "Error"
+          ],
+          "answer": 0,
+          "why": "Indexing starts at 0, so index 1 is the second item."
         }
       ],
       "challenge": {
@@ -421,6 +652,39 @@
           ],
           "answer": 1,
           "why": "finally executes whether or not an exception occurred."
+        },
+        {
+          "q": "What does this print? try: x = int(\"abc\"), except ValueError: x = -1, then print(x)",
+          "options": [
+            "abc",
+            "0",
+            "-1",
+            "Error"
+          ],
+          "answer": 2,
+          "why": "int(\"abc\") raises ValueError, which the except block catches."
+        },
+        {
+          "q": "Accessing a missing dict key raises…",
+          "options": [
+            "ValueError",
+            "KeyError",
+            "IndexError",
+            "TypeError"
+          ],
+          "answer": 1,
+          "why": "Missing keys raise KeyError — catch that specifically."
+        },
+        {
+          "q": "What prints? try: print(\"a\"), except: print(\"b\"), else: print(\"c\")",
+          "options": [
+            "a then c",
+            "a then b",
+            "c only",
+            "b only"
+          ],
+          "answer": 0,
+          "why": "No error occurs, so try runs, then the else block runs."
         }
       ],
       "challenge": {
@@ -470,6 +734,39 @@
           ],
           "answer": 1,
           "why": "__init__ (the constructor) runs automatically when you create an object."
+        },
+        {
+          "q": "What does this print? class Cat: def __init__(self, n): self.n = n, then c = Cat(\"Tom\"), print(c.n)",
+          "options": [
+            "Cat",
+            "n",
+            "Error",
+            "Tom"
+          ],
+          "answer": 3,
+          "why": "__init__ stores \"Tom\" in self.n."
+        },
+        {
+          "q": "What does Dog(\"Rex\") do?",
+          "options": [
+            "Deletes the class",
+            "Creates an instance (object)",
+            "Defines a method",
+            "Imports the class"
+          ],
+          "answer": 1,
+          "why": "Calling the class name constructs a new object."
+        },
+        {
+          "q": "Why does Dog.bark() fail while rex.bark() works?",
+          "options": [
+            "bark is private",
+            "Dogs can't bark",
+            "The instance isn't passed, so self has no value",
+            "Missing import"
+          ],
+          "answer": 2,
+          "why": "Calling a method on an instance supplies self automatically."
         }
       ],
       "challenge": {
@@ -519,6 +816,39 @@
           ],
           "answer": 1,
           "why": "3 × 2 × 1 = 6."
+        },
+        {
+          "q": "What does this print? def f(n): if n <= 0: return 0, return n + f(n-1), then print(f(3))",
+          "options": [
+            "6",
+            "3",
+            "0",
+            "Error"
+          ],
+          "answer": 0,
+          "why": "3 + 2 + 1 + 0 = 6."
+        },
+        {
+          "q": "In a countdown function, the recursive step is…",
+          "options": [
+            "print(n)",
+            "if n <= 0",
+            "return",
+            "countdown(n - 1)"
+          ],
+          "answer": 3,
+          "why": "It is the self-call with a smaller argument."
+        },
+        {
+          "q": "Why does def bad(n): return bad(n) crash?",
+          "options": [
+            "Missing import",
+            "No base case — it recurses forever",
+            "n is undefined",
+            "return is illegal"
+          ],
+          "answer": 1,
+          "why": "Every call makes another identical call until Python hits the recursion limit."
         }
       ],
       "challenge": {
@@ -568,6 +898,39 @@
           ],
           "answer": 1,
           "why": "The with block guarantees the file is closed, even on errors."
+        },
+        {
+          "q": "What prints? Write \"ab\" to f.txt with \"w\", then read it back and print it.",
+          "options": [
+            "(empty)",
+            "ab",
+            "Error",
+            "f.txt"
+          ],
+          "answer": 1,
+          "why": "Write mode saves \"ab\", then read mode loads it back."
+        },
+        {
+          "q": "A file holds \"hi\". After with open(\"f.txt\", \"a\") as f: f.write(\"!\"), it holds…",
+          "options": [
+            "!",
+            "hi",
+            "hi!",
+            "Error"
+          ],
+          "answer": 2,
+          "why": "Append mode adds to the end without erasing."
+        },
+        {
+          "q": "What does f.readline() return?",
+          "options": [
+            "The whole file",
+            "One line",
+            "A list of lines",
+            "Nothing"
+          ],
+          "answer": 1,
+          "why": "readline() reads up to and including the next newline."
         }
       ],
       "challenge": {
@@ -615,6 +978,39 @@
           ],
           "answer": 1,
           "why": "lambda creates a small anonymous function, e.g. lambda x: x * 2."
+        },
+        {
+          "q": "What is \"-\".join([str(n) for n in range(3)])?",
+          "options": [
+            "0-1-2",
+            "[0, 1, 2]",
+            "012",
+            "Error"
+          ],
+          "answer": 0,
+          "why": "The comprehension makes ['0','1','2'], then join glues them with '-'."
+        },
+        {
+          "q": "sorted(['bb', 'a', 'ccc'], key=len) gives…",
+          "options": [
+            "['a', 'bb', 'ccc']",
+            "['ccc', 'bb', 'a']",
+            "Error",
+            "['bb', 'a', 'ccc']"
+          ],
+          "answer": 0,
+          "why": "key=len sorts by length: 1, 2, 3."
+        },
+        {
+          "q": "What is (lambda x: x * 3)(4)?",
+          "options": [
+            "x * 3",
+            "4",
+            "Error",
+            "12"
+          ],
+          "answer": 3,
+          "why": "The lambda is called immediately with 4."
         }
       ],
       "challenge": {
@@ -664,6 +1060,39 @@
           ],
           "answer": 1,
           "why": "Items are produced one at a time instead of building a giant list in memory."
+        },
+        {
+          "q": "What does this print? def g(): yield 1, yield 2, then print(list(g()))",
+          "options": [
+            "[1, 2]",
+            "[1]",
+            "[2]",
+            "Error"
+          ],
+          "answer": 0,
+          "why": "list() pulls both yielded values out of the generator."
+        },
+        {
+          "q": "What does next() do to a generator?",
+          "options": [
+            "Restarts it",
+            "Closes it",
+            "Resumes it until the next yield",
+            "Converts it to a list"
+          ],
+          "answer": 2,
+          "why": "Each next() continues execution from after the last yield."
+        },
+        {
+          "q": "Why does the second list(gen) print []? gen = (x for x in range(3)), print(list(gen)), print(list(gen))",
+          "options": [
+            "Bug in Python",
+            "Generators are single-use — already exhausted",
+            "range(3) is empty",
+            "list() is broken"
+          ],
+          "answer": 1,
+          "why": "A generator cannot be rewound; once consumed, it stays done."
         }
       ],
       "challenge": {
@@ -713,6 +1142,39 @@
           ],
           "answer": 1,
           "why": "Without it, the wrapped function would report the wrapper's name instead of the original."
+        },
+        {
+          "q": "With the lesson's @shout decorator, greet() returns…",
+          "options": [
+            "hello",
+            "HELLO",
+            "Error",
+            "None"
+          ],
+          "answer": 1,
+          "why": "wrapper() returns func().upper()."
+        },
+        {
+          "q": "When is shout(greet) actually applied?",
+          "options": [
+            "When greet is called",
+            "When greet is defined",
+            "Never",
+            "When Python starts"
+          ],
+          "answer": 1,
+          "why": "Decoration happens once, at function definition time."
+        },
+        {
+          "q": "A decorator whose outer function forgets return wrapper causes…",
+          "options": [
+            "Faster code",
+            "Nothing",
+            "A warning",
+            "TypeError when calling the decorated function"
+          ],
+          "answer": 3,
+          "why": "The name gets bound to None instead of a function."
         }
       ],
       "challenge": {
@@ -762,6 +1224,39 @@
           ],
           "answer": 1,
           "why": "Each project gets its own package versions — no conflicts between projects."
+        },
+        {
+          "q": "What does this print? import math, print(math.floor(3.9))",
+          "options": [
+            "4",
+            "3.9",
+            "3",
+            "Error"
+          ],
+          "answer": 2,
+          "why": "floor() rounds down to 3."
+        },
+        {
+          "q": "What does pip freeze > requirements.txt do?",
+          "options": [
+            "Saves the exact installed package versions",
+            "Installs everything",
+            "Deletes packages",
+            "Upgrades pip"
+          ],
+          "answer": 0,
+          "why": "It records precise versions so others can recreate the environment."
+        },
+        {
+          "q": "After import random, how do you call randint?",
+          "options": [
+            "randint(1, 10)",
+            "random.randint(1, 10)",
+            "import randint",
+            "random:randint"
+          ],
+          "answer": 1,
+          "why": "Names live under the module namespace."
         }
       ],
       "challenge": {
@@ -807,6 +1302,39 @@
           ],
           "answer": 1,
           "why": "yield splits the function: before = setup, after = teardown on exit."
+        },
+        {
+          "q": "In the lesson's stopwatch example, when does \"DONE …\" print?",
+          "options": [
+            "Before START",
+            "After the with block finishes",
+            "Never",
+            "Only on error"
+          ],
+          "answer": 1,
+          "why": "Code after yield runs when the with block exits."
+        },
+        {
+          "q": "Which two methods define a class-based context manager?",
+          "options": [
+            "__in__ and __out__",
+            "open and close",
+            "start and stop",
+            "__enter__ and __exit__"
+          ],
+          "answer": 3,
+          "why": "Python calls __enter__ on entry and __exit__ on exit."
+        },
+        {
+          "q": "Which @contextmanager pattern is correct?",
+          "options": [
+            "yield before any setup code",
+            "setup, yield, then teardown",
+            "two yields",
+            "no function body"
+          ],
+          "answer": 1,
+          "why": "Code before yield sets up; code after yield tears down."
         }
       ],
       "challenge": {
@@ -821,6 +1349,1306 @@
         ],
         "answer": 0,
         "hint": "Entry prints <b>, the body prints hi, exit prints </b>."
+      }
+    },
+    {
+      "id": "b6",
+      "track": "beginner",
+      "title": "Lists & Tuples",
+      "explain": "Lists let you keep an ordered collection of items you can change — perfect for things like to-do lists or scores. Tuples look similar but are locked after creation, which makes them great for fixed data like coordinates. Knowing when to use each one is a core Python habit.",
+      "takeaways": [
+        "Lists are ordered and changeable — index them from 0, or from -1 for the end.",
+        "append() adds to the end; slicing like [1:3] grabs a sub-list.",
+        "Tuples are immutable — use them for fixed data you do not want accidentally changed."
+      ],
+      "code": "fruits = [\"apple\", \"banana\", \"cherry\"]\nfruits.append(\"mango\")\nprint(fruits[0])\nprint(fruits[1:3])\npoint = (3, 4)\nprint(point)",
+      "quiz": [
+        {
+          "q": "What does fruits.append(\"mango\") do?",
+          "options": [
+            "Adds mango to the end of the list",
+            "Replaces the first item with mango",
+            "Sorts the list",
+            "Removes mango from the list"
+          ],
+          "answer": 0,
+          "why": "append() always adds the new item at the end of the list."
+        },
+        {
+          "q": "What happens if you try point[0] = 5 on a tuple?",
+          "options": [
+            "It works fine",
+            "TypeError — tuples cannot be changed",
+            "It creates a new tuple",
+            "It deletes the tuple"
+          ],
+          "answer": 1,
+          "why": "Tuples are immutable, so item assignment raises a TypeError."
+        },
+        {
+          "q": "What does this print? fruits = [\"apple\", \"banana\", \"cherry\"], then print(fruits[1:3])",
+          "options": [
+            "['banana', 'cherry']",
+            "['apple', 'banana']",
+            "['cherry']",
+            "Error"
+          ],
+          "answer": 0,
+          "why": "Slicing [1:3] takes indices 1 and 2."
+        },
+        {
+          "q": "What does this print? a = [1, 2], b = a, b.append(3), print(a)",
+          "options": [
+            "[1, 2]",
+            "[3]",
+            "[1, 2, 3]",
+            "Error"
+          ],
+          "answer": 2,
+          "why": "b refers to the same list object as a, so the change is visible through a."
+        },
+        {
+          "q": "len((3, 4)) is…",
+          "options": [
+            "3",
+            "4",
+            "Error",
+            "2"
+          ],
+          "answer": 3,
+          "why": "The tuple holds two items."
+        }
+      ],
+      "challenge": {
+        "type": "predict",
+        "prompt": "What will this print?",
+        "code": "nums = [10, 20, 30]\nprint(nums[-1])",
+        "options": [
+          "10",
+          "30",
+          "Error",
+          "-1"
+        ],
+        "answer": 1,
+        "hint": "Negative indexes count from the end of the list."
+      }
+    },
+    {
+      "id": "b7",
+      "track": "beginner",
+      "title": "Dictionaries & Sets",
+      "explain": "Dictionaries store data as key-value pairs, so you can look things up by name instead of by position — like a real dictionary. Sets are unordered collections that automatically drop duplicates, which makes them perfect for membership tests. Together they power everything from counting words to removing repeats.",
+      "takeaways": [
+        "Dictionaries map keys to values; look up with d[key] or the safer d.get(key, default).",
+        "Assigning to a new key adds it; assigning to an existing key updates it.",
+        "Sets store unique items only — duplicates vanish automatically."
+      ],
+      "code": "student = {\"name\": \"Asha\", \"age\": 20}\nprint(student[\"name\"])\nprint(student.get(\"grade\", \"N/A\"))\nstudent[\"age\"] = 21\ncolors = {\"red\", \"blue\", \"red\"}\nprint(colors)",
+      "quiz": [
+        {
+          "q": "What does student.get(\"grade\", \"N/A\") return when \"grade\" is missing?",
+          "options": [
+            "An error",
+            "N/A",
+            "None",
+            "An empty string"
+          ],
+          "answer": 1,
+          "why": ".get() returns the default you supply instead of raising a KeyError."
+        },
+        {
+          "q": "Why does {\"red\", \"blue\", \"red\"} end up with only two items?",
+          "options": [
+            "Sets automatically remove duplicates",
+            "Python deletes random items",
+            "The last item overwrites the first",
+            "It actually keeps all three"
+          ],
+          "answer": 0,
+          "why": "A set can only hold unique values, so the repeated \"red\" is dropped."
+        },
+        {
+          "q": "What does this print? d = {\"x\": 1}, d[\"x\"] = 9, print(d[\"x\"])",
+          "options": [
+            "1",
+            "9 and 1",
+            "Error",
+            "9"
+          ],
+          "answer": 3,
+          "why": "Assigning to an existing key overwrites its value."
+        },
+        {
+          "q": "\"z\" in {\"a\", \"b\"} is…",
+          "options": [
+            "True",
+            "False",
+            "Error",
+            "None"
+          ],
+          "answer": 1,
+          "why": "in tests membership, and \"z\" is not in the set."
+        },
+        {
+          "q": "What does this print? s = {3, 1, 2}, print(len(s))",
+          "options": [
+            "3",
+            "6",
+            "Error",
+            "1"
+          ],
+          "answer": 0,
+          "why": "The set holds three unique items."
+        }
+      ],
+      "challenge": {
+        "type": "blank",
+        "prompt": "Fill the blank so the program prints 21:",
+        "code": "student = {\"name\": \"Asha\", \"age\": 20}\nstudent[____] = 21\nprint(student[\"age\"])  # should print 21",
+        "answer": [
+          "\"age\""
+        ],
+        "hint": "Dictionary keys go inside the square brackets."
+      }
+    },
+    {
+      "id": "b8",
+      "track": "beginner",
+      "title": "Conditionals & Logic",
+      "explain": "Programs get smart when they can make decisions, and conditionals are how you teach them. if/elif/else lets your code take different paths based on what is true right now. Combined with and, or, and not, you can express surprisingly subtle logic in just a few lines.",
+      "takeaways": [
+        "if/elif/else runs the first branch whose condition is true.",
+        "and needs both sides true; or needs just one; not flips a condition.",
+        "Comparisons can chain: 1 < x < 10 checks both ends at once."
+      ],
+      "code": "score = 85\nif score >= 90:\n    print(\"A grade\")\nelif score >= 75:\n    print(\"B grade\")\nelse:\n    print(\"Keep practicing\")",
+      "quiz": [
+        {
+          "q": "What prints when score is 85?",
+          "options": [
+            "A grade",
+            "B grade",
+            "Keep practicing",
+            "Nothing"
+          ],
+          "answer": 1,
+          "why": "85 is not >= 90, but it is >= 75, so the elif branch runs."
+        },
+        {
+          "q": "In \"if x > 5 and x < 10:\", when does the block run?",
+          "options": [
+            "When x is greater than 5",
+            "When x is less than 10",
+            "Only when both conditions are true",
+            "When either condition is true"
+          ],
+          "answer": 2,
+          "why": "and requires the left and right conditions to both be true."
+        },
+        {
+          "q": "What does this print? x = 7, print(1 < x < 10)",
+          "options": [
+            "False",
+            "1 < 7 < 10",
+            "True",
+            "Error"
+          ],
+          "answer": 2,
+          "why": "Chained comparisons check both ends: 1 < 7 and 7 < 10."
+        },
+        {
+          "q": "not (5 > 3) is…",
+          "options": [
+            "False",
+            "True",
+            "Error",
+            "None"
+          ],
+          "answer": 0,
+          "why": "5 > 3 is True, and not flips it to False."
+        },
+        {
+          "q": "What prints? age = 16, print(\"teen\" if 13 <= age <= 19 else \"other\")",
+          "options": [
+            "other",
+            "teen",
+            "Error",
+            "13"
+          ],
+          "answer": 1,
+          "why": "16 is between 13 and 19, so the condition is True."
+        }
+      ],
+      "challenge": {
+        "type": "predict",
+        "prompt": "What will this print?",
+        "code": "temp = 30\nif temp > 25:\n    print(\"Hot\")\nelse:\n    print(\"Cool\")",
+        "options": [
+          "Hot",
+          "Cool",
+          "HotCool",
+          "Error"
+        ],
+        "answer": 0,
+        "hint": "30 is greater than 25, so the first branch runs."
+      }
+    },
+    {
+      "id": "b9",
+      "track": "beginner",
+      "title": "Loops: for & while",
+      "explain": "Loops let you repeat work without repeating code — the moment a program needs to do something a hundred times, you need them. for loops walk through collections and ranges, while while loops keep going until a condition changes. break and continue give you fine control over when to stop or skip.",
+      "takeaways": [
+        "for i in range(n) loops n times with i going 0 to n-1.",
+        "while repeats until its condition becomes false — make sure it eventually does.",
+        "break exits the loop now; continue skips to the next round."
+      ],
+      "code": "for i in range(3):\n    print(i)\ncount = 3\nwhile count > 0:\n    print(count)\n    count = count - 1\nprint(\"Go!\")",
+      "quiz": [
+        {
+          "q": "What does range(3) produce?",
+          "options": [
+            "1, 2, 3",
+            "0, 1, 2",
+            "0, 1, 2, 3",
+            "3, 2, 1"
+          ],
+          "answer": 1,
+          "why": "range(3) starts at 0 and stops before 3."
+        },
+        {
+          "q": "What does break do inside a loop?",
+          "options": [
+            "Skips to the next iteration",
+            "Stops the loop immediately",
+            "Restarts the loop",
+            "Pauses for one second"
+          ],
+          "answer": 1,
+          "why": "break exits the loop right away; continue is the one that skips ahead."
+        },
+        {
+          "q": "What does this print? total = 0, for i in range(1, 4): total += i, print(total)",
+          "options": [
+            "3",
+            "6",
+            "10",
+            "0"
+          ],
+          "answer": 1,
+          "why": "1 + 2 + 3 = 6."
+        },
+        {
+          "q": "n starts at 3 and a while n > 0 loop does n -= 1 each round. How many rounds run?",
+          "options": [
+            "4",
+            "0",
+            "Forever",
+            "3"
+          ],
+          "answer": 3,
+          "why": "n goes 3, 2, 1, then 0 stops the loop — 3 rounds."
+        },
+        {
+          "q": "What prints? for c in \"ab\": print(c)",
+          "options": [
+            "a then b",
+            "ab",
+            "Error",
+            "b then a"
+          ],
+          "answer": 0,
+          "why": "for walks through each character of the string in order."
+        }
+      ],
+      "challenge": {
+        "type": "predict",
+        "prompt": "What will this print?",
+        "code": "total = 0\nfor n in [1, 2, 3]:\n    total = total + n\nprint(total)",
+        "options": [
+          "3",
+          "5",
+          "6",
+          "123"
+        ],
+        "answer": 2,
+        "hint": "Add them up step by step: 0+1, then +2, then +3."
+      }
+    },
+    {
+      "id": "b10",
+      "track": "beginner",
+      "title": "Functions",
+      "explain": "Functions let you package logic into reusable, named blocks — write once, call anywhere. Parameters make them flexible, return values make them useful, and default arguments make them friendly. Good functions are the difference between a script and a program.",
+      "takeaways": [
+        "def names a function; parameters are its inputs, return sends a result back.",
+        "Arguments with defaults (name=\"friend\") are optional when calling.",
+        "A function without return gives back None."
+      ],
+      "code": "def greet(name=\"friend\"):\n    return \"Hello, \" + name\n\nprint(greet(\"Asha\"))\nprint(greet())",
+      "quiz": [
+        {
+          "q": "What does return do in a function?",
+          "options": [
+            "Prints a value",
+            "Sends a value back to the caller",
+            "Ends the program",
+            "Repeats the function"
+          ],
+          "answer": 1,
+          "why": "return hands a value back to whoever called the function."
+        },
+        {
+          "q": "What prints for greet() with no arguments?",
+          "options": [
+            "Hello, ",
+            "Hello, friend",
+            "Error — missing argument",
+            "None"
+          ],
+          "answer": 1,
+          "why": "The default \"friend\" is used when no argument is given."
+        },
+        {
+          "q": "What does this print? def double(n): return n * 2, then print(double(5))",
+          "options": [
+            "n * 2",
+            "5",
+            "10",
+            "None"
+          ],
+          "answer": 2,
+          "why": "double(5) returns 10, which print displays."
+        },
+        {
+          "q": "With def add(a, b=0):, which call is valid?",
+          "options": [
+            "add(5) — valid, b defaults to 0",
+            "add() — valid",
+            "add(1, 2, 3) — valid",
+            "None are valid"
+          ],
+          "answer": 0,
+          "why": "b has a default, so only a is required."
+        },
+        {
+          "q": "What is wrong with a def line that has no colon at the end?",
+          "options": [
+            "Nothing",
+            "Missing colon after the def line",
+            "The name is wrong",
+            "print is misspelled"
+          ],
+          "answer": 1,
+          "why": "def lines must end with a colon before the indented body."
+        }
+      ],
+      "challenge": {
+        "type": "blank",
+        "prompt": "Fill the blank so the program prints 12:",
+        "code": "def double(x):\n    ____ x * 2\nprint(double(6))  # should print 12",
+        "answer": [
+          "return"
+        ],
+        "hint": "The function must send the result back to the caller."
+      }
+    },
+    {
+      "id": "i7",
+      "track": "intermediate",
+      "title": "List Comprehensions",
+      "explain": "List comprehensions compress a loop-and-collect pattern into a single readable line — once it clicks, you will use them everywhere. The syntax reads almost like English: transform each item, for each item, optionally only if some condition holds. They are not just shorter; they are usually faster than the equivalent loop.",
+      "takeaways": [
+        "[expr for item in items] transforms every item into a new list.",
+        "Add \"if cond\" at the end to keep only matching items.",
+        "Comprehensions beat manual append-loops for clarity and speed."
+      ],
+      "code": "nums = [1, 2, 3, 4, 5]\nsquares = [n * n for n in nums]\nprint(squares)\nevens = [n for n in nums if n % 2 == 0]\nprint(evens)",
+      "quiz": [
+        {
+          "q": "What does [n * n for n in nums] build?",
+          "options": [
+            "A list of each number squared",
+            "A single number",
+            "A dictionary",
+            "A tuple"
+          ],
+          "answer": 0,
+          "why": "The expression n * n is evaluated for every n, collecting the results."
+        },
+        {
+          "q": "In [n for n in nums if n % 2 == 0], what does the if do?",
+          "options": [
+            "Stops the loop early",
+            "Keeps only even numbers",
+            "Sorts the numbers",
+            "Doubles each number"
+          ],
+          "answer": 1,
+          "why": "The trailing if filters: only items passing the test are included."
+        },
+        {
+          "q": "What is [n if n % 2 == 0 else -n for n in range(4)]?",
+          "options": [
+            "[0, -1, 2, -3]",
+            "[0, 1, 2, 3]",
+            "[-0, -1, -2, -3]",
+            "Error"
+          ],
+          "answer": 0,
+          "why": "The conditional expression picks n for evens and -n for odds."
+        },
+        {
+          "q": "Which comprehension collects only the words longer than 3 letters?",
+          "options": [
+            "[w for w in words if len(w) > 3]",
+            "[w for w in words if w > 3]",
+            "[len(w) for w in words]",
+            "[w if len(w) > 3 for w in words]"
+          ],
+          "answer": 0,
+          "why": "The filter if goes after the for, and len(w) > 3 tests the length."
+        },
+        {
+          "q": "Compared to an append-loop, a comprehension is usually…",
+          "options": [
+            "Slower",
+            "Longer",
+            "Clearer and faster",
+            "Only for strings"
+          ],
+          "answer": 2,
+          "why": "Comprehensions are optimized and read as one idea."
+        }
+      ],
+      "challenge": {
+        "type": "predict",
+        "prompt": "What will this print?",
+        "code": "words = [\"hi\", \"hello\", \"hey\"]\nlong = [w for w in words if len(w) > 2]\nprint(long)",
+        "options": [
+          "['hi', 'hello', 'hey']",
+          "['hello']",
+          "['hello', 'hey']",
+          "Error"
+        ],
+        "answer": 2,
+        "hint": "Check the length of each word — which are longer than 2 letters?"
+      }
+    },
+    {
+      "id": "i8",
+      "track": "intermediate",
+      "title": "Error Handling",
+      "explain": "Real programs hit real problems: missing files, bad input, network hiccups. try/except lets your code handle failure gracefully instead of crashing. else runs when nothing went wrong, and finally always runs — perfect for cleanup.",
+      "takeaways": [
+        "Put risky code in try and the recovery plan in except.",
+        "Match specific exceptions (ValueError) before broad ones.",
+        "finally always runs — use it for cleanup like closing files."
+      ],
+      "code": "try:\n    age = int(\"twenty\")\nexcept ValueError:\n    print(\"That is not a number\")\n    age = 0\nfinally:\n    print(\"Done, age =\", age)",
+      "quiz": [
+        {
+          "q": "When does the except block run?",
+          "options": [
+            "Always",
+            "Only when an error occurs in try",
+            "Before the try block",
+            "Only when there is no error"
+          ],
+          "answer": 1,
+          "why": "except runs only if the try block raises a matching exception."
+        },
+        {
+          "q": "What does finally guarantee?",
+          "options": [
+            "The error is fixed",
+            "Its code runs whether or not an error happened",
+            "The program restarts",
+            "Errors are hidden"
+          ],
+          "answer": 1,
+          "why": "finally executes no matter how the try block exits."
+        },
+        {
+          "q": "What does this print? try: x = 1/1, except ZeroDivisionError: x = 0, print(x)",
+          "options": [
+            "0",
+            "1.0",
+            "Error",
+            "None"
+          ],
+          "answer": 1,
+          "why": "No error occurs, so the except block is skipped."
+        },
+        {
+          "q": "Why put except ValueError before except Exception?",
+          "options": [
+            "Specific handlers must come first or they are never reached",
+            "It is faster",
+            "Python requires alphabetical order",
+            "No reason"
+          ],
+          "answer": 0,
+          "why": "Exception would catch everything first, hiding the specific handler."
+        },
+        {
+          "q": "What prints? try: raise ValueError(\"bad\"), except ValueError: print(\"caught\")",
+          "options": [
+            "bad",
+            "Nothing",
+            "Error",
+            "caught"
+          ],
+          "answer": 3,
+          "why": "raise triggers the matching except block."
+        }
+      ],
+      "challenge": {
+        "type": "predict",
+        "prompt": "What will this print?",
+        "code": "try:\n    x = 10 / 0\nexcept ZeroDivisionError:\n    x = -1\nprint(x)",
+        "options": [
+          "-1",
+          "0",
+          "Error",
+          "10"
+        ],
+        "answer": 0,
+        "hint": "Dividing by zero raises ZeroDivisionError, which is caught."
+      }
+    },
+    {
+      "id": "i9",
+      "track": "intermediate",
+      "title": "File Handling",
+      "explain": "Programs become far more useful when they can save and load data, and files are the simplest way. The with statement opens a file and guarantees it gets closed, even if something goes wrong. Learn the read/write modes once and you will reuse this pattern for logs, configs, and datasets.",
+      "takeaways": [
+        "with open(path) as f: auto-closes the file, even on errors.",
+        "'w' overwrites, 'a' appends, 'r' (the default) reads.",
+        "f.read() grabs everything; f.readline() grabs one line."
+      ],
+      "code": "with open(\"notes.txt\", \"w\") as f:\n    f.write(\"Python is fun\\n\")\n\nwith open(\"notes.txt\") as f:\n    text = f.read()\nprint(text)",
+      "quiz": [
+        {
+          "q": "Why use \"with open(...) as f:\"?",
+          "options": [
+            "It runs faster",
+            "The file is closed automatically",
+            "It encrypts the file",
+            "It works without a filename"
+          ],
+          "answer": 1,
+          "why": "with guarantees the file closes when the block exits, even on errors."
+        },
+        {
+          "q": "What does open(\"notes.txt\", \"w\") do if the file exists?",
+          "options": [
+            "Appends to it",
+            "Overwrites it from scratch",
+            "Raises an error",
+            "Reads it"
+          ],
+          "answer": 1,
+          "why": "Write mode truncates the file; use \"a\" to append instead."
+        },
+        {
+          "q": "What does this print? Write \"line1\\nline2\\n\" to t.txt, reopen it, print(f.readline().strip())",
+          "options": [
+            "line1",
+            "line1\nline2",
+            "line2",
+            "Error"
+          ],
+          "answer": 0,
+          "why": "readline() grabs just the first line."
+        },
+        {
+          "q": "Reading a file that does not exist raises…",
+          "options": [
+            "FileNotFoundError",
+            "ValueError",
+            "SyntaxError",
+            "Nothing — it creates it"
+          ],
+          "answer": 0,
+          "why": "Read mode requires the file to already exist."
+        },
+        {
+          "q": "What is the risk of open() without with or close()?",
+          "options": [
+            "The file may stay open and data may not flush",
+            "It runs faster",
+            "Syntax error",
+            "Nothing — Python handles it"
+          ],
+          "answer": 0,
+          "why": "Unclosed files can lose buffered data and leak resources."
+        }
+      ],
+      "challenge": {
+        "type": "blank",
+        "prompt": "Fill the blank to read the whole file as a string:",
+        "code": "with open(\"notes.txt\") as f:\n    text = f.____()\nprint(text)",
+        "answer": [
+          "read"
+        ],
+        "hint": "The method that reads everything at once."
+      }
+    },
+    {
+      "id": "i10",
+      "track": "intermediate",
+      "title": "OOP Basics",
+      "explain": "Classes let you bundle data and the functions that work on it into one tidy package — a Dog knows its name and how to bark. __init__ sets up each new object, and self is how methods refer to the specific instance they are working on. OOP is how large Python programs stay organized.",
+      "takeaways": [
+        "class defines the blueprint; calling it creates an instance.",
+        "__init__ runs at creation time and sets up the object's data.",
+        "self is the instance — always the first parameter of a method."
+      ],
+      "code": "class Dog:\n    def __init__(self, name):\n        self.name = name\n    def bark(self):\n        return self.name + \" says woof\"\nrex = Dog(\"Rex\")\nprint(rex.bark())",
+      "quiz": [
+        {
+          "q": "What is self in a method?",
+          "options": [
+            "A keyword for imports",
+            "The instance the method was called on",
+            "The class itself",
+            "A global variable"
+          ],
+          "answer": 1,
+          "why": "self refers to the particular object the method is operating on."
+        },
+        {
+          "q": "When does __init__ run?",
+          "options": [
+            "When the program starts",
+            "When you create an instance",
+            "When you delete the object",
+            "Never automatically"
+          ],
+          "answer": 1,
+          "why": "__init__ is the constructor — it runs each time you instantiate the class."
+        },
+        {
+          "q": "What does this print? class Dog with __init__(self, name) and bark() returning self.name + \" says woof\", then rex = Dog(\"Rex\"), print(rex.bark())",
+          "options": [
+            "woof",
+            "Rex",
+            "Dog",
+            "Rex says woof"
+          ],
+          "answer": 3,
+          "why": "bark() combines self.name with the string."
+        },
+        {
+          "q": "After d1 = Dog(\"A\") and d2 = Dog(\"B\"), d1.name is…",
+          "options": [
+            "A",
+            "B",
+            "Dog",
+            "Error"
+          ],
+          "answer": 0,
+          "why": "Each instance keeps its own data."
+        },
+        {
+          "q": "A method defined as def speak(): with no self fails when called because…",
+          "options": [
+            "It needs a return",
+            "Classes can't have methods",
+            "Python passes the instance automatically, so self is required",
+            "Methods must be uppercase"
+          ],
+          "answer": 2,
+          "why": "The instance is always passed as the first argument."
+        }
+      ],
+      "challenge": {
+        "type": "predict",
+        "prompt": "What will this print?",
+        "code": "class Cat:\n    def __init__(self, name):\n        self.name = name\nkitty = Cat(\"Milo\")\nprint(kitty.name)",
+        "options": [
+          "Milo",
+          "name",
+          "Cat",
+          "Error"
+        ],
+        "answer": 0,
+        "hint": "__init__ stores the argument on the new instance."
+      }
+    },
+    {
+      "id": "i11",
+      "track": "intermediate",
+      "title": "Modules & Imports",
+      "explain": "You do not have to write everything yourself — Python ships with a huge standard library. import brings in a whole module, while from...import grabs just what you need. math, random, and datetime cover an enormous amount of everyday work.",
+      "takeaways": [
+        "import math loads the module; math.sqrt(16) uses it.",
+        "from random import choice grabs just one function.",
+        "Standard library first: check math, random, datetime before writing your own."
+      ],
+      "code": "import math\nimport random\n\nprint(math.sqrt(16))\nprint(math.pi)\nlucky = random.choice([\"Asha\", \"Ravi\", \"Mina\"])\nprint(\"Winner:\", lucky)",
+      "quiz": [
+        {
+          "q": "What does \"import math\" give you?",
+          "options": [
+            "A faster Python",
+            "Access to math functions like sqrt",
+            "A new data type",
+            "Internet access"
+          ],
+          "answer": 1,
+          "why": "Importing a module makes all its functions and constants available."
+        },
+        {
+          "q": "How do you import only choice from random?",
+          "options": [
+            "import choice from random",
+            "from random import choice",
+            "random.import(choice)",
+            "include random.choice"
+          ],
+          "answer": 1,
+          "why": "from X import Y pulls a single name out of a module."
+        },
+        {
+          "q": "What does this print? import math, print(math.sqrt(16))",
+          "options": [
+            "4",
+            "4.0",
+            "16",
+            "Error"
+          ],
+          "answer": 1,
+          "why": "sqrt(16) is 4.0 — math functions return floats."
+        },
+        {
+          "q": "After import datetime, today's date comes from…",
+          "options": [
+            "date.today()",
+            "today()",
+            "datetime.date.today()",
+            "datetime()"
+          ],
+          "answer": 2,
+          "why": "You go through the module name: datetime.date.today()."
+        },
+        {
+          "q": "What does this print? from math import pi, print(round(pi, 2))",
+          "options": [
+            "3.14",
+            "3",
+            "3.14159",
+            "Error"
+          ],
+          "answer": 0,
+          "why": "round(pi, 2) keeps two decimal places."
+        }
+      ],
+      "challenge": {
+        "type": "predict",
+        "prompt": "What will this print?",
+        "code": "import math\nprint(math.floor(3.9))",
+        "options": [
+          "4",
+          "3",
+          "3.9",
+          "Error"
+        ],
+        "answer": 1,
+        "hint": "floor() rounds down to the nearest whole number."
+      }
+    },
+    {
+      "id": "i12",
+      "track": "intermediate",
+      "title": "Lambda, map, filter",
+      "explain": "Sometimes a full def is overkill — lambda creates a tiny throwaway function right where you need it. map applies a function to every item, filter keeps only the items that pass a test, and sorted with a key function sorts by anything you can compute. Together they are a compact toolkit for transforming data.",
+      "takeaways": [
+        "lambda n: n * 2 is a tiny function with no name.",
+        "map(f, items) transforms; filter(f, items) keeps matches.",
+        "sorted(items, key=...) sorts by whatever the key function returns."
+      ],
+      "code": "nums = [1, 2, 3, 4]\ndoubled = list(map(lambda n: n * 2, nums))\nprint(doubled)\nevens = list(filter(lambda n: n % 2 == 0, nums))\nprint(evens)",
+      "quiz": [
+        {
+          "q": "What is a lambda?",
+          "options": [
+            "A small anonymous function",
+            "A type of loop",
+            "A Python module",
+            "An error type"
+          ],
+          "answer": 0,
+          "why": "lambda defines a small function inline without a name."
+        },
+        {
+          "q": "What does map do?",
+          "options": [
+            "Draws a diagram",
+            "Applies a function to every item",
+            "Removes duplicates",
+            "Sorts the list"
+          ],
+          "answer": 1,
+          "why": "map runs the given function on each item and yields the results."
+        },
+        {
+          "q": "What is list(filter(lambda n: n > 2, [1, 2, 3, 4]))?",
+          "options": [
+            "[1, 2]",
+            "[2, 3, 4]",
+            "[3, 4]",
+            "[1, 2, 3, 4]"
+          ],
+          "answer": 2,
+          "why": "filter keeps only the items where the test is True."
+        },
+        {
+          "q": "What is sorted([3, 1, 2], key=lambda x: -x)?",
+          "options": [
+            "[1, 2, 3]",
+            "[2, 1, 3]",
+            "[1, 3, 2]",
+            "[3, 2, 1]"
+          ],
+          "answer": 3,
+          "why": "Sorting by -x puts the largest value first."
+        },
+        {
+          "q": "Can a lambda body have multiple statements?",
+          "options": [
+            "Yes, as many as you like",
+            "No — one expression only",
+            "Only two",
+            "Only inside loops"
+          ],
+          "answer": 1,
+          "why": "A lambda body must be a single expression."
+        }
+      ],
+      "challenge": {
+        "type": "predict",
+        "prompt": "What will this print?",
+        "code": "nums = [5, 2, 8]\nprint(sorted(nums, key=lambda n: -n))",
+        "options": [
+          "[2, 5, 8]",
+          "[8, 5, 2]",
+          "[5, 2, 8]",
+          "Error"
+        ],
+        "answer": 1,
+        "hint": "Sorting by -n puts the biggest number first."
+      }
+    },
+    {
+      "id": "a6",
+      "track": "advanced",
+      "title": "Decorators",
+      "explain": "A decorator is a function that wraps another function to add behavior — logging, timing, access checks — without touching its code. The @ syntax is just shorthand for passing your function through the decorator. Once you see the pattern, you will spot decorators everywhere in real Python projects.",
+      "takeaways": [
+        "@decorator above def is shorthand for func = decorator(func).",
+        "The wrapper function runs extra code before/after the original.",
+        "Decorators keep cross-cutting concerns (timing, logging) out of business logic."
+      ],
+      "code": "def shout(func):\n    def wrapper():\n        return func().upper()\n    return wrapper\n@shout\ndef greet():\n    return \"hello\"\nprint(greet())",
+      "quiz": [
+        {
+          "q": "What does @shout above \"def greet\" do?",
+          "options": [
+            "Deletes the function",
+            "Passes greet through the shout decorator",
+            "Runs greet twice",
+            "Converts greet to a class"
+          ],
+          "answer": 1,
+          "why": "@shout is shorthand for greet = shout(greet)."
+        },
+        {
+          "q": "What must a decorator return?",
+          "options": [
+            "A string",
+            "A new (usually wrapped) function",
+            "Nothing",
+            "A number"
+          ],
+          "answer": 1,
+          "why": "The decorator returns the replacement function that gets called instead."
+        },
+        {
+          "q": "What does this print? def shout(func): def wrapper(): return func().upper(), return wrapper, then @shout, def greet(): return \"hello\", print(greet())",
+          "options": [
+            "HELLO",
+            "hello",
+            "Error",
+            "None"
+          ],
+          "answer": 0,
+          "why": "wrapper() returns func().upper()."
+        },
+        {
+          "q": "With @a above @b above def f, which decorator applies first?",
+          "options": [
+            "a",
+            "b",
+            "Both at once",
+            "Neither"
+          ],
+          "answer": 1,
+          "why": "Decorators apply bottom-up: f = a(b(f))."
+        },
+        {
+          "q": "Why should the wrapper accept *args, **kwargs?",
+          "options": [
+            "So it works with any arguments",
+            "It is required syntax",
+            "For speed",
+            "To hide the code"
+          ],
+          "answer": 0,
+          "why": "The wrapper must forward whatever arguments the wrapped function takes."
+        }
+      ],
+      "challenge": {
+        "type": "predict",
+        "prompt": "What will this print?",
+        "code": "def star(func):\n    def wrapper():\n        return \"*\" + func() + \"*\"\n    return wrapper\n\n@star\ndef word():\n    return \"hi\"\nprint(word())",
+        "options": [
+          "hi",
+          "*hi*",
+          "**hi**",
+          "Error"
+        ],
+        "answer": 1,
+        "hint": "The wrapper adds one star on each side of the result."
+      }
+    },
+    {
+      "id": "a7",
+      "track": "advanced",
+      "title": "Generators & Iterators",
+      "explain": "Generators produce values one at a time, pausing at each yield and resuming on demand. That laziness means you can work with huge or even infinite sequences without building them all in memory. for loops and next() both know how to pull values from a generator.",
+      "takeaways": [
+        "yield pauses a function and emits one value; next() resumes it.",
+        "Generators are lazy — values are produced only when asked for.",
+        "A generator is single-use: once exhausted, it stays exhausted."
+      ],
+      "code": "def countdown(n):\n    while n > 0:\n        yield n\n        n = n - 1\n\nfor x in countdown(3):\n    print(x)",
+      "quiz": [
+        {
+          "q": "How is yield different from return?",
+          "options": [
+            "It is faster",
+            "It pauses the function and resumes later, producing a sequence",
+            "It ends the program",
+            "It deletes variables"
+          ],
+          "answer": 1,
+          "why": "yield suspends the function state; the next call continues after it."
+        },
+        {
+          "q": "Why are generators memory-friendly?",
+          "options": [
+            "They compress data",
+            "They produce one item at a time instead of building a whole list",
+            "They run on the GPU",
+            "They skip error checking"
+          ],
+          "answer": 1,
+          "why": "Laziness means only one value exists in memory at a time."
+        },
+        {
+          "q": "What does this print? def c(n): while n > 0: yield n, n -= 1, then print(list(c(3)))",
+          "options": [
+            "[1, 2, 3]",
+            "[3, 2, 1]",
+            "[3]",
+            "[0]"
+          ],
+          "answer": 1,
+          "why": "It yields 3, then 2, then 1."
+        },
+        {
+          "q": "What does for x in countdown(3): do with the generator?",
+          "options": [
+            "Builds a list first",
+            "Runs forever",
+            "Pulls values one by one until exhausted",
+            "Skips it"
+          ],
+          "answer": 2,
+          "why": "for keeps calling next() until StopIteration."
+        },
+        {
+          "q": "Calling next() on an exhausted generator raises…",
+          "options": [
+            "StopIteration",
+            "ValueError",
+            "Nothing — returns None",
+            "SyntaxError"
+          ],
+          "answer": 0,
+          "why": "Exhaustion is signaled with StopIteration."
+        }
+      ],
+      "challenge": {
+        "type": "predict",
+        "prompt": "What will this print?",
+        "code": "def gen():\n    yield 1\n    yield 2\ng = gen()\nprint(next(g))\nprint(next(g))",
+        "options": [
+          "1 then 1",
+          "1 then 2",
+          "2 then 2",
+          "Error"
+        ],
+        "answer": 1,
+        "hint": "Each next() call resumes where the generator paused."
+      }
+    },
+    {
+      "id": "a8",
+      "track": "advanced",
+      "title": "Recursion",
+      "explain": "Recursion is when a function solves a problem by calling itself on a smaller version of it. Every recursive function needs a base case — the simple situation where it stops calling itself. It is elegant for problems like factorial or tree traversal, but always respect Python's recursion limit.",
+      "takeaways": [
+        "A recursive function calls itself with a smaller input.",
+        "The base case stops the recursion — without it, you recurse forever.",
+        "Each call waits for the deeper one, so deep recursion uses lots of stack."
+      ],
+      "code": "def factorial(n):\n    if n <= 1:\n        return 1\n    return n * factorial(n - 1)\n\nprint(factorial(4))",
+      "quiz": [
+        {
+          "q": "What is a base case?",
+          "options": [
+            "The first line of code",
+            "The condition that stops the recursion",
+            "A syntax error",
+            "The fastest computer"
+          ],
+          "answer": 1,
+          "why": "The base case is the terminating condition every recursion needs."
+        },
+        {
+          "q": "What happens without a base case?",
+          "options": [
+            "The function runs once",
+            "Infinite recursion until Python stops it",
+            "It returns 0",
+            "Nothing happens"
+          ],
+          "answer": 1,
+          "why": "The calls never stop until Python hits the recursion limit and raises."
+        },
+        {
+          "q": "What is factorial(4)?",
+          "options": [
+            "12",
+            "4",
+            "120",
+            "24"
+          ],
+          "answer": 3,
+          "why": "4 × 3 × 2 × 1 = 24."
+        },
+        {
+          "q": "While computing factorial(4), how many factorial calls are waiting at the deepest point?",
+          "options": [
+            "1",
+            "4",
+            "24",
+            "0"
+          ],
+          "answer": 1,
+          "why": "The calls for 4, 3, 2 and 1 are all stacked up."
+        },
+        {
+          "q": "What does this print? def s(n): if n == 0: return 0, return n + s(n-1), then print(s(4))",
+          "options": [
+            "4",
+            "0",
+            "10",
+            "24"
+          ],
+          "answer": 2,
+          "why": "4 + 3 + 2 + 1 + 0 = 10."
+        }
+      ],
+      "challenge": {
+        "type": "predict",
+        "prompt": "What will this print?",
+        "code": "def countdown(n):\n    if n <= 0:\n        return\n    print(n)\n    countdown(n - 1)\ncountdown(2)",
+        "options": [
+          "2 then 1",
+          "1 then 2",
+          "2 then 1 then 0",
+          "Error"
+        ],
+        "answer": 0,
+        "hint": "Each call prints, then recurses with n - 1 — until 0 stops it silently."
+      }
+    },
+    {
+      "id": "a9",
+      "track": "advanced",
+      "title": "Sorting & Searching",
+      "explain": "Sorting puts data in order so searching becomes dramatically cheaper. Binary search repeatedly halves a sorted list, finding any item in about log2(n) steps — roughly 20 steps for a million items. Python's own sort is world-class, so learn the intuition and reach for the built-ins.",
+      "takeaways": [
+        "Sorting once makes every later search cheap.",
+        "Binary search halves the search space each step: O(log n).",
+        "Use list.sort()/sorted() and the bisect module instead of hand-rolling."
+      ],
+      "code": "import bisect\nnums = [1, 2, 5, 8]\ni = bisect.bisect_left(nums, 5)\nprint(\"index:\", i)\nprint(\"sorted:\", sorted([5, 2, 8, 1]))",
+      "quiz": [
+        {
+          "q": "Why must data be sorted for binary search?",
+          "options": [
+            "It looks nicer",
+            "Each comparison can eliminate half the remaining items",
+            "Python requires it for all searches",
+            "Unsorted data causes errors"
+          ],
+          "answer": 1,
+          "why": "Only sorted order lets one comparison discard half the candidates."
+        },
+        {
+          "q": "Roughly how many steps does binary search need for 1,000,000 sorted items?",
+          "options": [
+            "1,000,000",
+            "About 20",
+            "About 500,000",
+            "Exactly 7"
+          ],
+          "answer": 1,
+          "why": "log2(1,000,000) is about 20 — that is the power of halving."
+        },
+        {
+          "q": "What does this print? import bisect, nums = [1, 2, 5, 8], print(bisect.bisect_left(nums, 5))",
+          "options": [
+            "2",
+            "3",
+            "5",
+            "0"
+          ],
+          "answer": 0,
+          "why": "5 sits at index 2 in the sorted list."
+        },
+        {
+          "q": "Binary search runs in…",
+          "options": [
+            "O(n)",
+            "O(n squared)",
+            "O(log n)",
+            "O(1)"
+          ],
+          "answer": 2,
+          "why": "Halving the search space each step gives logarithmic time."
+        },
+        {
+          "q": "What is sorted([5, 2, 8, 1])?",
+          "options": [
+            "[5, 2, 8, 1]",
+            "[1, 2, 5, 8]",
+            "[8, 5, 2, 1]",
+            "[1, 5, 2, 8]"
+          ],
+          "answer": 1,
+          "why": "sorted() returns a new ascending list."
+        }
+      ],
+      "challenge": {
+        "type": "predict",
+        "prompt": "What will this print?",
+        "code": "nums = [3, 1, 2]\nnums.sort()\nprint(nums[0])",
+        "options": [
+          "3",
+          "1",
+          "2",
+          "Error"
+        ],
+        "answer": 1,
+        "hint": "sort() arranges the list from smallest to largest."
+      }
+    },
+    {
+      "id": "a10",
+      "track": "advanced",
+      "title": "Dictionaries in Depth",
+      "explain": "Dictionaries reward deeper study: .get() with a default makes counting patterns trivial, .items() lets you loop over keys and values together, and dict comprehensions build mappings in one line. These three idioms show up constantly in real-world Python.",
+      "takeaways": [
+        "counts[k] = counts.get(k, 0) + 1 is the classic counting idiom.",
+        ".items() loops over (key, value) pairs together.",
+        "{k: v for ...} builds dicts as compactly as list comprehensions build lists."
+      ],
+      "code": "votes = [\"a\", \"b\", \"a\", \"c\", \"a\", \"b\"]\ncounts = {}\nfor v in votes:\n    counts[v] = counts.get(v, 0) + 1\nprint(counts)\nsquares = {n: n * n for n in range(4)}\nprint(squares)",
+      "quiz": [
+        {
+          "q": "What does counts.get(v, 0) do here?",
+          "options": [
+            "Deletes the key",
+            "Returns the current count, or 0 if the key is new",
+            "Sorts the dictionary",
+            "Counts all keys"
+          ],
+          "answer": 1,
+          "why": "The default 0 handles first-time keys without a KeyError."
+        },
+        {
+          "q": "What does {n: n * n for n in range(4)} create?",
+          "options": [
+            "A list of squares",
+            "A dict mapping 0-3 to their squares",
+            "A set",
+            "A tuple"
+          ],
+          "answer": 1,
+          "why": "The k: v form in a comprehension builds a dictionary."
+        },
+        {
+          "q": "In the lesson's vote counter, counts[\"a\"] is…",
+          "options": [
+            "1",
+            "3",
+            "6",
+            "0"
+          ],
+          "answer": 1,
+          "why": "\"a\" appears three times in the votes list."
+        },
+        {
+          "q": "In for k, v in d.items():, k and v are…",
+          "options": [
+            "The key and value of each pair",
+            "Two keys",
+            "Two values",
+            "Always strings"
+          ],
+          "answer": 0,
+          "why": ".items() yields (key, value) tuples."
+        },
+        {
+          "q": "What is {w: len(w) for w in [\"a\", \"bb\", \"ccc\"] if len(w) > 1}?",
+          "options": [
+            "{'bb': 2, 'ccc': 3}",
+            "{'a': 1, 'bb': 2, 'ccc': 3}",
+            "{2: 'bb', 3: 'ccc'}",
+            "Error"
+          ],
+          "answer": 0,
+          "why": "\"a\" is filtered out, leaving bb mapped to 2 and ccc to 3."
+        }
+      ],
+      "challenge": {
+        "type": "predict",
+        "prompt": "What will this print?",
+        "code": "d = {\"a\": 1}\nd[\"a\"] = d.get(\"a\", 0) + 10\nprint(d[\"a\"])",
+        "options": [
+          "1",
+          "10",
+          "11",
+          "Error"
+        ],
+        "answer": 2,
+        "hint": "get returns 1, then 10 is added."
       }
     }
   ]
