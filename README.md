@@ -1,17 +1,27 @@
 # Skillzify v2 — Learn. Build. Shine. 🌟
 
-An advanced, browser-first Python learning platform for students — rebuilt from scratch as a modern multi-page static site. No build step, no backend required.
+An advanced, browser-first Python learning platform for students — a modern multi-page static site with an optional Node backend for AI features. No build step required.
+
+**Live:** https://skillzify-v2.onrender.com · https://vikaspatil06.github.io/skillzify-v2/
 
 ## ✨ Features
 
 - **Landing page** (`index.html`) — hero, feature cards, animated stats, testimonials, dark/light theme toggle
-- **Python learning path** (`learn.html`) — 16 lessons across Beginner / Intermediate / Advanced rendered as a Duolingo-style visual journey: lesson nodes on a winding animated SVG path (locked 🔒 / current ✨ / completed ✓), sequential unlocking (lesson N+1 unlocks after N; tracks unlock in order with locked-track teasers). Each lesson opens in a slide-over panel with rich explanation, key takeaways, syntax-highlighted code (Copy + "Try in compiler" handoff via `localStorage`), a 2-question multiple-choice quiz with instant feedback, and a mini coding challenge (predict-the-output or fill-the-blank). Completing both triggers confetti, an XP gain popup, and streak update. **XP & levels** (Novice → Python Master) persist to `localStorage`; progress stays in `skillzify_progress` so the dashboard keeps working. Keyboard: `Esc` closes, `←/→` navigate lessons. Respects `prefers-reduced-motion`.
-- **AI Compiler** (`compiler.html`) — real Python 3.11 via Pyodide (CDN), CodeMirror editor, run timing, console output, `input()` support via a program-input box, sample snippets, and an **AI Explain** panel:
+- **Python learning path** (`learn.html`) — **32 lessons** across Beginner (10) / Intermediate (12) / Advanced (10) rendered as a Duolingo-style visual journey: lesson nodes on a winding animated SVG path (locked 🔒 / current ✨ / completed ✓), sequential unlocking. Each lesson opens in a slide-over panel with rich explanation, key takeaways, syntax-highlighted code (Copy + "Try in compiler" handoff), a 2-question quiz with instant feedback, and a mini coding challenge (predict-the-output or fill-the-blank). Completing both triggers confetti, XP gain popup, and streak update. **XP & levels** (Novice → Python Master) persist to `localStorage`. Keyboard: `Esc` closes, `←/→` navigate lessons. Respects `prefers-reduced-motion`.
+- **Practice Mode** (`practice.html` + `assets/js/practice.js` + `assets/js/practice-data.js`) — **24 exercises** across 8 topics (variables, strings, collections, loops, functions, OOP, exceptions, algorithms) in 3 formats: ✍️ write-code (hidden tests executed in Pyodide), 🔮 predict-output, 🐞 fix-the-bug. Features: per-test pass/fail results, **3-level progressive hints**, ⏱ timed mode with personal bests, 📅 daily challenge (deterministic by date), 🔁 spaced-repetition review queue, solution walkthroughs, 🐍 pythonic-coach notes, your-code-vs-model **solution comparison**, and a **Socratic AI Tutor** (guides without revealing the answer). Solved exercises award XP into the shared system.
+- **Learning Paths** (`paths.html`) — 5 guided sequences (Python Fundamentals, DSA with Python, Automation & Scripting, Data Analysis Basics, Interview Prep) mixing lessons and exercises with per-path progress bars.
+- **Projects** (`projects.html`) — 4 guided real-world builds: File Organizer, Weather API Client, Web Scraper, CSV Data Analyzer — each with milestones and starter code.
+- **AI Compiler** (`compiler.html`) — real Python 3.11 via Pyodide (CDN), CodeMirror editor, run timing, console output, `input()` support, sample snippets, snippet library (save/star/pin), and an **AI Explain** panel:
   - Offline heuristic explainer covering 12 common Python error patterns
-  - Optional OpenAI-compatible API key (stored in `localStorage` only, never hardcoded) for deeper explanations
-- **Dashboard** (`dashboard.html`) — overall % ring, per-track bars, day streak 🔥, recent run history, next-lesson hint
-- **Demo auth** (`auth.html` + `assets/js/auth.js`) — register/login/logout with `localStorage`; a clearly-marked comment shows where to plug in real Firebase config (no keys shipped)
-- **About / Contact** — contact form saves to `localStorage` with a success toast
+  - Backend AI via `POST /api/explain` (developer's Gemini key, Render) → visitor's own optional key → offline fallback
+- **Dashboard** (`dashboard.html`) — overall % ring, per-track bars, day streak 🔥, recent run history, next-lesson hint, **exercise accuracy by topic with weak-spot flags**, today's challenge, review queue, and downloadable **track-completion certificates** (canvas-rendered PNG)
+- **Profile** (`profile.html`) — GitHub-style identity: identicon avatar, editable name/bio (syncs to Firebase), contribution heatmap, pinned items, achievements, activity feed
+- **Python Reference** (`reference.html`) — W3Schools-style reference with 30+ entries, Try-it-yourself handoff, and copy buttons
+- **Firebase Authentication** (`auth.html` + `assets/js/auth.js`) — real Email/Password auth on Firebase project `skillzify-1d0f2` (same as the Android app); one account works across devices; nav shows your name
+- **Command palette** (`Ctrl/⌘+K`) — fuzzy search over pages, lessons, snippets, and actions
+- **About / Contact** — contact form opens the visitor's email app pre-addressed to skillzifyind2024@gmail.com (mailto fallback)
+- **Analytics** — Google Analytics 4 on all pages
+- **Security** — `SECURITY.md` policy + private vulnerability reporting enabled
 - **Theming** — dark mode default, CSS variables, responsive down to phones
 
 ## 🚀 How to run
@@ -67,21 +77,37 @@ never commit a real key (the repo is public).
 ```
 skillzify-v2/
 ├── index.html          # Landing page
-├── learn.html          # Learning tracks + lessons
+├── learn.html          # Learning tracks + 32 lessons
+├── practice.html       # Practice Mode (exercises + tests)
+├── paths.html          # Guided learning paths
+├── projects.html       # Real-world guided projects
 ├── compiler.html       # AI Python compiler
-├── dashboard.html      # Progress dashboard
-├── auth.html           # Login / Register (demo)
+├── dashboard.html      # Progress dashboard + analytics + certificates
+├── profile.html        # GitHub-style profile
+├── reference.html      # Python reference
+├── auth.html           # Login / Register (Firebase)
 ├── about.html
 ├── contact.html
+├── SECURITY.md         # Security policy
+├── server.js           # Express backend: AI explain + Socratic tutor
+├── render.yaml         # Render one-click deploy
 ├── assets/
 │   ├── css/style.css   # Theme variables, layout, responsive
 │   ├── js/app.js       # Theme toggle, nav, toast, storage utils
-│   ├── js/auth.js      # Demo auth (localStorage) + Firebase notes
-│   ├── js/learn.js     # Lesson catalog + progress
+│   ├── js/auth.js      # Firebase Authentication (Email/Password)
+│   ├── js/learn.js     # 32-lesson catalog + progress
+│   ├── js/practice.js  # Practice engine: test runner, hints, timed mode
+│   ├── js/practice-data.js # 24 validated exercises
+│   ├── js/paths-data.js    # Learning path definitions
 │   ├── js/compiler.js  # Pyodide runner + AI explainer
-│   ├── js/dashboard.js # Dashboard rendering
+│   ├── js/dashboard.js # Dashboard rendering + analytics + certificates
+│   ├── js/profile.js   # Profile rendering (Firebase-synced name)
+│   ├── js/activity.js  # XP, streaks, heatmap, achievements, feed
+│   ├── js/palette.js   # Cmd+K command palette
+│   ├── js/reference-data.js # Python reference entries
 │   ├── logo-dark.png   # Logo for light backgrounds
 │   └── logo-light.png  # Logo for dark backgrounds
+├── android/            # Native Android app (Kotlin + Chaquopy)
 └── README.md
 ```
 
@@ -89,16 +115,23 @@ skillzify-v2/
 
 - [x] Quiz mode per lesson with XP scoring
 - [x] Progressive unlocking + visual learning path
-- [ ] More tracks: JavaScript, DSA in Python
+- [x] Practice Mode: 24 exercises with automated test evaluation
+- [x] Progressive hints + Socratic AI Tutor
+- [x] Learning paths + guided projects
+- [x] Real Firebase Auth (web + Android, shared project)
+- [x] Certificates for track completion
+- [x] Google Analytics 4
+- [ ] Spaced-repetition scheduling (SM-2) for the review queue
 - [ ] Shareable code snippets (URL-encoded)
 - [ ] PWA support for offline lessons
-- [ ] Real Firebase Auth + Firestore sync (see `assets/js/auth.js`)
+- [ ] Community forum + live leaderboards (needs backend)
 - [ ] Multi-file projects in the compiler
 
 ## 🔑 Notes on secrets
 
-- No API keys are shipped in this project. The AI explainer's API key field is user-supplied and stored only in the browser.
-- The old Skillzify Firebase keys were intentionally **not** carried over. To enable real auth, follow the commented guide at the top of `assets/js/auth.js`.
+- The Firebase **web API key** in `assets/js/auth.js` and `android/app/google-services.json` is **public by design** (it ships in every web page and APK). Access is controlled by Firebase authorized domains and security rules, not the key.
+- The developer's **Gemini API key** lives only in the `GEMINI_API_KEY` environment variable (Render dashboard / `.env`, gitignored) — never in the repo.
+- The AI explainer's visitor key field is user-supplied and stored only in the browser.
 
 ---
 © 2026 Skillzify · Learn. Build. Shine.
