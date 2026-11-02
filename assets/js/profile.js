@@ -16,17 +16,25 @@
     document.getElementById("profile-avatar").innerHTML = A.identicon(seed, 96);
     document.getElementById("profile-name").textContent = name;
     document.getElementById("profile-bio").textContent = prof.bio || "Add a bio so future-you remembers why you started.";
-    var xp = 0, done = 0;
+    var xp = 0, done = 0, exSolved = 0, exTotal = 0;
     try { xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0; } catch (e) {}
     try { done = Object.keys(JSON.parse(localStorage.getItem("skillzify_progress") || "{}")).length; } catch (e) {}
+    var totalLessons = (window.SkillzifyLearn && window.SkillzifyLearn.totalLessons) || 32;
+    try {
+      var EXD = window.SkillzifyPracticeData || [];
+      exTotal = EXD.length;
+      var atts = JSON.parse(localStorage.getItem("skillzify_exercise_attempts") || "{}");
+      EXD.forEach(function (ex) { if (atts[ex.id] && atts[ex.id].solved) exSolved++; });
+    } catch (e) {}
     var st = A.streak(), runs = A.runCount();
     var since = "recently";
     if (user && user.created) since = new Date(user.created).toLocaleDateString(undefined, { month: "short", year: "numeric" });
-    document.getElementById("profile-meta").textContent = "🗓️ Learning since " + since + " · " + done + "/16 lessons";
+    document.getElementById("profile-meta").textContent = "🗓️ Learning since " + since + " · " + done + "/" + totalLessons + " lessons";
 
     var stats = [
       ["⚡", xp.toLocaleString(), "Total XP"],
-      ["📚", done + "/16", "Lessons done"],
+      ["📚", done + "/" + totalLessons, "Lessons done"],
+      ["🏋️", exSolved + "/" + exTotal, "Exercises solved"],
       ["🔥", st.current + "d", "Day streak"],
       ["▶️", runs, "Code runs"]
     ];
