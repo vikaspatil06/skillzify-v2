@@ -76,4 +76,71 @@ class Store(ctx: Context) {
 
     fun getLastCode(): String = prefs.getString("last_code", "") ?: ""
     fun saveLastCode(code: String) = prefs.edit().putString("last_code", code).apply()
+
+    /* ---------- exercise attempts (syncs via Firestore) ---------- */
+
+    fun getAttempt(id: String): ExerciseAttempt {
+        val raw = prefs.getString("ex_att_$id", null) ?: return ExerciseAttempt()
+        return try {
+            val o = JSONObject(raw)
+            ExerciseAttempt(
+                attempts = o.optInt("attempts", 0),
+                solved = o.optBoolean("solved", false),
+                hintsUsed = o.optInt("hintsUsed", 0),
+                revealed = o.optBoolean("revealed", false),
+                bestMs = o.optLong("bestMs", 0),
+                lastTry = o.optLong("lastTry", 0)
+            )
+        } catch (e: Exception) { ExerciseAttempt() }
+    }
+
+    fun saveAttempt(id: String, a: ExerciseAttempt) {
+        val o = JSONObject().apply {
+            put("attempts", a.attempts); put("solved", a.solved)
+            put("hintsUsed", a.hintsUsed); put("revealed", a.revealed)
+            put("bestMs", a.bestMs); put("lastTry", a.lastTry)
+        }
+        prefs.edit().putString("ex_att_$id", o.toString()).apply()
+    }
+
+    fun allAttemptIds(): Set<String> =
+        prefs.all.keys.filter { it.startsWith("ex_att_") }.map { it.removePrefix("ex_att_") }.toSet()
+
+    /* ---------- profile (syncs via Firestore) ---------- */
+
+    fun getProfileName(): String = prefs.getString("profile_name", "") ?: ""
+    fun getProfileBio(): String = prefs.getString("profile_bio", "") ?: ""
+    fun saveProfile(name: String, bio: String, updatedAt: Long) {
+        prefs.edit().putString("profile_name", name).putString("profile_bio", bio)
+            .putLong("profile_updated_at", updatedAt).apply()
+    }
+    fun getProfileUpdatedAt(): Long = prefs.getLong("profile_updated_at", 0)
+
+    /* ---------- sync export / import ---------- */
+
+    /** Streak last-day in yyyy-MM-dd (already normalized in this app). */
+    fun getStreakLast(): String? = prefs.getString("streak_last", null)
+
+    fun setStreak(count: Int, last: String?) {
+        prefs.edit().putInt("streak_count", count).putString("streak_last", last).apply()
+    }
+
+    /** Applies a merged progress doc from sync. */
+    fun applySyncedProgress(lessons: Set<String>, xp: Int, streakCount: Int, streakLast: String?) {
+        val e = prefs.edit()
+        // lesson union: only add, never remove
+        for (id in lessons) e.putBoolean("done_$id", true)
+        if (xp > getXp()) e.putInt("xp", xp)
+        e.putInt("streak_count", streakCount)
+        if (streakLast != null) e.putString("streak_last", streakLast) else e.remove("streak_last")
+        e.apply()
+    }
+
+    fun applySyncedProfile(name: String, bio: String, updatedAt: Long) {
+        saveProfile(name, bio, updatedAt)
+    }
+
+    fun applySyncedAttempts(merged: Map<String, ExerciseAttempt>) {
+        for ((id, a) in merged) saveAttempt(id, a)
+    }
 }
