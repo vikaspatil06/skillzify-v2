@@ -1,0 +1,725 @@
+[
+  {
+    "id": "ex-variables-01",
+    "topic": "variables",
+    "title": "Reassignment relay",
+    "kind": "predict",
+    "diff": 1,
+    "prompt": "What does this code print? Trace each assignment in order.",
+    "code": "x = 7\ny = x + 3\nx = y - 2\nprint(x)",
+    "options": [
+      "8",
+      "7",
+      "10",
+      "Error"
+    ],
+    "answer": 0,
+    "hints": [
+      "Level 1 — nudge: Read the lines top to bottom. A variable's value is whatever was assigned to it most recently.",
+      "Level 2 — strategy: First compute y from x's value at that moment, then compute the new x from y.",
+      "Level 3 — almost there: x starts at 7, so y = 7 + 3 = 10, then x = 10 - 2. The final print shows that last value."
+    ],
+    "walkthrough": "Step 1: x is assigned 7. Step 2: y = x + 3 uses the current x (7), so y becomes 10. Step 3: x = y - 2 reassigns x to 10 - 2 = 8 — the old 7 is gone. Step 4: print(x) outputs 8.",
+    "coach": "No shortcut needed here — but this is why descriptive names beat x and y in real code: reassignment bugs are easier to spot.",
+    "model": "x = 7\ny = x + 3   # y becomes 10\nx = y - 2     # x becomes 8\nprint(x)      # prints 8",
+    "xp": 10
+  },
+  {
+    "id": "ex-variables-02",
+    "topic": "variables",
+    "title": "Fix the swap",
+    "kind": "fix",
+    "diff": 1,
+    "prompt": "swap_values(a, b) should return the two values swapped as a tuple, but it has one bug. Fix it without changing the function signature.",
+    "starter": "def swap_values(a, b):\n    a = b\n    b = a\n    return (a, b)",
+    "tests": [
+      {
+        "run": "swap_values(3, 8)",
+        "expect": "(8, 3)"
+      },
+      {
+        "run": "swap_values(0, 5)",
+        "expect": "(5, 0)"
+      },
+      {
+        "run": "swap_values(\"x\", \"y\")",
+        "expect": "('y', 'x')"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: Trace it with a=3, b=8. What are a and b after EACH line?",
+      "Level 2 — strategy: After `a = b`, the original 3 is lost — so the next line copies the new a, not the old one.",
+      "Level 3 — almost there: You never need to overwrite at all — just build and return the tuple (b, a) directly."
+    ],
+    "walkthrough": "Step 1: The bug — `a = b` destroys a's original value. Step 2: `b = a` then copies the already-overwritten a, so both end up equal to b. Step 3: Returning (b, a) reads the original values before anything is overwritten. Step 4: No temporary variable needed.",
+    "coach": "Python can swap in one line with tuple unpacking: `a, b = b, a` — no temp variable, no bug.",
+    "model": "def swap_values(a, b):\n    return (b, a)",
+    "xp": 20
+  },
+  {
+    "id": "ex-variables-03",
+    "topic": "variables",
+    "title": "Celsius to Fahrenheit",
+    "kind": "code",
+    "diff": 2,
+    "prompt": "Write a function c_to_f(c) that converts Celsius to Fahrenheit using F = C × 9/5 + 32, and returns the result.",
+    "starter": "def c_to_f(c):\n    # your code here\n    pass",
+    "tests": [
+      {
+        "run": "c_to_f(0)",
+        "expect": "32.0"
+      },
+      {
+        "run": "c_to_f(100)",
+        "expect": "212.0"
+      },
+      {
+        "run": "c_to_f(37)",
+        "expect": "98.6"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: Translate the formula F = C × 9/5 + 32 directly into Python.",
+      "Level 2 — strategy: `c * 9 / 5 + 32` follows normal math order — multiplication and division happen before addition.",
+      "Level 3 — almost there: Multiply c by 9, divide by 5, add 32 — then return it. In Python 3, `/` always gives a float."
+    ],
+    "walkthrough": "Step 1: `c * 9 / 5` scales the Celsius value (each Celsius degree is 1.8 Fahrenheit degrees). Step 2: `+ 32` shifts to Fahrenheit's zero point (0°C = 32°F). Step 3: `return` hands the float result back to the caller.",
+    "coach": "`c * 1.8 + 32` is equivalent — and a reminder that in Python 3, `9 / 5` is 1.8, not 1.",
+    "model": "def c_to_f(c):\n    return c * 9 / 5 + 32",
+    "xp": 20
+  },
+  {
+    "id": "ex-strings-01",
+    "topic": "strings",
+    "title": "Index detective",
+    "kind": "predict",
+    "diff": 1,
+    "prompt": "What does this code print? Remember how indexing works.",
+    "code": "word = \"Python\"\nprint(word[1] + word[-1])",
+    "options": [
+      "yn",
+      "Pn",
+      "yhn",
+      "Error"
+    ],
+    "answer": 0,
+    "hints": [
+      "Level 1 — nudge: Indexing starts at 0, and negative indices count back from the end.",
+      "Level 2 — strategy: word[1] is the second character; word[-1] is the very last character.",
+      "Level 3 — almost there: 'Python' → P(0) y(1) t(2) h(3) o(4) n(5). Join word[1] and word[-1]."
+    ],
+    "walkthrough": "Step 1: Indices of 'Python' are P=0, y=1, t=2, h=3, o=4, n=5. Step 2: word[1] picks 'y'. Step 3: word[-1] counts from the end and picks 'n'. Step 4: 'y' + 'n' concatenates to 'yn'.",
+    "coach": "Negative indexing is pure Pythonic convenience — most languages make you write word[len(word)-1].",
+    "model": "word = \"Python\"\n# word[1] is 'y', word[-1] is 'n'\nprint(word[1] + word[-1])  # prints yn",
+    "xp": 10
+  },
+  {
+    "id": "ex-strings-02",
+    "topic": "strings",
+    "title": "Shout it back",
+    "kind": "code",
+    "diff": 2,
+    "prompt": "Write a function shout(s) that returns the string in ALL CAPS with an exclamation mark at the end.",
+    "starter": "def shout(s):\n    # your code here\n    pass",
+    "tests": [
+      {
+        "run": "shout(\"hello\")",
+        "expect": "HELLO!"
+      },
+      {
+        "run": "shout(\"PyThon\")",
+        "expect": "PYTHON!"
+      },
+      {
+        "run": "shout(\"\")",
+        "expect": "!"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: Strings have a built-in method for uppercase — no loop needed.",
+      "Level 2 — strategy: `s.upper()` returns the uppercase copy; then stick '!' on the end with `+`.",
+      "Level 3 — almost there: Call `.upper()` on s, concatenate `\"!\"` with `+`, and return the result."
+    ],
+    "walkthrough": "Step 1: `s.upper()` builds a new all-caps string (the original is unchanged — strings are immutable). Step 2: `+ \"!\"` concatenates the exclamation mark. Step 3: `return` gives the result back.",
+    "coach": "Method chaining reads naturally here. For fancier formatting you'd reach for f-strings: `f\"{s.upper()}!\"`.",
+    "model": "def shout(s):\n    return s.upper() + \"!\"",
+    "xp": 20
+  },
+  {
+    "id": "ex-strings-03",
+    "topic": "strings",
+    "title": "Silent vowel counter",
+    "kind": "fix",
+    "diff": 2,
+    "prompt": "count_vowels(s) should count lowercase vowels, but it always returns 0. There is exactly one bug — find it.",
+    "starter": "def count_vowels(s):\n    count = 0\n    for ch in s:\n        if ch == \"aeiou\":\n            count += 1\n    return count",
+    "tests": [
+      {
+        "run": "count_vowels(\"hello\")",
+        "expect": "2"
+      },
+      {
+        "run": "count_vowels(\"beautiful\")",
+        "expect": "5"
+      },
+      {
+        "run": "count_vowels(\"queue\")",
+        "expect": "4"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: Trace 'hello' — the loop runs, but the count never moves. Why is the `if` never true?",
+      "Level 2 — strategy: `ch == \"aeiou\"` asks if one character equals the whole five-letter string. When could that ever be true?",
+      "Level 3 — almost there: You want membership, not equality — Python's keyword for 'is one of' is `in`."
+    ],
+    "walkthrough": "Step 1: The bug — `==` compares the character against the entire string 'aeiou', which is never equal to a single character. Step 2: `in` tests membership: is ch one of a, e, i, o, u? Step 3: With `in`, each vowel increments the count correctly.",
+    "coach": "The one-liner version: `sum(1 for ch in s if ch in \"aeiou\")` — a generator expression doing the counting.",
+    "model": "def count_vowels(s):\n    count = 0\n    for ch in s:\n        if ch in \"aeiou\":\n            count += 1\n    return count",
+    "xp": 20
+  },
+  {
+    "id": "ex-collections-01",
+    "topic": "collections",
+    "title": "First and last",
+    "kind": "code",
+    "diff": 1,
+    "prompt": "Write a function first_last(nums) that returns a new list containing the first and last elements of nums.",
+    "starter": "def first_last(nums):\n    # your code here\n    pass",
+    "tests": [
+      {
+        "run": "first_last([3, 7, 9])",
+        "expect": "[3, 9]"
+      },
+      {
+        "run": "first_last([5])",
+        "expect": "[5, 5]"
+      },
+      {
+        "run": "first_last([-2, 0, 4, 11])",
+        "expect": "[-2, 11]"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: You need the item at position 0 and the item at the final position.",
+      "Level 2 — strategy: `nums[0]` is first; `nums[-1]` is last. Pack them into a new list.",
+      "Level 3 — almost there: Build a two-item list from `nums[0]` and `nums[-1]`, and return it."
+    ],
+    "walkthrough": "Step 1: `nums[0]` grabs the first element. Step 2: `nums[-1]` grabs the last, whatever the length. Step 3: `[..., ...]` builds a fresh two-item list to return.",
+    "coach": "Negative indexing shines here — no `len(nums) - 1` arithmetic needed.",
+    "model": "def first_last(nums):\n    return [nums[0], nums[-1]]",
+    "xp": 20
+  },
+  {
+    "id": "ex-collections-02",
+    "topic": "collections",
+    "title": "Mutating the list",
+    "kind": "predict",
+    "diff": 2,
+    "prompt": "What does this code print? Track the list after each line.",
+    "code": "nums = [1, 2, 3]\nnums.append(4)\nnums[1] = 9\nprint(len(nums), nums[2])",
+    "options": [
+      "4 3",
+      "4 4",
+      "3 3",
+      "Error"
+    ],
+    "answer": 0,
+    "hints": [
+      "Level 1 — nudge: `append` adds to the end; `nums[1] = 9` replaces one slot. Rewrite the list after each line.",
+      "Level 2 — strategy: After append: [1, 2, 3, 4]. After the assignment: index 1 becomes 9.",
+      "Level 3 — almost there: The final list is [1, 9, 3, 4] — length 4, and index 2 was never touched."
+    ],
+    "walkthrough": "Step 1: append(4) grows the list to [1, 2, 3, 4]. Step 2: nums[1] = 9 replaces the 2, giving [1, 9, 3, 4]. Step 3: len is 4. Step 4: nums[2] is still 3. Output: `4 3`.",
+    "coach": "Lists are mutable — methods like append change them in place instead of returning a new list.",
+    "model": "nums = [1, 2, 3]\nnums.append(4)   # [1, 2, 3, 4]\nnums[1] = 9      # [1, 9, 3, 4]\nprint(len(nums), nums[2])  # prints: 4 3",
+    "xp": 10
+  },
+  {
+    "id": "ex-collections-03",
+    "topic": "collections",
+    "title": "Missing the first item",
+    "kind": "fix",
+    "diff": 2,
+    "prompt": "total(prices) should sum every price, but the result is always short. Exactly one bug — fix it.",
+    "starter": "def total(prices):\n    s = 0\n    for p in prices[1:]:\n        s += p\n    return s",
+    "tests": [
+      {
+        "run": "total([10, 20, 30])",
+        "expect": "60"
+      },
+      {
+        "run": "total([5])",
+        "expect": "5"
+      },
+      {
+        "run": "total([1, 2, 3, 4])",
+        "expect": "10"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: Try total([5]) — a one-item list. What should it return, and what does it return?",
+      "Level 2 — strategy: `prices[1:]` is a slice starting at index 1. Which element never gets visited?",
+      "Level 3 — almost there: Loop over `prices` itself, not a slice of it."
+    ],
+    "walkthrough": "Step 1: The bug — `prices[1:]` slices off index 0, so the first price is never added. Step 2: On [5] the slice is empty, giving 0. Step 3: Iterating `prices` directly visits every element.",
+    "coach": "Or skip the loop entirely: `return sum(prices)` — the built-in does exactly this.",
+    "model": "def total(prices):\n    s = 0\n    for p in prices:\n        s += p\n    return s",
+    "xp": 20
+  },
+  {
+    "id": "ex-loops-01",
+    "topic": "loops",
+    "title": "Sum of evens",
+    "kind": "code",
+    "diff": 1,
+    "prompt": "Write a function sum_evens(n) that returns the sum of all even numbers from 1 to n (inclusive).",
+    "starter": "def sum_evens(n):\n    # your code here\n    pass",
+    "tests": [
+      {
+        "run": "sum_evens(10)",
+        "expect": "30"
+      },
+      {
+        "run": "sum_evens(1)",
+        "expect": "0"
+      },
+      {
+        "run": "sum_evens(5)",
+        "expect": "6"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: Walk through 1 to n and pick out the evens.",
+      "Level 2 — strategy: `range(1, n + 1)` covers 1..n; `i % 2 == 0` tests for even.",
+      "Level 3 — almost there: Start `total` at 0, add each even `i` from `range(1, n + 1)`, then return `total`."
+    ],
+    "walkthrough": "Step 1: `range(1, n + 1)` yields every integer from 1 to n. Step 2: `i % 2 == 0` is True only for evens. Step 3: `total += i` accumulates them. Step 4: Return the final total (0 when n < 2).",
+    "coach": "One-liner: `sum(i for i in range(1, n + 1) if i % 2 == 0)` — a generator expression keeps it lazy and readable.",
+    "model": "def sum_evens(n):\n    total = 0\n    for i in range(1, n + 1):\n        if i % 2 == 0:\n            total += i\n    return total",
+    "xp": 20
+  },
+  {
+    "id": "ex-loops-02",
+    "topic": "loops",
+    "title": "Countdown that counts nothing",
+    "kind": "fix",
+    "diff": 2,
+    "prompt": "countdown(n) should return [n, n-1, ..., 1], but it returns []. Exactly one bug — fix it.",
+    "starter": "def countdown(n):\n    result = []\n    for i in range(n, 0):\n        result.append(i)\n    return result",
+    "tests": [
+      {
+        "run": "countdown(3)",
+        "expect": "[3, 2, 1]"
+      },
+      {
+        "run": "countdown(1)",
+        "expect": "[1]"
+      },
+      {
+        "run": "countdown(5)",
+        "expect": "[5, 4, 3, 2, 1]"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: What does `range(3, 0)` actually produce? Think about the default direction.",
+      "Level 2 — strategy: range counts UP by default — from 3 toward 0 it stops immediately, yielding nothing.",
+      "Level 3 — almost there: Give range a step of -1: `range(n, 0, -1)`."
+    ],
+    "walkthrough": "Step 1: The bug — `range(n, 0)` uses the default step +1, so starting above the stop it yields zero items. Step 2: The third range argument is the step; -1 counts downward. Step 3: `range(n, 0, -1)` yields n, n-1, …, 1 — stopping before 0.",
+    "coach": "Or build it declaratively: `list(range(n, 0, -1))`.",
+    "model": "def countdown(n):\n    result = []\n    for i in range(n, 0, -1):\n        result.append(i)\n    return result",
+    "xp": 20
+  },
+  {
+    "id": "ex-loops-03",
+    "topic": "loops",
+    "title": "FizzBuzz list",
+    "kind": "code",
+    "diff": 3,
+    "prompt": "Write a function fizzbuzz(n) that returns a list of strings for 1..n: 'FizzBuzz' for multiples of both 3 and 5, 'Fizz' for multiples of 3, 'Buzz' for multiples of 5, otherwise the number itself as a string.",
+    "starter": "def fizzbuzz(n):\n    # your code here\n    pass",
+    "tests": [
+      {
+        "run": "fizzbuzz(5)",
+        "expect": "['1', '2', 'Fizz', '4', 'Buzz']"
+      },
+      {
+        "run": "fizzbuzz(3)",
+        "expect": "['1', '2', 'Fizz']"
+      },
+      {
+        "run": "fizzbuzz(15)",
+        "expect": "['1', '2', 'Fizz', '4', 'Buzz', 'Fizz', '7', '8', 'Fizz', 'Buzz', '11', 'Fizz', '13', '14', 'FizzBuzz']"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: Each number 1..n falls into exactly one of four cases.",
+      "Level 2 — strategy: Check the combined case (divisible by both 3 AND 5) FIRST — with elif, order matters.",
+      "Level 3 — almost there: Append 'FizzBuzz' / 'Fizz' / 'Buzz' / str(i) per number into a list, then return it."
+    ],
+    "walkthrough": "Step 1: Loop i from 1 to n. Step 2: Test divisibility with `%` — the both-divisible check must come first, or 15 would match 'Fizz' early. Step 3: Append the right string for each i. Step 4: Return the finished list.",
+    "coach": "The combined check can also be `i % 15 == 0` — a number divisible by both 3 and 5 is divisible by 15.",
+    "model": "def fizzbuzz(n):\n    out = []\n    for i in range(1, n + 1):\n        if i % 3 == 0 and i % 5 == 0:\n            out.append(\"FizzBuzz\")\n        elif i % 3 == 0:\n            out.append(\"Fizz\")\n        elif i % 5 == 0:\n            out.append(\"Buzz\")\n        else:\n            out.append(str(i))\n    return out",
+    "xp": 30
+  },
+  {
+    "id": "ex-functions-01",
+    "topic": "functions",
+    "title": "Area of a circle",
+    "kind": "code",
+    "diff": 2,
+    "prompt": "Write a function circle_area(r) that returns the area of a circle with radius r. Use 3.14159 for π (area = π × r²).",
+    "starter": "def circle_area(r):\n    # your code here\n    pass",
+    "tests": [
+      {
+        "run": "circle_area(1)",
+        "expect": "3.14159"
+      },
+      {
+        "run": "circle_area(2)",
+        "expect": "12.56636"
+      },
+      {
+        "run": "circle_area(0)",
+        "expect": "0.0"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: Area = π × r². Use 3.14159 for π.",
+      "Level 2 — strategy: r² in Python is `r * r` (or `r ** 2`).",
+      "Level 3 — almost there: Return 3.14159 times r times r."
+    ],
+    "walkthrough": "Step 1: `r * r` computes r². Step 2: Multiply by 3.14159 (π). Step 3: Return the float result.",
+    "coach": "For real math you'd `import math` and use `math.pi` — more precise than any literal.",
+    "model": "def circle_area(r):\n    return 3.14159 * r * r",
+    "xp": 20
+  },
+  {
+    "id": "ex-functions-02",
+    "topic": "functions",
+    "title": "Default greeting",
+    "kind": "predict",
+    "diff": 1,
+    "prompt": "What does this code print? Pay attention to the default argument.",
+    "code": "def greet(name=\"friend\"):\n    return \"Hi, \" + name\n\nprint(greet())\nprint(greet(\"Ada\"))",
+    "options": [
+      "Hi, friend\nHi, Ada",
+      "Hi, \nHi, Ada",
+      "Hi, friend\nHi, friend",
+      "Error"
+    ],
+    "answer": 0,
+    "hints": [
+      "Level 1 — nudge: `name=\"friend\"` is a default — used only when the caller passes nothing.",
+      "Level 2 — strategy: The first call passes no argument, so name is 'friend'; the second passes 'Ada'.",
+      "Level 3 — almost there: Two prints, two lines: 'Hi, friend' then 'Hi, Ada'."
+    ],
+    "walkthrough": "Step 1: `greet()` supplies no argument, so name defaults to 'friend' → 'Hi, friend'. Step 2: `greet(\"Ada\")` overrides the default → 'Hi, Ada'. Step 3: Each print outputs its own line.",
+    "coach": "Defaults make functions friendly — but never use a mutable default like `[]`; that's a classic Python gotcha.",
+    "model": "def greet(name=\"friend\"):  # default kicks in only with no argument\n    return \"Hi, \" + name\n\nprint(greet())        # Hi, friend\nprint(greet(\"Ada\"))  # Hi, Ada",
+    "xp": 10
+  },
+  {
+    "id": "ex-functions-03",
+    "topic": "functions",
+    "title": "Nowhere to return",
+    "kind": "fix",
+    "diff": 2,
+    "prompt": "square_all(nums) should return a new list of squares, but it returns None. Exactly one bug — fix it.",
+    "starter": "def square_all(nums):\n    result = []\n    for n in nums:\n        result.append(n * n)",
+    "tests": [
+      {
+        "run": "square_all([2, 3])",
+        "expect": "[4, 9]"
+      },
+      {
+        "run": "square_all([5])",
+        "expect": "[25]"
+      },
+      {
+        "run": "square_all([])",
+        "expect": "[]"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: The loop builds `result` perfectly — so where does the answer go after the loop ends?",
+      "Level 2 — strategy: A function with no `return` hands back `None`, no matter what it computed.",
+      "Level 3 — almost there: Add `return result` as the last line, aligned with the `for` — not inside it."
+    ],
+    "walkthrough": "Step 1: The bug — the function computes `result` but never returns it, so callers get None. Step 2: `return result` must sit after the loop, at the function's indentation level. Step 3: Indenting it inside the loop would return after just one item — placement matters.",
+    "coach": "The idiomatic version is a list comprehension: `return [n * n for n in nums]`.",
+    "model": "def square_all(nums):\n    result = []\n    for n in nums:\n        result.append(n * n)\n    return result",
+    "xp": 20
+  },
+  {
+    "id": "ex-oop-01",
+    "topic": "oop",
+    "title": "Meet the object",
+    "kind": "predict",
+    "diff": 1,
+    "prompt": "What does this code print? Follow what happens when Dog('Rex') runs.",
+    "code": "class Dog:\n    def __init__(self, name):\n        self.name = name\n\nd = Dog(\"Rex\")\nprint(d.name)",
+    "options": [
+      "Rex",
+      "name",
+      "Dog",
+      "Error"
+    ],
+    "answer": 0,
+    "hints": [
+      "Level 1 — nudge: `__init__` runs automatically the moment you create Dog('Rex').",
+      "Level 2 — strategy: `self.name = name` stores 'Rex' on the new object.",
+      "Level 3 — almost there: `d.name` reads back the stored value."
+    ],
+    "walkthrough": "Step 1: `Dog(\"Rex\")` creates an object and calls `__init__` with name='Rex'. Step 2: `self.name = name` saves 'Rex' as the object's attribute. Step 3: `d.name` retrieves it → prints Rex.",
+    "coach": "`__init__` is the constructor — its only job is to set up the object's initial state.",
+    "model": "class Dog:\n    def __init__(self, name):\n        self.name = name  # stores 'Rex' on the object\n\nd = Dog(\"Rex\")\nprint(d.name)  # prints Rex",
+    "xp": 10
+  },
+  {
+    "id": "ex-oop-02",
+    "topic": "oop",
+    "title": "Rectangle area",
+    "kind": "code",
+    "diff": 2,
+    "prompt": "Write a class Rectangle with __init__(self, w, h) storing width and height, and a method area(self) returning w × h.",
+    "starter": "class Rectangle:\n    # your code here\n    pass",
+    "tests": [
+      {
+        "run": "Rectangle(3, 4).area()",
+        "expect": "12"
+      },
+      {
+        "run": "Rectangle(5, 5).area()",
+        "expect": "25"
+      },
+      {
+        "run": "Rectangle(2, 7).area()",
+        "expect": "14"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: `__init__` should store w and h on `self` so other methods can reach them.",
+      "Level 2 — strategy: `area` takes only `self` and multiplies the two stored attributes.",
+      "Level 3 — almost there: Store both dimensions in `__init__`, then multiply the stored attributes in `area`."
+    ],
+    "walkthrough": "Step 1: `__init__` receives w and h and saves them as `self.w`, `self.h`. Step 2: `area(self)` needs no extra arguments — it reads the stored attributes. Step 3: Returning `self.w * self.h` gives the area.",
+    "coach": "Methods that only read state are candidates for `@property` later — `rect.area` instead of `rect.area()`.",
+    "model": "class Rectangle:\n    def __init__(self, w, h):\n        self.w = w\n        self.h = h\n    def area(self):\n        return self.w * self.h",
+    "xp": 20
+  },
+  {
+    "id": "ex-oop-03",
+    "topic": "oop",
+    "title": "Lost coordinates",
+    "kind": "fix",
+    "diff": 3,
+    "prompt": "Point should store x and y and return them via coords(), but coords() crashes. Exactly one bug — fix it.",
+    "starter": "class Point:\n    def __init__(self, x, y):\n        self.x = x\n        y = y\n    def coords(self):\n        return (self.x, self.y)",
+    "tests": [
+      {
+        "run": "Point(2, 3).coords()",
+        "expect": "(2, 3)"
+      },
+      {
+        "run": "Point(0, 5).coords()",
+        "expect": "(0, 5)"
+      },
+      {
+        "run": "Point(-1, -4).coords()",
+        "expect": "(-1, -4)"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: The crash is an AttributeError — some attribute was never created. Which one?",
+      "Level 2 — strategy: Compare the two lines in `__init__` — one stores on `self`, the other doesn't.",
+      "Level 3 — almost there: Change `y = y` to `self.y = y`."
+    ],
+    "walkthrough": "Step 1: The bug — `y = y` creates a throwaway local variable instead of an attribute. Step 2: When `coords()` reads `self.y`, the attribute doesn't exist → AttributeError. Step 3: `self.y = y` stores it on the instance where methods can find it.",
+    "coach": "For tiny data holders like this, look up `dataclasses` later — `@dataclass class Point:` with `x: int; y: int` writes `__init__` for you.",
+    "model": "class Point:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n    def coords(self):\n        return (self.x, self.y)",
+    "xp": 30
+  },
+  {
+    "id": "ex-exceptions-01",
+    "topic": "exceptions",
+    "title": "Caught in the act",
+    "kind": "predict",
+    "diff": 1,
+    "prompt": "What does this code print? Watch what the except block catches.",
+    "code": "try:\n    x = 10 / 0\nexcept ZeroDivisionError:\n    x = -1\nprint(x)",
+    "options": [
+      "-1",
+      "0",
+      "Error",
+      "10"
+    ],
+    "answer": 0,
+    "hints": [
+      "Level 1 — nudge: `10 / 0` raises ZeroDivisionError — but something is watching for it.",
+      "Level 2 — strategy: The matching `except` runs instead of crashing, setting x to -1.",
+      "Level 3 — almost there: try fails → except catches → print shows -1."
+    ],
+    "walkthrough": "Step 1: `10 / 0` raises ZeroDivisionError inside the try. Step 2: Python jumps to the matching `except ZeroDivisionError` block — no crash. Step 3: x becomes -1, and print outputs -1.",
+    "coach": "Catch specific errors, never bare `except:` — you want to handle the failure you expect, not hide every bug.",
+    "model": "try:\n    x = 10 / 0  # raises ZeroDivisionError\nexcept ZeroDivisionError:\n    x = -1    # this runs instead of crashing\nprint(x)      # prints -1",
+    "xp": 10
+  },
+  {
+    "id": "ex-exceptions-02",
+    "topic": "exceptions",
+    "title": "Safe divide",
+    "kind": "code",
+    "diff": 2,
+    "prompt": "Write a function safe_divide(a, b) that returns a / b, but returns None when b is 0. Catch the error — don't check with `if`.",
+    "starter": "def safe_divide(a, b):\n    # your code here\n    pass",
+    "tests": [
+      {
+        "run": "safe_divide(10, 2)",
+        "expect": "5.0"
+      },
+      {
+        "run": "safe_divide(7, 0)",
+        "expect": "None"
+      },
+      {
+        "run": "safe_divide(9, 3)",
+        "expect": "3.0"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: Put the risky division inside `try`, and decide the fallback in `except`.",
+      "Level 2 — strategy: `try:` the division and `return` it; the `except ZeroDivisionError` branch should `return None`.",
+      "Level 3 — almost there: That's the whole function — a try, a return, an except, a return."
+    ],
+    "walkthrough": "Step 1: `try` attempts `a / b` normally. Step 2: If b is 0, ZeroDivisionError is raised and caught. Step 3: The `except` branch returns None as the graceful fallback.",
+    "coach": "This pattern is called EAFP — Easier to Ask Forgiveness than Permission — the Pythonic alternative to checking first.",
+    "model": "def safe_divide(a, b):\n    try:\n        return a / b\n    except ZeroDivisionError:\n        return None",
+    "xp": 20
+  },
+  {
+    "id": "ex-exceptions-03",
+    "topic": "exceptions",
+    "title": "Catching the wrong error",
+    "kind": "fix",
+    "diff": 2,
+    "prompt": "get_item(items, i) should return None for a bad index, but it still crashes. Exactly one bug — fix it.",
+    "starter": "def get_item(items, i):\n    try:\n        return items[i]\n    except ValueError:\n        return None",
+    "tests": [
+      {
+        "run": "get_item([1, 2, 3], 5)",
+        "expect": "None"
+      },
+      {
+        "run": "get_item([1, 2, 3], 10)",
+        "expect": "None"
+      },
+      {
+        "run": "get_item([], 0)",
+        "expect": "None"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: What error does `items[5]` on a 3-item list REALLY raise? (Hint: it's not ValueError.)",
+      "Level 2 — strategy: `except ValueError` only catches ValueError — a different error flies right past it.",
+      "Level 3 — almost there: An out-of-range index raises IndexError — catch that instead."
+    ],
+    "walkthrough": "Step 1: The bug — indexing past the end raises IndexError, not ValueError. Step 2: The wrong `except` never triggers, so the crash escapes. Step 3: Catching IndexError handles exactly the failure this code can produce.",
+    "coach": "Match the except to the error you can actually cause — precise handling beats `except Exception`.",
+    "model": "def get_item(items, i):\n    try:\n        return items[i]\n    except IndexError:\n        return None",
+    "xp": 20
+  },
+  {
+    "id": "ex-dsa-01",
+    "topic": "dsa",
+    "title": "Linear search",
+    "kind": "code",
+    "diff": 2,
+    "prompt": "Write a function linear_search(nums, target) that returns the INDEX of target in nums, or -1 if it isn't there.",
+    "starter": "def linear_search(nums, target):\n    # your code here\n    pass",
+    "tests": [
+      {
+        "run": "linear_search([4, 2, 7, 1], 7)",
+        "expect": "2"
+      },
+      {
+        "run": "linear_search([4, 2, 7, 1], 9)",
+        "expect": "-1"
+      },
+      {
+        "run": "linear_search([], 5)",
+        "expect": "-1"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: Walk the list with an index, comparing each element to the target.",
+      "Level 2 — strategy: `for i in range(len(nums))` gives you indices; `return i` the moment `nums[i] == target`.",
+      "Level 3 — almost there: Return the index the moment you find a match; return -1 after the loop ends."
+    ],
+    "walkthrough": "Step 1: `range(len(nums))` produces every valid index. Step 2: Compare `nums[i]` with target; return `i` on the first hit. Step 3: Reaching the end means 'not found' → return -1. Step 4: It checks each element once: O(n) time.",
+    "coach": "Python's `in` operator does the searching, but writing it yourself teaches the pattern behind `.index()` — minus its ValueError.",
+    "model": "def linear_search(nums, target):\n    for i in range(len(nums)):\n        if nums[i] == target:\n            return i\n    return -1",
+    "xp": 20
+  },
+  {
+    "id": "ex-dsa-02",
+    "topic": "dsa",
+    "title": "Palindrome check",
+    "kind": "code",
+    "diff": 3,
+    "prompt": "Write a function is_palindrome(s) that returns True if s reads the same forwards and backwards (exact characters, case-sensitive).",
+    "starter": "def is_palindrome(s):\n    # your code here\n    pass",
+    "tests": [
+      {
+        "run": "is_palindrome(\"racecar\")",
+        "expect": "True"
+      },
+      {
+        "run": "is_palindrome(\"hello\")",
+        "expect": "False"
+      },
+      {
+        "run": "is_palindrome(\"abba\")",
+        "expect": "True"
+      },
+      {
+        "run": "is_palindrome(\"\")",
+        "expect": "True"
+      }
+    ],
+    "hints": [
+      "Level 1 — nudge: A palindrome equals its own reverse — compare the string with a reversed copy.",
+      "Level 2 — strategy: `s[::-1]` is Python's reverse-a-string slice.",
+      "Level 3 — almost there: Return the result of comparing s with its reversed slice."
+    ],
+    "walkthrough": "Step 1: `s[::-1]` builds the reversed string. Step 2: `==` compares it with the original. Step 3: Equal → True; anything else → False. Runs in O(n) time and space.",
+    "coach": "The `[::-1]` slice is the idiomatic reverse — readable to any Pythonista.",
+    "model": "def is_palindrome(s):\n    return s == s[::-1]",
+    "xp": 30
+  },
+  {
+    "id": "ex-dsa-03",
+    "topic": "dsa",
+    "title": "Binary search trace",
+    "kind": "predict",
+    "diff": 2,
+    "prompt": "What does this code print? Trace lo, hi, and mid each round.",
+    "code": "def binary_search(nums, target):\n    lo, hi = 0, len(nums) - 1\n    while lo <= hi:\n        mid = (lo + hi) // 2\n        if nums[mid] == target:\n            return mid\n        if nums[mid] < target:\n            lo = mid + 1\n        else:\n            hi = mid - 1\n    return -1\n\nprint(binary_search([2, 5, 8, 12, 16], 12))",
+    "options": [
+      "3",
+      "2",
+      "4",
+      "-1"
+    ],
+    "answer": 0,
+    "hints": [
+      "Level 1 — nudge: The list is sorted, so each round throws away half. Track lo, hi, mid.",
+      "Level 2 — strategy: Round 1: mid = 2, value 8 < 12, so lo becomes 3. Round 2: mid = (3+4)//2.",
+      "Level 3 — almost there: Round 2 checks index 3 — nums[3] is 12, the target."
+    ],
+    "walkthrough": "Step 1: lo=0, hi=4, mid=2 → nums[2]=8 < 12, so the target is right of mid: lo=3. Step 2: lo=3, hi=4, mid=3 → nums[3]=12 == target → return 3. Step 3: Two rounds for five items — that's the O(log n) magic.",
+    "coach": "For real code, `bisect` in the standard library does this — but tracing it by hand builds the intuition.",
+    "model": "def binary_search(nums, target):\n    lo, hi = 0, len(nums) - 1\n    while lo <= hi:\n        mid = (lo + hi) // 2\n        if nums[mid] == target:\n            return mid\n        if nums[mid] < target:\n            lo = mid + 1\n        else:\n            hi = mid - 1\n    return -1\n\n# Round 1: lo=0, hi=4, mid=2 -> nums[2]=8 < 12 -> lo=3\n# Round 2: lo=3, hi=4, mid=3 -> nums[3]=12 -> return 3\nprint(binary_search([2, 5, 8, 12, 16], 12))  # prints 3",
+    "xp": 10
+  }
+]
