@@ -1,0 +1,65 @@
+[
+  {
+    "id": "file-organizer",
+    "title": "File Organizer",
+    "desc": "Write a script that scans your Downloads folder and sorts files into subfolders by extension — images, documents, videos, everything else.",
+    "difficulty": "beginner",
+    "skills": "os, pathlib, loops, conditionals",
+    "icon": "📁",
+    "milestones": [
+      "List every file in a folder with pathlib.Path.iterdir().",
+      "Map extensions to folder names with a dictionary ({\".jpg\": \"images\", \".pdf\": \"docs\"}).",
+      "Create missing folders with mkdir(exist_ok=True) and move files with shutil.move().",
+      "Stretch: add a --dry-run flag that prints moves without doing them."
+    ],
+    "starter": "from pathlib import Path\nimport shutil\n\ndownloads = Path.home() / \"Downloads\"\nkinds = {\".jpg\": \"images\", \".png\": \"images\",\n         \".pdf\": \"docs\", \".mp4\": \"videos\"}\n\nfor f in downloads.iterdir():\n    if f.is_file() and f.suffix in kinds:\n        dest = downloads / kinds[f.suffix]\n        dest.mkdir(exist_ok=True)\n        shutil.move(str(f), dest / f.name)\nprint(\"Done! ✨\")"
+  },
+  {
+    "id": "weather-api-client",
+    "title": "Weather API Client",
+    "desc": "Fetch live weather data from a free API and print a friendly report. Your first program that talks to the internet.",
+    "difficulty": "intermediate",
+    "skills": "requests, JSON, error handling, f-strings",
+    "icon": "🌤️",
+    "milestones": [
+      "Get a free key from openweathermap.org (or use the no-key wttr.in service).",
+      "requests.get(url, params={...}) — always pass a timeout.",
+      "Check response.status_code; parse with response.json().",
+      "Handle failures gracefully: try/except requests.RequestException.",
+      "Stretch: accept the city as a command-line argument via sys.argv."
+    ],
+    "starter": "import requests\n\ncity = \"Pune\"\nr = requests.get(\"https://wttr.in/\" + city,\n                 params={\"format\": \"j1\"}, timeout=10)\ndata = r.json()\nnow = data[\"current_condition\"][0]\nprint(f\"{city}: {now['weatherDesc'][0]['value']}, \"\n      f\"{now['temp_C']}°C (feels {now['FeelsLikeC']}°C)\")"
+  },
+  {
+    "id": "web-scraper",
+    "title": "Web Scraper",
+    "desc": "Scrape headlines from a news site and save them to a CSV file. Respect robots.txt — scrape gently.",
+    "difficulty": "intermediate",
+    "skills": "requests, BeautifulSoup, lists, CSV output",
+    "icon": "🕷️",
+    "milestones": [
+      "Fetch the page HTML with requests.",
+      "Parse with BeautifulSoup(html, \"html.parser\").",
+      "Select headlines with soup.select(\"h2 a\") (inspect the page first!).",
+      "Write title + link rows with the csv module.",
+      "Stretch: scrape 3 pages and de-duplicate with a set."
+    ],
+    "starter": "import csv, requests\nfrom bs4 import BeautifulSoup\n\nhtml = requests.get(\"https://example.com/news\", timeout=10).text\nsoup = BeautifulSoup(html, \"html.parser\")\n\nrows = [(a.get_text(strip=True), a[\"href\"])\n        for a in soup.select(\"h2 a\") if a.get(\"href\")]\n\nwith open(\"headlines.csv\", \"w\", newline=\"\") as f:\n    csv.writer(f).writerows([(\"title\", \"link\"), *rows])\nprint(f\"Saved {len(rows)} headlines.\")"
+  },
+  {
+    "id": "csv-data-analyzer",
+    "title": "CSV Data Analyzer",
+    "desc": "Analyze a real dataset (e.g. your exercise attempts exported as CSV): top categories, averages, trends.",
+    "difficulty": "advanced",
+    "skills": "csv, collections.Counter, statistics, comprehensions",
+    "icon": "📊",
+    "milestones": [
+      "Read rows with csv.DictReader — dictionaries beat index juggling.",
+      "Count categories with collections.Counter.",
+      "Compute averages with statistics.mean; group with dict comprehensions.",
+      "Print a clean text report with f-strings and max(..., key=...) highlights.",
+      "Stretch: draw a bar chart with matplotlib."
+    ],
+    "starter": "import csv\nfrom collections import Counter\nfrom statistics import mean\n\nwith open(\"scores.csv\") as f:\n    rows = list(csv.DictReader(f))\n\nby_topic = {}\nfor r in rows:\n    by_topic.setdefault(r[\"topic\"], []).append(float(r[\"score\"]))\n\nfor topic, scores in sorted(by_topic.items()):\n    print(f\"{topic:12} avg {mean(scores):5.1f}  \"\n          f\"n={len(scores)}\")\ntop = Counter(r[\"topic\"] for r in rows).most_common(1)[0]\nprint(f\"\\nMost practiced: {top[0]} ({top[1]} attempts)\")"
+  }
+]
