@@ -69,6 +69,39 @@ private fun parseLesson(o: JSONObject) = Lesson(
 
 data class Catalog(val tracks: List<Track>, val levels: List<Level>, val lessons: List<Lesson>)
 
+/** One exercise attempt record — mirrors the web's skillzify_exercise_attempts entries. */
+data class ExerciseAttempt(
+    val attempts: Int = 0,
+    val solved: Boolean = false,
+    val hintsUsed: Int = 0,
+    val revealed: Boolean = false,
+    val bestMs: Long = 0,
+    val lastTry: Long = 0
+)
+
+data class ExTest(val run: String?, val expr: String?, val expect: String)
+data class Exercise(
+    val id: String, val topic: String, val title: String, val kind: String,
+    val diff: Int, val prompt: String, val starter: String,
+    val tests: List<ExTest>, val hints: List<String>,
+    val walkthrough: String, val coach: String, val model: String, val xp: Int,
+    // predict-kind extras (kept from source so predict exercises run)
+    val code: String?, val options: List<String>, val answer: Int
+)
+
+data class RefEntry(
+    val id: String, val name: String, val category: String,
+    val syntax: String, val desc: String, val example: String
+)
+
+data class PathStep(val type: String, val ref: String, val title: String)
+data class LearnPath(val id: String, val title: String, val desc: String, val icon: String, val steps: List<PathStep>)
+
+data class Project(
+    val id: String, val title: String, val desc: String, val difficulty: String,
+    val skills: String, val icon: String, val milestones: List<String>, val starter: String
+)
+
 fun loadCatalog(ctx: Context): Catalog {
     val json = ctx.assets.open("lessons.json").bufferedReader().use { it.readText() }
     val root = JSONObject(json)
@@ -97,8 +130,104 @@ fun loadSnippets(ctx: Context): List<Snippet> {
     }
 }
 
+private fun parseExTest(o: JSONObject) = ExTest(
+    run = if (o.isNull("run")) null else o.getString("run"),
+    expr = if (o.isNull("expr")) null else o.getString("expr"),
+    expect = o.getString("expect")
+)
+
+fun loadExercises(ctx: Context): List<Exercise> {
+    val json = ctx.assets.open("exercises.json").bufferedReader().use { it.readText() }
+    val arr = JSONArray(json)
+    return (0 until arr.length()).map {
+        val o = arr.getJSONObject(it)
+        Exercise(
+            id = o.getString("id"),
+            topic = o.optString("topic", ""),
+            title = o.getString("title"),
+            kind = o.getString("kind"),
+            diff = o.optInt("diff", 1),
+            prompt = o.getString("prompt"),
+            starter = o.optString("starter", ""),
+            tests = o.optJSONArray("tests")?.let { t -> (0 until t.length()).map { parseExTest(t.getJSONObject(it)) } } ?: emptyList(),
+            hints = o.optJSONArray("hints")?.strings() ?: emptyList(),
+            walkthrough = o.optString("walkthrough", ""),
+            coach = o.optString("coach", ""),
+            model = o.optString("model", ""),
+            xp = o.optInt("xp", 10),
+            code = if (o.isNull("code")) null else o.getString("code"),
+            options = o.optJSONArray("options")?.strings() ?: emptyList(),
+            answer = o.optInt("answer", 0)
+        )
+    }
+}
+
+fun loadReference(ctx: Context): List<RefEntry> {
+    val json = ctx.assets.open("reference.json").bufferedReader().use { it.readText() }
+    val arr = JSONArray(json)
+    return (0 until arr.length()).map {
+        val o = arr.getJSONObject(it)
+        RefEntry(
+            id = o.getString("id"), name = o.getString("name"),
+            category = o.optString("category", "Other"),
+            syntax = o.optString("syntax", ""), desc = o.optString("desc", ""),
+            example = o.optString("example", "")
+        )
+    }
+}
+
+fun loadPaths(ctx: Context): List<LearnPath> {
+    val json = ctx.assets.open("paths.json").bufferedReader().use { it.readText() }
+    val arr = JSONArray(json)
+    return (0 until arr.length()).map {
+        val o = arr.getJSONObject(it)
+        LearnPath(
+            id = o.getString("id"), title = o.getString("title"),
+            desc = o.optString("desc", ""), icon = o.optString("icon", "🎯"),
+            steps = o.optJSONArray("steps")?.let { s ->
+                (0 until s.length()).map { k ->
+                    val so = s.getJSONObject(k)
+                    PathStep(so.getString("type"), so.getString("ref"), so.optString("title", so.getString("ref")))
+                }
+            } ?: emptyList()
+        )
+    }
+}
+
+fun loadProjects(ctx: Context): List<Project> {
+    val json = ctx.assets.open("projects.json").bufferedReader().use { it.readText() }
+    val arr = JSONArray(json)
+    return (0 until arr.length()).map {
+        val o = arr.getJSONObject(it)
+        Project(
+            id = o.getString("id"), title = o.getString("title"),
+            desc = o.optString("desc", ""), difficulty = o.optString("difficulty", "Beginner"),
+            skills = o.optString("skills", ""), icon = o.optString("icon", "🛠"),
+            milestones = o.optJSONArray("milestones")?.strings() ?: emptyList(),
+            starter = o.optString("starter", "")
+        )
+    }
+}
+
 /** Web parity: gain = 20 + (quiz questions correct on first try) * 5 + 10 */
 fun xpGain(quizFirstTries: Int): Int = 20 + quizFirstTries * 5 + 10
+
+/** A quiz question with shuffled options (answer remapped) — mirrors web buildQuiz(). */
+data class ShuffledQuiz(val q: String, val options: List<String>, val answer: Int, val why: String)
+
+/** Picks 3 random questions from the 5-question bank, shuffles options. */
+fun buildQuiz(lesson: Lesson, seed: Long = System.currentTimeMillis()): List<ShuffledQuiz> {
+    val rnd = kotlin.random.Random(seed)
+    return lesson.quiz.shuffled(rnd).take(3).map { q ->
+        val order = q.options.indices.shuffled(rnd)
+        ShuffledQuiz(
+            q = q.q,
+            options = order.map { q.options[it] },
+            answer = order.indexOf(q.answer),
+            why = q.why
+        )
+    }
+}
 
 fun levelFor(levels: List<Level>, xp: Int): Level = levels.filter { xp >= it.xp }.maxByOrNull { it.xp } ?: levels.first()
 fun nextLevel(levels: List<Level>, xp: Int): Level? = levels.filter { it.xp > xp }.minByOrNull { it.xp }
