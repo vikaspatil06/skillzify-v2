@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YYR4JD16G8"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-YYR4JD16G8');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Skillzify Learning Paths — guided sequences for Python fundamentals, DSA, automation, data analysis, and interview prep.">
+  <title>Learning Paths — Skillzify</title>
+  <link rel="icon" href="assets/logo-light.png">
+  <link rel="stylesheet" href="assets/css/style.css?v=4">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html"><img data-logo src="assets/logo-light.png" alt="Skillzify logo"><span>Skillzify</span></a>
+    <div class="nav-links" id="nav-links">
+      <a href="index.html">Home</a>
+      <a href="learn.html">Learn</a>
+      <a href="compiler.html">Compiler</a>
+      <a href="reference.html">Reference</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="profile.html">Profile</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+    </div>
+    <div class="nav-actions">
+      <span id="account-link"></span>
+      <button class="icon-btn" data-theme-toggle aria-label="Toggle dark/light theme">☀️</button>
+      <button class="icon-btn hamburger" id="hamburger" aria-label="Open menu">☰</button>
+    </div>
+  </div>
+</nav>
+<div class="toast" id="toast" role="status"></div>
+
+<main>
+  <section class="page-hero">
+    <div class="container">
+      <h1 class="section-title">🗺️ Learning Paths</h1>
+      <p class="section-sub">Don't wander — follow a guided sequence of lessons and exercises built for a goal.</p>
+    </div>
+  </section>
+  <section class="section" style="padding-top:24px">
+    <div class="container">
+      <div class="grid-2" id="paths-grid"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <img data-logo src="assets/logo-light.png" alt="Skillzify logo">
+        <p>Learn. Build. Shine. — an advanced, browser-first Python learning platform for students.</p>
+      </div>
+      <div>
+        <h4>Learn</h4>
+        <a href="learn.html">Beginner track</a>
+        <a href="learn.html">Intermediate track</a>
+        <a href="learn.html">Advanced track</a>
+      </div>
+      <div>
+        <h4>Platform</h4>
+        <a href="compiler.html">AI Compiler</a>
+        <a href="practice.html">Practice</a>
+        <a href="paths.html">Learning Paths</a>
+        <a href="dashboard.html">Dashboard</a>
+      </div>
+      <div>
+        <h4>Company</h4>
+        <a href="about.html">About us</a>
+        <a href="contact.html">Contact</a>
+      </div>
+    </div>
+    <div class="footer-bottom">© <span data-year>2026</span> Skillzify · Learn. Build. Shine.</div>
+  </div>
+</footer>
+
+<script src="assets/js/app.js"></script>
+<script src="assets/js/activity.js"></script>
+<script src="assets/js/palette.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
+<script src="assets/js/auth.js"></script>
+<script src="assets/js/learn.js"></script>
+<script src="assets/js/practice-data.js"></script>
+<script src="assets/js/paths-data.js"></script>
+<script>
+(function () {
+  "use strict";
+  function esc(s) { return window.Skillzify.esc(String(s == null ? "" : s)); }
+  function lessonTitle(id) {
+    var L = (window.SkillzifyLearn && window.SkillzifyLearn.LESSONS) || [];
+    for (var i = 0; i < L.length; i++) if (L[i].id === id) return L[i].title;
+    return id;
+  }
+  function exTitle(id) {
+    var E = window.SkillzifyPracticeData || [];
+    for (var i = 0; i < E.length; i++) if (E[i].id === id) return E[i].title;
+    return id;
+  }
+  function lessonDone(id) {
+    try { return !!(JSON.parse(localStorage.getItem("skillzify_progress") || "{}")[id]); } catch (e) { return false; }
+  }
+  function exDone(id) {
+    try { var a = JSON.parse(localStorage.getItem("skillzify_exercise_attempts") || "{}")[id]; return !!(a && a.solved); }
+    catch (e) { return false; }
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    var host = document.getElementById("paths-grid");
+    var paths = window.SkillzifyPaths || [];
+    host.innerHTML = paths.map(function (p) {
+      var done = 0;
+      var steps = p.steps.map(function (s, i) {
+        var isDone = s.t === "lesson" ? lessonDone(s.id) : exDone(s.id);
+        if (isDone) done++;
+        var label = s.t === "lesson" ? "📖 " + lessonTitle(s.id) : "🏋️ " + exTitle(s.id);
+        var href = s.t === "lesson" ? "learn.html" : "practice.html#ex=" + s.id;
+        return '<li class="path-step' + (isDone ? " done" : "") + '"><span class="step-n">' +
+          (isDone ? "✓" : (i + 1)) + '</span><a class="step-t" href="' + href + '">' + esc(label) + "</a></li>";
+      }).join("");
+      var pct = p.steps.length ? Math.round(done / p.steps.length * 100) : 0;
+      return '<div class="card path-card"><div style="font-size:2rem">' + p.icon + "</div>" +
+        "<h3>" + esc(p.title) + "</h3><p class='hint'>" + esc(p.desc) + "</p>" +
+        '<div class="mastery"><div class="mastery-fill" style="width:' + pct + '%"></div></div>' +
+        '<p class="hint">' + done + "/" + p.steps.length + " steps · " + pct + "%</p><ol>" + steps + "</ol></div>";
+    }).join("");
+  });
+})();
+</script>
+</body>
+</html>
