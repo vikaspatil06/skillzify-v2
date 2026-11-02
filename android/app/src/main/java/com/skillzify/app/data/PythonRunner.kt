@@ -5,6 +5,11 @@ import org.json.JSONObject
 
 data class RunResult(val ok: Boolean, val output: String, val error: String, val ms: Long)
 
+data class TestResult(val ok: Boolean, val got: String, val expect: String)
+data class TestsOutcome(val codeOk: Boolean, val error: String, val results: List<TestResult>, val ms: Long) {
+    val allPassed: Boolean get() = codeOk && results.isNotEmpty() && results.all { it.ok }
+}
+
 /** Runs Python via Chaquopy's skillzify_runner module on a background thread. */
 object PythonRunner {
     fun run(code: String, stdinText: String): RunResult {
@@ -33,5 +38,35 @@ object PythonRunner {
         val lines = raw.split("\n").toMutableList()
         if (lines.isNotEmpty() && lines.last().isEmpty()) lines.removeAt(lines.size - 1)
         return if (lines.isEmpty()) "" else lines.joinToString("\n") + "\n"
+    }
+
+    /**
+     * Runs hidden tests against user code (Practice Mode).
+     * tests: list of (expression, expected str) pairs.
+     * Call from a background thread; Chaquopy calls are blocking.
+     */
+    fun runTests(code: String, tests: List<Pair<String, String>>): TestsOutcome {
+        return try {
+            val mod = Python.getInstance().getModule("skillzify_runner")
+            val testsJson = org.json.JSONArray().apply {
+                for ((expr, expect) in tests) put(
+                    org.json.JSONObject().put("run", expr).put("expect", expect)
+                )
+            }.toString()
+            val json = mod.callAttr("run_tests", code, testsJson).toString()
+            val o = JSONObject(json)
+            val arr = o.getJSONArray("results")
+            TestsOutcome(
+                codeOk = o.getBoolean("ok"),
+                error = o.getString("error"),
+                results = (0 until arr.length()).map {
+                    val r = arr.getJSONObject(it)
+                    TestResult(r.getBoolean("ok"), r.getString("got"), r.getString("expect"))
+                },
+                ms = o.getLong("ms")
+            )
+        } catch (e: Exception) {
+            TestsOutcome(false, "Test runner failed: ${e.message ?: e.javaClass.simpleName}", emptyList(), 0)
+        }
     }
 }
