@@ -93,6 +93,7 @@
       var newName = document.getElementById("pf-name").value.trim();
       var newBio = document.getElementById("pf-bio").value.trim();
       A.saveProfile({ name: newName, bio: newBio });
+      if (window.SkillzifySync) window.SkillzifySync.markDirty("profile");
       // Sync the name to Firebase so the nav + all devices show it
       try {
         var SA = window.SkillzifyAuth;
