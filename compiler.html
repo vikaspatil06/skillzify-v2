@@ -70,8 +70,11 @@
           <div class="toolbar">
             <select id="snippet-select" style="width:auto;flex:1;min-width:180px" aria-label="Sample snippets"></select>
             <button class="btn btn-sm" id="run-btn" disabled>▶ Run <span class="kbd">Ctrl+↵</span></button>
+            <button class="btn btn-sm btn-ghost" id="stop-btn" disabled title="Stop a running program">⏹ Stop</button>
             <button class="btn btn-sm btn-ghost" id="clear-btn">Clear</button>
             <button class="btn btn-sm btn-ghost" id="save-snippet-btn" title="Save as snippet (Gist-like)">💾 Save</button>
+            <button class="btn btn-sm btn-ghost" id="share-btn" title="Copy a shareable link to this code">🔗 Share</button>
+            <button class="btn btn-sm btn-ghost" id="download-btn" title="Download as a .py file">⬇️ .py</button>
             <span class="status-pill" id="status-pill">Starting…</span>
           </div>
           <textarea id="code-fallback" style="display:none"></textarea>
