@@ -43,6 +43,7 @@ app.post("/api/explain", async (req, res) => {
   if (!GEMINI_API_KEY) return res.status(503).json({ error: "AI backend not configured." });
   const code = String((req.body && req.body.code) || "").slice(0, 8000);
   const errText = String((req.body && req.body.error) || "").slice(0, 2000);
+  const mode = String((req.body && req.body.mode) || "");
   if (!code.trim() && !errText.trim()) return res.status(400).json({ error: "Nothing to explain." });
 
   const tutorStyle =
@@ -53,7 +54,20 @@ app.post("/api/explain", async (req, res) => {
     "(group repetitive lines; explain WHY each part exists, not just WHAT it says).\n" +
     "3. A '💡 Key concepts:' section listing each Python idea used with one short line each.\n" +
     "Keep the whole answer concise. Use short bullet points.";
-  const prompt = errText
+
+  // Socratic tutor mode (Practice page): guide, don't reveal the answer.
+  const socraticStyle =
+    "You are a Socratic Python tutor for a beginner student working on a coding exercise. " +
+    "Rules you MUST follow:\n" +
+    "1. NEVER write the full corrected code — not even a snippet longer than one line.\n" +
+    "2. Explain what is likely wrong in plain words, then give exactly ONE guiding hint.\n" +
+    "3. Ask one short follow-up question that nudges the student to discover the fix.\n" +
+    "4. Keep the whole answer under 120 words. Be encouraging.";
+  const useSocratic = mode === "tutor";
+  const style = useSocratic ? socraticStyle : tutorStyle;
+  const prompt = useSocratic
+    ? "A student is stuck on this Python exercise. Their code is failing. Follow your Socratic rules strictly.\n\n" + code + "\n\n" + errText
+    : errText
     ? "A student ran this Python code and got this error. First explain the error in simple terms and exactly how to fix it, then give the walkthrough structure above for the code.\n\nCODE:\n" +
       code + "\n\nERROR:\n" + errText
     : "Explain this Python code using the walkthrough structure above.\n\nCODE:\n" + code;
@@ -65,7 +79,7 @@ app.post("/api/explain", async (req, res) => {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: tutorStyle }] },
+          systemInstruction: { parts: [{ text: style }] },
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 },
         }),
