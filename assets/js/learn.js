@@ -722,6 +722,15 @@
       }
   ];
 
+  /* Quiz bank expansion: merge extra questions (quiz-extra.js) when present.
+     Each lesson goes from 2 to 5 questions; openLesson() picks 3 at random. */
+  try {
+    var __qx = window.SkillzifyQuizExtra || {};
+    LESSONS.forEach(function (l) {
+      if (__qx[l.id] && __qx[l.id].length) l.quiz = l.quiz.concat(__qx[l.id]);
+    });
+  } catch (e) {}
+
   var TRACKS = [
     { id: "beginner", name: "Beginner", desc: "Zero to confident — syntax, variables, logic and loops.", icon: "🌱", needs: null },
     { id: "intermediate", name: "Intermediate", desc: "Functions, data structures, errors, OOP, recursion and files.", icon: "⚙️", needs: "beginner" },
