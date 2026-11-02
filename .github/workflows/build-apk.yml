@@ -46,6 +46,6 @@ jobs:
       - name: Create GitHub release with APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v1.0.${{ github.run_number }}
+          tag_name: android-v2.0.${{ github.run_number }}
           name: Skillzify Android v1.0 (build ${{ github.run_number }})
           files: android/app/build/outputs/apk/arm64/debug/*.apk
