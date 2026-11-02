@@ -29,7 +29,11 @@
     fizzbuzz: { name: "🍹 FizzBuzz", code: 'for i in range(1, 31):\n    if i % 15 == 0:\n        print("FizzBuzz")\n    elif i % 3 == 0:\n        print("Fizz")\n    elif i % 5 == 0:\n        print("Buzz")\n    else:\n        print(i)' },
     factorial: { name: "❗ Factorial", code: 'def factorial(n):\n    return 1 if n <= 1 else n * factorial(n - 1)\n\nfor i in range(1, 8):\n    print(f"{i}! = {factorial(i)}")' },
     guess: { name: "🎲 Guessing Game", code: 'import random\n\nsecret = random.randint(1, 20)\nprint("I picked a number 1-20. You get 4 tries!")\nfor attempt in range(1, 5):\n    g = int(input(f"Try {attempt}: "))\n    if g == secret:\n        print("🎉 Correct!")\n        break\n    print("Too high!" if g > secret else "Too low!")\nelse:\n    print(f"Out of tries — it was {secret}.")' },
-    sorting: { name: "📊 Sort Visualizer", code: 'nums = [64, 34, 25, 12, 22, 11, 90]\nprint("Before:", nums)\nfor i in range(len(nums)):\n    for j in range(i + 1, len(nums)):\n        if nums[j] < nums[i]:\n            nums[i], nums[j] = nums[j], nums[i]\n    print(f"Pass {i+1}: {nums}")\nprint("Sorted:", nums)' }
+    sorting: { name: "📊 Sort Visualizer", code: 'nums = [64, 34, 25, 12, 22, 11, 90]\nprint("Before:", nums)\nfor i in range(len(nums)):\n    for j in range(i + 1, len(nums)):\n        if nums[j] < nums[i]:\n            nums[i], nums[j] = nums[j], nums[i]\n    print(f"Pass {i+1}: {nums}")\nprint("Sorted:", nums)' },
+    prime: { name: "🧮 Prime Checker", code: 'def is_prime(n):\n    if n < 2:\n        return False\n    for i in range(2, int(n ** 0.5) + 1):\n        if n % i == 0:\n            return False\n    return True\n\nfor n in range(1, 31):\n    if is_prime(n):\n        print(n, end=" ")\nprint("\\nDone!")' },
+    wordcount: { name: "📝 Word Counter", code: 'text = input("Paste some text: ")\nwords = text.split()\nprint(f"Words: {len(words)}")\nprint(f"Characters: {len(text)}")\nlongest = max(words, key=len) if words else "-"\nprint(f"Longest word: {longest}")' },
+    binsearch: { name: "🎯 Binary Search", code: 'def binary_search(arr, target):\n    lo, hi = 0, len(arr) - 1\n    while lo <= hi:\n        mid = (lo + hi) // 2\n        print(f"Checking index {mid} (value {arr[mid]})")\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            lo = mid + 1\n        else:\n            hi = mid - 1\n    return -1\n\nnums = [2, 5, 8, 12, 16, 23, 38, 45]\nprint("Found at index:", binary_search(nums, 23))' },
+    palindrome: { name: "🔤 Palindrome Check", code: 's = input("Enter a word: ")\nclean = "".join(c.lower() for c in s if c.isalnum())\nif clean == clean[::-1]:\n    print(f"\\"{s}\\" is a palindrome! 🎉")\nelse:\n    print(f"\\"{s}\\" is not a palindrome.")' }
   };
 
   /* ---------- Pyodide loading ---------- */
@@ -88,7 +92,16 @@
     };
   }
 
-  /* ---------- Run ---------- */
+  /* ---------- Run (with stop + timeout) ---------- */
+  var runToken = 0;
+  var RUN_TIMEOUT_MS = 15000;
+
+  function setRunningUI(running) {
+    document.getElementById("run-btn").disabled = running;
+    var stop = document.getElementById("stop-btn");
+    if (stop) stop.disabled = !running;
+  }
+
   function runCode() {
     if (!pyodide) { window.Skillzify.toast("Python runtime is still loading…", "error"); return; }
     var code = editor ? editor.getValue() : document.getElementById("code-fallback").value;
@@ -100,14 +113,25 @@
 
     clearConsole();
     setStatus("running", "Running…");
-    document.getElementById("run-btn").disabled = true;
+    setRunningUI(true);
 
     var out = [];
     pyodide.setStdout({ batched: function (s) { out.push(s); } });
     pyodide.setStderr({ batched: function (s) { out.push(s); } });
     try { pyodide.setStdin(makeStdin(lines)); } catch (e) { /* older builds */ }
 
+    var myToken = ++runToken;
     var t0 = performance.now();
+    var timer = setTimeout(function () {
+      if (myToken !== runToken) return;
+      runToken++; // abandon the runaway execution
+      out.forEach(function (l) { printLine(l); });
+      printLine("———\n⏱ Stopped: your program ran over 15 seconds — likely an infinite loop. The output above is what it printed before the cutoff.", "err");
+      recordRun(false, RUN_TIMEOUT_MS);
+      setStatus("ready", "Python ready ✓");
+      setRunningUI(false);
+    }, RUN_TIMEOUT_MS);
+
     var promise;
     try {
       promise = pyodide.runPythonAsync(code);
@@ -116,6 +140,8 @@
     }
 
     promise.then(function () {
+      if (myToken !== runToken) return; // abandoned (stop/timeout)
+      clearTimeout(timer);
       var ms = Math.round(performance.now() - t0);
       out.forEach(function (l) { printLine(l); });
       printLine("———\n✅ Finished in " + ms + " ms", "ok-meta");
@@ -123,6 +149,8 @@
       recordRun(true, ms);
       setStatus("ready", "Python ready ✓");
     }).catch(function (err) {
+      if (myToken !== runToken) return; // abandoned (stop/timeout)
+      clearTimeout(timer);
       var ms = Math.round(performance.now() - t0);
       var msg = String(err && err.message ? err.message : err);
       // Strip Python's noisy traceback down to the last error line + context
@@ -134,8 +162,65 @@
       recordRun(false, ms);
       setStatus("ready", "Python ready ✓");
     }).finally(function () {
-      document.getElementById("run-btn").disabled = false;
+      if (myToken !== runToken) return;
+      setRunningUI(false);
     });
+  }
+
+  function stopRun() {
+    if (runToken === 0) return;
+    runToken++; // abandon current execution
+    printLine("———\n⏹ Stopped by user.", "err");
+    setStatus("ready", "Python ready ✓");
+    setRunningUI(false);
+  }
+
+  /* ---------- Share via link + download ---------- */
+  function currentCode() {
+    return editor ? editor.getValue() : document.getElementById("code-fallback").value;
+  }
+  function b64urlEncode(s) {
+    return btoa(unescape(encodeURIComponent(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  function b64urlDecode(s) {
+    s = s.replace(/-/g, "+").replace(/_/g, "/");
+    while (s.length % 4) s += "=";
+    return decodeURIComponent(escape(atob(s)));
+  }
+  function shareCode() {
+    var hash = "#code=" + b64urlEncode(currentCode());
+    try { history.replaceState(null, "", hash); } catch (e) {}
+    var url = location.href.split("#")[0] + hash;
+    function done() { window.Skillzify.toast("Share link copied! 🔗", "success"); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done, function () { fallbackCopy(url); done(); });
+    } else { fallbackCopy(url); done(); }
+  }
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    ta.remove();
+  }
+  function loadSharedCode() {
+    var m = (location.hash || "").match(/^#code=(.+)$/);
+    if (!m) return false;
+    try {
+      var code = b64urlDecode(m[1]);
+      if (editor) editor.setValue(code);
+      else document.getElementById("code-fallback").value = code;
+      return true;
+    } catch (e) { return false; }
+  }
+  function downloadCode() {
+    var blob = new Blob([currentCode()], { type: "text/x-python" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "skillzify.py";
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    window.Skillzify.toast("Downloaded skillzify.py ⬇️", "success");
   }
 
   function simplifyTraceback(msg) {
@@ -394,15 +479,27 @@
       document.getElementById("code-fallback").style.display = "block";
     }
 
-    // Handoff from learn.html ("Try in compiler")
+    // Handoff from learn.html ("Try in compiler"), or shared #code= link (link wins)
     try {
-      var handed = localStorage.getItem("skillzify_compiler_code");
-      if (handed) {
-        if (editor) editor.setValue(handed);
-        else document.getElementById("code-fallback").value = handed;
-        localStorage.removeItem("skillzify_compiler_code");
+      var shared = loadSharedCode();
+      if (!shared) {
+        var handed = localStorage.getItem("skillzify_compiler_code");
+        if (handed) {
+          if (editor) editor.setValue(handed);
+          else document.getElementById("code-fallback").value = handed;
+          localStorage.removeItem("skillzify_compiler_code");
+        }
+      } else {
+        try { localStorage.removeItem("skillzify_compiler_code"); } catch (e) {}
       }
     } catch (e) {}
+
+    var stopBtn = document.getElementById("stop-btn");
+    if (stopBtn) stopBtn.addEventListener("click", stopRun);
+    var shareBtn = document.getElementById("share-btn");
+    if (shareBtn) shareBtn.addEventListener("click", shareCode);
+    var dlBtn = document.getElementById("download-btn");
+    if (dlBtn) dlBtn.addEventListener("click", downloadCode);
 
     var sel = document.getElementById("snippet-select");
     Object.keys(SNIPPETS).forEach(function (k) {
