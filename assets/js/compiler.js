@@ -343,12 +343,28 @@
     return b;
   }
   function aiExplainRemote(code, errText) {
-    renderAiBox('<p class="hint">🤖 Asking AI…</p>');
-    fetch("api/explain", {
+    renderAiBox('<p class="hint">🤖 Waking up the AI…</p>');
+    var ctrl = null, timer = null, stageTimer = null;
+    try {
+      ctrl = new AbortController();
+      // Never hang for minutes: give the backend 60s, then fall back fast.
+      timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 60000);
+      stageTimer = setTimeout(function () {
+        renderAiBox('<p class="hint">🤖 Still working — the AI backend is slow to wake on the free tier. Hang on…</p>');
+      }, 9000);
+    } catch (e) {}
+    function clearTimers() {
+      if (timer) clearTimeout(timer);
+      if (stageTimer) clearTimeout(stageTimer);
+    }
+    var opts = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code: code, error: errText || "" })
-    }).then(function (r) {
+    };
+    if (ctrl) opts.signal = ctrl.signal;
+    fetch("api/explain", opts).then(function (r) {
+      clearTimers();
       if (!r.ok) throw 0;
       return r.json();
     }).then(function (data) {
@@ -356,6 +372,7 @@
       renderAiBox("<h4>🤖 AI explanation</h4><p>" +
         window.Skillzify.esc(data.explanation).replace(/\n/g, "<br>") + "</p>");
     }).catch(function () {
+      clearTimers();
       aiExplainViaKey(code, errText); // no backend / not configured → own key → offline
     });
   }
@@ -500,6 +517,10 @@
     if (shareBtn) shareBtn.addEventListener("click", shareCode);
     var dlBtn = document.getElementById("download-btn");
     if (dlBtn) dlBtn.addEventListener("click", downloadCode);
+
+    // Warm the AI backend now, so "Explain" is fast when the user clicks it.
+    // (On static hosts like GitHub Pages this 404s harmlessly.)
+    try { fetch("api/health", { method: "GET", cache: "no-store" }).catch(function () {}); } catch (e) {}
 
     var sel = document.getElementById("snippet-select");
     Object.keys(SNIPPETS).forEach(function (k) {
