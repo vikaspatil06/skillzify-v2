@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YYR4JD16G8"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-YYR4JD16G8');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Skillzify Practice — topic-wise Python exercises with automated tests, hints, and AI tutor.">
+  <title>Practice — Skillzify</title>
+  <link rel="icon" href="assets/logo-light.png">
+  <link rel="stylesheet" href="assets/css/style.css?v=4">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html"><img data-logo src="assets/logo-light.png" alt="Skillzify logo"><span>Skillzify</span></a>
+    <div class="nav-links" id="nav-links">
+      <a href="index.html">Home</a>
+      <a href="learn.html">Learn</a>
+      <a href="compiler.html">Compiler</a>
+      <a href="reference.html">Reference</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="profile.html">Profile</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+    </div>
+    <div class="nav-actions">
+      <span id="account-link"></span>
+      <button class="icon-btn" data-theme-toggle aria-label="Toggle dark/light theme">☀️</button>
+      <button class="icon-btn hamburger" id="hamburger" aria-label="Open menu">☰</button>
+    </div>
+  </div>
+</nav>
+<div class="toast" id="toast" role="status"></div>
+
+<main>
+  <section class="page-hero">
+    <div class="container">
+      <h1 class="section-title">🏋️ Practice</h1>
+      <p class="section-sub">Write real code, pass real tests. Hints when you're stuck, an AI tutor when you're lost.</p>
+      <div class="card" style="margin-top:18px"><div class="stats-row" id="practice-stats"></div></div>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:24px">
+    <div class="container">
+
+      <div id="practice-list">
+        <div class="card" id="daily-banner" style="margin-bottom:18px"></div>
+
+        <div class="card" id="revision-sec" style="margin-bottom:18px">
+          <h2 class="section-title" style="font-size:1.3rem">🔁 Review queue</h2>
+          <p class="hint">Exercises you attempted but haven't cracked yet — spaced repetition in action.</p>
+          <div class="grid-3" id="revision-row" style="margin-top:12px"></div>
+        </div>
+
+        <div class="filter-bar">
+          <select id="filter-topic" aria-label="Filter by topic"></select>
+          <select id="filter-diff" aria-label="Filter by difficulty">
+            <option value="all">All levels</option>
+            <option value="1">★ Easy</option>
+            <option value="2">★★ Medium</option>
+            <option value="3">★★★ Hard</option>
+          </select>
+          <input type="text" id="filter-q" placeholder="Search exercises…" aria-label="Search exercises">
+          <label class="checkline"><input type="checkbox" id="filter-unsolved"> Unsolved only</label>
+        </div>
+        <p class="hint" id="ex-count"></p>
+        <div class="grid-3" id="ex-grid" style="margin-top:12px"></div>
+      </div>
+
+      <div id="practice-detail" style="display:none;max-width:860px;margin:0 auto"></div>
+
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <img data-logo src="assets/logo-light.png" alt="Skillzify logo">
+        <p>Learn. Build. Shine. — an advanced, browser-first Python learning platform for students.</p>
+      </div>
+      <div>
+        <h4>Learn</h4>
+        <a href="learn.html">Beginner track</a>
+        <a href="learn.html">Intermediate track</a>
+        <a href="learn.html">Advanced track</a>
+      </div>
+      <div>
+        <h4>Platform</h4>
+        <a href="compiler.html">AI Compiler</a>
+        <a href="practice.html">Practice</a>
+        <a href="dashboard.html">Dashboard</a>
+      <a href="profile.html">Profile</a>
+        <a href="auth.html">Login / Register</a>
+      </div>
+      <div>
+        <h4>Company</h4>
+        <a href="about.html">About us</a>
+        <a href="contact.html">Contact</a>
+      </div>
+    </div>
+    <div class="footer-bottom">© <span data-year>2026</span> Skillzify · Learn. Build. Shine.</div>
+  </div>
+</footer>
+
+<script src="assets/js/app.js"></script>
+<script src="assets/js/activity.js"></script>
+<script src="assets/js/palette.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
+<script src="assets/js/auth.js"></script>
+<script src="assets/js/practice-data.js"></script>
+<script src="assets/js/practice.js"></script>
+</body>
+</html>
