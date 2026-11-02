@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.skillzify.app.AppViewModel
+import com.skillzify.app.data.buildQuiz
 import com.skillzify.app.ui.theme.Card
 import com.skillzify.app.ui.theme.Danger
 import com.skillzify.app.ui.theme.Success
@@ -51,17 +52,19 @@ fun LessonDetail(vm: AppViewModel, lessonId: String, nav: NavController) {
     val lesson = remember(lessonId) { vm.catalog.lessons.first { it.id == lessonId } }
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
+    // Randomized quiz: fresh 3-question pick from the 5-question bank, options shuffled (web parity).
+    val quiz = remember(lessonId) { buildQuiz(lesson) }
     // quiz state per question: -1 unanswered, else chosen index; track first-try correctness
-    val chosen = remember(lessonId) { mutableStateListOf(-1, -1) }
-    val firstTryCorrect = remember(lessonId) { mutableStateListOf(false, false) }
-    val attempts = remember(lessonId) { mutableStateListOf(0, 0) }
+    val chosen = remember(lessonId) { mutableStateListOf(*IntArray(quiz.size) { -1 }.toTypedArray()) }
+    val firstTryCorrect = remember(lessonId) { mutableStateListOf(*BooleanArray(quiz.size).toTypedArray()) }
+    val attempts = remember(lessonId) { mutableStateListOf(*IntArray(quiz.size).toTypedArray()) }
     var challengeDone by remember(lessonId) { mutableStateOf(false) }
     var blankInput by remember(lessonId) { mutableStateOf("") }
     var blankWrong by remember(lessonId) { mutableStateOf(false) }
     var showCongrats by remember(lessonId) { mutableStateOf(false) }
     var congratsText by remember { mutableStateOf("") }
 
-    val quizOk = lesson.quiz.indices.all { chosen[it] == lesson.quiz[it].answer }
+    val quizOk = quiz.indices.all { chosen[it] == quiz[it].answer }
     val canComplete = quizOk && challengeDone && !vm.isDone(lessonId)
 
     fun norm(s: String) = s.trim().lowercase()
@@ -91,7 +94,7 @@ fun LessonDetail(vm: AppViewModel, lessonId: String, nav: NavController) {
 
             Text("🧠 Quick quiz", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Text("Answer all correctly to proceed.", color = TextMuted, fontSize = 12.sp)
-            lesson.quiz.forEachIndexed { qi, q ->
+            quiz.forEachIndexed { qi, q ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Card),
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
