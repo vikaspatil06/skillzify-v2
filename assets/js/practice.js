@@ -57,6 +57,7 @@
     Object.keys(patch).forEach(function (k) { cur[k] = patch[k]; });
     cur.lastTry = Date.now();
     all[id] = cur; saveAttempts(all);
+    if (window.SkillzifySync) window.SkillzifySync.markDirty();
     return cur;
   }
   function addXP(n, label) {
