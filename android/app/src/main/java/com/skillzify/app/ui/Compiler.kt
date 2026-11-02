@@ -22,7 +22,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -57,6 +60,8 @@ import java.util.Locale
 @Composable
 fun CompilerTab(vm: AppViewModel) {
     val scope = rememberCoroutineScope()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
     var code by remember { mutableStateOf(vm.lastCode().ifEmpty { vm.snippets.first().code }) }
     var programInput by remember { mutableStateOf("") }
     var running by remember { mutableStateOf(false) }
@@ -64,6 +69,19 @@ fun CompilerTab(vm: AppViewModel) {
     var showExplainer by remember { mutableStateOf(false) }
     var snippetExpanded by remember { mutableStateOf(false) }
     var snippetIdx by remember { mutableStateOf(0) }
+    var runFuture by remember { mutableStateOf<java.util.concurrent.Future<*>?>(null) }
+    val runExec = remember { java.util.concurrent.Executors.newSingleThreadExecutor() }
+    val clipboard = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+
+    fun finishOnMain(r: RunResult) {
+        scope.launch(Dispatchers.Main) {
+            if (!running) return@launch // stopped / timed out — abandon stale result
+            result = r
+            running = false
+            runFuture = null
+            vm.addRun(code, r.ok)
+        }
+    }
 
     fun run() {
         if (running || code.isBlank()) return
@@ -71,21 +89,73 @@ fun CompilerTab(vm: AppViewModel) {
         result = null
         showExplainer = false
         vm.saveLastCode(code)
+        val codeSnap = code
+        val inputSnap = programInput
+        runFuture = runExec.submit {
+            try {
+                val r = PythonRunner.run(codeSnap, PythonRunner.makeStdin(inputSnap))
+                finishOnMain(r)
+            } catch (e: Exception) {
+                finishOnMain(RunResult(false, "", "Runner failed: ${e.message}", 0))
+            }
+        }
+        // 15s auto-timeout (web parity): abandon runaway code, recover UI
         scope.launch(Dispatchers.IO) {
-            val r = PythonRunner.run(code, PythonRunner.makeStdin(programInput))
+            kotlinx.coroutines.delay(15000)
             withContext(Dispatchers.Main) {
-                result = r
-                running = false
-                vm.addRun(code, r.ok)
+                if (running) {
+                    runFuture?.cancel(true)
+                    runFuture = null
+                    running = false
+                    result = RunResult(false, "", "⏱ Timed out after 15s — check for infinite loops.", 15000)
+                }
             }
         }
     }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Text("🤖 Python Compiler", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+    fun stop() {
+        runFuture?.cancel(true)
+        runFuture = null
+        running = false
+        result = RunResult(false, "", "⏹ Stopped.", 0)
+    }
+
+    fun shareCode() {
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("skillzify", code))
+        scope.launch { snackbar.showSnackbar("Code copied to clipboard") }
+    }
+
+    fun downloadCode() {
+        try {
+            val filename = "skillzify.py"
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                val values = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, filename)
+                    put(android.provider.MediaStore.Downloads.MIME_TYPE, "text/x-python")
+                }
+                val uri = ctx.contentResolver.insert(
+                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values
+                )
+                ctx.contentResolver.openOutputStream(uri!!)?.use { it.write(code.toByteArray()) }
+            } else {
+                @Suppress("DEPRECATION")
+                val dir = android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_DOWNLOADS
+                )
+                java.io.File(dir, filename).writeText(code)
+            }
+            scope.launch { snackbar.showSnackbar("Saved to Downloads/skillzify.py") }
+        } catch (e: Exception) {
+            scope.launch { snackbar.showSnackbar("Save failed: ${e.message}") }
+        }
+    }
+
+    Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { pad ->
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(pad).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("🤖 Python Compiler", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
         Text("Real Python 3.11 running on-device via Chaquopy.", color = TextMuted, fontSize = 13.sp)
 
         ExposedDropdownMenuBox(expanded = snippetExpanded, onExpandedChange = { snippetExpanded = it }) {
@@ -130,12 +200,20 @@ fun CompilerTab(vm: AppViewModel) {
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(
-                onClick = ::run,
-                enabled = !running,
-                modifier = Modifier.weight(1f).height(50.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) { Text(if (running) "⏳ Running…" else "▶ Run", fontSize = 15.sp) }
+            if (running) {
+                Button(
+                    onClick = ::stop,
+                    colors = ButtonDefaults.buttonColors(containerColor = Danger),
+                    modifier = Modifier.weight(1f).height(50.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("⏹ Stop", fontSize = 15.sp) }
+            } else {
+                Button(
+                    onClick = ::run,
+                    modifier = Modifier.weight(1f).height(50.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("▶ Run", fontSize = 15.sp) }
+            }
             Button(
                 onClick = { code = ""; result = null; showExplainer = false },
                 enabled = !running,
@@ -143,6 +221,16 @@ fun CompilerTab(vm: AppViewModel) {
                 modifier = Modifier.weight(1f).height(50.dp),
                 shape = RoundedCornerShape(12.dp)
             ) { Text("Clear", fontSize = 15.sp) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(
+                onClick = ::shareCode,
+                modifier = Modifier.weight(1f)
+            ) { Text("🔗 Share") }
+            OutlinedButton(
+                onClick = ::downloadCode,
+                modifier = Modifier.weight(1f)
+            ) { Text("⬇️ Save .py") }
         }
 
         Text("📟 Console output", fontWeight = FontWeight.Bold, fontSize = 15.sp)
@@ -232,5 +320,6 @@ fun CompilerTab(vm: AppViewModel) {
             }
         }
         Spacer(Modifier.height(8.dp))
-    }
+        } // Column
+    } // Scaffold
 }
