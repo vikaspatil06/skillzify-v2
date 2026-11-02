@@ -36,6 +36,9 @@
           cbs.forEach(function (cb) { try { cb(); } catch (e) {} });
         }
         refreshAccountUI();
+        // Cross-device sync: start Firestore sync once auth state is known.
+        // Guarded — sync.js is a no-op if the SDK failed to load.
+        try { if (window.SkillzifySync && window.SkillzifySync.init) window.SkillzifySync.init(); } catch (e) {}
         if (fbUser && /auth\.html$/.test(location.pathname)) location.href = "dashboard.html";
       });
     } else { ready = true; }
