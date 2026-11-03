@@ -16,7 +16,68 @@
   <link rel="icon" href="assets/logo-light.png">
   <link rel="stylesheet" href="assets/css/style.css?v=4">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/nord.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/monokai.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/eclipse.min.css">
+  <style>
+    /* IDE layout */
+    .ide-grid { display: grid; grid-template-columns: 1fr 380px; gap: 20px; margin-top: 24px; align-items: start; }
+    .ide-main { min-width: 0; }
+    .ide-toolbar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+    .ide-toolbar .tbtn {
+      border: 1px solid var(--card-border); background: var(--card); color: var(--text);
+      border-radius: 9px; padding: 7px 11px; font-size: .8rem; font-weight: 600; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px; transition: .15s;
+    }
+    .ide-toolbar .tbtn:hover { border-color: var(--primary); transform: translateY(-1px); }
+    .ide-toolbar .tbtn.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .ide-toolbar .tbtn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    .ide-toolbar .sep { width: 1px; height: 22px; background: var(--card-border); margin: 0 4px; }
+    .ide-toolbar .run-btn { background: var(--gradient); color: #fff; border: 0; font-weight: 800; }
+    .editor-shell { position: relative; border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; }
+    .editor-shell.fullscreen { position: fixed; inset: 12px; z-index: 400; background: var(--bg); display: flex; flex-direction: column; }
+    .editor-shell.fullscreen .CodeMirror { flex: 1; height: auto !important; }
+    .CodeMirror { height: 380px; font-size: 14px; }
+    .ide-statusbar {
+      display: flex; gap: 14px; align-items: center; padding: 7px 14px;
+      background: var(--bg-soft); border-top: 1px solid var(--card-border);
+      font-size: .75rem; color: var(--muted); flex-wrap: wrap;
+    }
+    .ide-statusbar select { width: auto; padding: 3px 8px; font-size: .75rem; }
+    .ide-statusbar .fs-btn { background: none; border: 1px solid var(--card-border); color: var(--muted);
+      border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: .75rem; }
+    .ide-statusbar .fs-btn:hover { color: var(--text); }
+    .console-head { display: flex; gap: 8px; align-items: center; margin: 16px 0 8px; flex-wrap: wrap; }
+    .console-head h3 { margin: 0; font-size: 1.05rem; }
+    .run-pager { display: flex; gap: 6px; align-items: center; margin-left: auto; font-size: .78rem; color: var(--muted); }
+    .run-pager button { background: var(--card); border: 1px solid var(--card-border); color: var(--text);
+      border-radius: 7px; padding: 4px 10px; cursor: pointer; font-size: .75rem; }
+    .run-pager button:disabled { opacity: .4; cursor: not-allowed; }
+    /* find bar */
+    .findbar { display: none; gap: 8px; align-items: center; padding: 8px 12px;
+      background: var(--bg-soft); border: 1px solid var(--card-border); border-radius: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+    .findbar.on { display: flex; }
+    .findbar input { width: auto; flex: 1; min-width: 140px; padding: 7px 10px; font-size: .85rem; }
+    .findbar .cnt { font-size: .78rem; color: var(--muted); white-space: nowrap; }
+    /* history modal */
+    .hist-modal { position: fixed; inset: 0; z-index: 500; display: none; align-items: center; justify-content: center;
+      background: rgba(4,8,24,.6); backdrop-filter: blur(4px); padding: 20px; }
+    .hist-modal.on { display: flex; }
+    .hist-box { background: var(--card); border: 1px solid var(--card-border); border-radius: 16px;
+      width: min(640px, 100%); max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; }
+    .hist-box header { padding: 16px 20px; border-bottom: 1px solid var(--card-border); display: flex; align-items: center; }
+    .hist-box header h3 { margin: 0; flex: 1; }
+    .hist-list { overflow-y: auto; padding: 12px; }
+    .hist-item { border: 1px solid var(--card-border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+    .hist-item .meta { font-size: .78rem; color: var(--muted); margin-bottom: 8px; }
+    .hist-item pre { background: var(--bg-soft); border-radius: 8px; padding: 10px; font-size: .78rem;
+      max-height: 120px; overflow: hidden; margin: 0 0 10px; white-space: pre-wrap; }
+    .hist-item .row { display: flex; gap: 8px; }
+    @media (max-width: 960px) { .ide-grid { grid-template-columns: 1fr; } }
+  </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -64,41 +125,95 @@
           <a class="btn" href="practice.html">Practice →</a>
         </div>
       </div>
-      <div class="compiler-grid">
+      <div class="ide-grid">
         <!-- Editor column -->
-        <div class="panel">
-          <div class="toolbar">
-            <select id="snippet-select" style="width:auto;flex:1;min-width:180px" aria-label="Sample snippets"></select>
-            <button class="btn btn-sm" id="run-btn" disabled>▶ Run <span class="kbd">Ctrl+↵</span></button>
-            <button class="btn btn-sm btn-ghost" id="stop-btn" disabled title="Stop a running program">⏹ Stop</button>
-            <button class="btn btn-sm btn-ghost" id="clear-btn">Clear</button>
-            <button class="btn btn-sm btn-ghost" id="save-snippet-btn" title="Save as snippet (Gist-like)">💾 Save</button>
-            <button class="btn btn-sm btn-ghost" id="share-btn" title="Copy a shareable link to this code">🔗 Share</button>
-            <button class="btn btn-sm btn-ghost" id="download-btn" title="Download as a .py file">⬇️ .py</button>
-            <span class="status-pill" id="status-pill">Starting…</span>
+        <div class="ide-main">
+          <div class="panel">
+            <div class="findbar" id="findbar">
+              <input id="find-input" placeholder="Find…  (Enter ↵ next · Shift+Enter ↵ prev)">
+              <input id="replace-input" placeholder="Replace with…" style="display:none">
+              <span class="cnt" id="find-count"></span>
+              <button class="tbtn" id="find-next" title="Next match">↓</button>
+              <button class="tbtn" id="find-prev" title="Previous match">↑</button>
+              <button class="tbtn" id="replace-one" style="display:none" title="Replace current">Replace</button>
+              <button class="tbtn" id="replace-all" style="display:none" title="Replace all">All</button>
+              <button class="tbtn" id="find-close" title="Close (Esc)">✕</button>
+            </div>
+            <div class="ide-toolbar">
+              <button class="tbtn run-btn" id="run-btn" disabled title="Run (Ctrl+Enter)">▶ Run</button>
+              <button class="tbtn" id="stop-btn" disabled title="Stop a running program">⏹</button>
+              <span class="sep"></span>
+              <select id="snippet-select" style="width:auto;min-width:150px" aria-label="Sample snippets"></select>
+              <span class="sep"></span>
+              <button class="tbtn" id="find-btn" title="Find (Ctrl+F)">🔍</button>
+              <button class="tbtn" id="undo-btn" title="Undo (Ctrl+Z)">↩</button>
+              <button class="tbtn" id="redo-btn" title="Redo (Ctrl+Y)">↪</button>
+              <button class="tbtn" id="wrap-btn" title="Toggle word wrap (Alt+Z)">↩️ Wrap</button>
+              <button class="tbtn" id="copy-code-btn" title="Copy code">📋</button>
+              <button class="tbtn" id="upload-btn" title="Upload a .py file">⬆️</button>
+              <button class="tbtn" id="download-btn" title="Download as .py">⬇️</button>
+              <button class="tbtn" id="history-btn" title="Code history">🕘</button>
+              <button class="tbtn" id="fullscreen-btn" title="Fullscreen editor">⛶</button>
+              <span class="sep"></span>
+              <button class="tbtn" id="save-snippet-btn" title="Save as snippet">💾</button>
+              <button class="tbtn" id="share-btn" title="Copy shareable link">🔗</button>
+              <button class="tbtn" id="clear-btn" title="Clear editor">🗑</button>
+              <span class="status-pill" id="status-pill">Starting…</span>
+            </div>
+            <div class="editor-shell" id="editor-shell">
+              <textarea id="code-fallback" style="display:none"></textarea>
+              <div id="editor-host"></div>
+              <div class="ide-statusbar">
+                <span id="cursor-pos">Ln 1, Col 1</span>
+                <span id="code-stats">0 lines</span>
+                <span>Python 3.11 · Pyodide</span>
+                <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
+                  <button class="fs-btn" id="fs-down" title="Smaller font">A−</button>
+                  <button class="fs-btn" id="fs-up" title="Larger font">A+</button>
+                  <select id="theme-select" aria-label="Editor theme">
+                    <option value="dracula">Dracula</option>
+                    <option value="material-darker">Material</option>
+                    <option value="nord">Nord</option>
+                    <option value="monokai">Monokai</option>
+                    <option value="eclipse">Eclipse (light)</option>
+                  </select>
+                </span>
+              </div>
+            </div>
+            <label class="field-lbl" for="program-input">⌨️ Program input <span class="hint" style="display:inline">— one line per input() call</span></label>
+            <textarea id="program-input" rows="3" placeholder='e.g.&#10;Vikas&#10;20'></textarea>
+            <div class="console-head">
+              <h3>📟 Console</h3>
+              <div class="run-pager">
+                <button id="run-prev" disabled>← Prev</button>
+                <span id="run-page">Run 1/1</span>
+                <button id="run-next" disabled>Next →</button>
+                <button id="copy-out-btn" title="Copy output">📋</button>
+                <button id="clear-out-btn" title="Clear console">✕</button>
+              </div>
+            </div>
+            <div class="console" id="console"><div class="dim">Press Run to execute your code…</div></div>
           </div>
-          <textarea id="code-fallback" style="display:none"></textarea>
-          <div id="editor-host"></div>
-          <label class="field-lbl" for="program-input">⌨️ Program input <span class="hint" style="display:inline">— one line per input() call</span></label>
-          <textarea id="program-input" rows="3" placeholder='e.g.&#10;Vikas&#10;20'></textarea>
-          <h3 style="margin-top:20px">📟 Console output</h3>
-          <div class="console" id="console"><div class="dim">Press Run to execute your code…</div></div>
         </div>
 
         <!-- AI column -->
         <div>
           <div class="panel">
-            <h3>✨ AI Explain</h3>
+            <h3>✨ AI Assistant</h3>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+              <button class="btn btn-sm" id="ai-generate-btn" title="Describe what you want — AI writes the code">✨ Generate</button>
+              <button class="btn btn-sm btn-ghost" id="explain-code-btn">Explain</button>
+            </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-sm" id="explain-error-btn">Explain last error</button>
-              <button class="btn btn-sm btn-ghost" id="explain-code-btn">Explain my code</button>
+              <button class="btn btn-sm btn-ghost" id="explain-error-btn">Explain last error</button>
+              <button class="btn btn-sm btn-ghost" id="fix-code-btn" title="AI fixes your code's error">🔧 Fix code</button>
             </div>
             <div class="ai-box" id="ai-output">
-              <p class="hint">Run code with an error and click <strong>Explain last error</strong> — the built-in explainer knows 12 common Python error patterns, and the backend AI goes deeper automatically.</p>
+              <p class="hint"><strong>Generate</strong> writes code from your description. <strong>Explain</strong> walks through your code. <strong>Fix code</strong> repairs the last error — the built-in explainer knows 12 common Python error patterns, and the backend AI goes deeper automatically.</p>
             </div>
             <details class="settings">
               <summary>⚙️ AI settings (optional)</summary>
-              <p class="hint">AI explanations run through the site's backend automatically — nothing to set up. The fields below are an optional fallback: use your own key if the backend is ever unreachable.</p>
+              <p class="hint">AI runs through the site's backend automatically — nothing to set up. The fields below are an optional fallback: use your own key if the backend is ever unreachable.</p>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
                 <button class="btn btn-sm" id="ai-preset-gemini" type="button">✨ Gemini (free)</button>
                 <button class="btn btn-sm btn-ghost" id="ai-preset-openai" type="button">OpenAI</button>
@@ -124,16 +239,26 @@
             <div id="snippet-library" class="snippet-grid"></div>
           </div>
           <div class="panel" style="margin-top:20px">
-            <h3>💡 Tips</h3>
+            <h3>⌨️ Shortcuts</h3>
             <ul class="list-check" style="margin-top:0">
-              <li><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> runs your code</li>
+              <li><span class="kbd">Ctrl</span>+<span class="kbd">Enter</span> run code</li>
+              <li><span class="kbd">Ctrl</span>+<span class="kbd">F</span> find · <span class="kbd">Ctrl</span>+<span class="kbd">H</span> replace</li>
+              <li><span class="kbd">Alt</span>+<span class="kbd">Z</span> word wrap</li>
+              <li><span class="kbd">Ctrl</span>+<span class="kbd">S</span> download .py</li>
               <li><span class="kbd">input()</span> reads lines from "Program input"</li>
-              <li>Only the Python standard library is available</li>
-              <li>Runs are saved to your dashboard history</li>
             </ul>
           </div>
         </div>
       </div>
+
+      <!-- code history modal -->
+      <div class="hist-modal" id="hist-modal">
+        <div class="hist-box">
+          <header><h3>🕘 Code history</h3><button class="tbtn" id="hist-close">✕</button></header>
+          <div class="hist-list" id="hist-list"></div>
+        </div>
+      </div>
+      <input type="file" id="upload-input" accept=".py,.txt" style="display:none">
     </div>
   </section>
 </main>
@@ -181,6 +306,10 @@
 <script src="assets/js/sync.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
 <script src="assets/js/compiler.js"></script>
 </body>
 </html>
