@@ -70,7 +70,7 @@
   /* ---------------- achievements ---------------- */
   var ACHIEVEMENTS = [
     { id: "first_steps",  icon: "🌱", name: "First Steps",   desc: "Complete your first lesson" },
-    { id: "scholar",      icon: "🎓", name: "Scholar",       desc: "Complete all 32 lessons" },
+    { id: "scholar",      icon: "🎓", name: "Scholar",       desc: "Complete all 95 lessons" },
     { id: "xp_100",       icon: "💯", name: "Century",       desc: "Earn 100 XP" },
     { id: "xp_500",       icon: "⚡", name: "Charged",       desc: "Earn 500 XP" },
     { id: "xp_1000",      icon: "🚀", name: "Rocket",        desc: "Earn 1,000 XP" },
@@ -101,7 +101,7 @@
     try { var p = JSON.parse(localStorage.getItem("skillzify_progress") || "{}"); done = Object.keys(p).length; } catch (e) {}
     var s = streak(), runs = runCount(), snips = get(SNIP_KEY, []).length;
     if (done >= 1) unlock("first_steps");
-    var totalLessons = (window.SkillzifyLearn && window.SkillzifyLearn.totalLessons) || 32;
+    var totalLessons = (window.SkillzifyLearn && window.SkillzifyLearn.totalLessons) || 95;
     if (done >= totalLessons) unlock("scholar");
     var exSolved = 0;
     try {
