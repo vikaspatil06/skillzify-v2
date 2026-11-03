@@ -32,6 +32,7 @@
         <div class="profile-id">
           <h1 class="section-title" id="profile-name" style="margin:0">Learner</h1>
           <p class="section-sub" id="profile-bio" style="margin:4px 0">Add a bio so future-you remembers why you started.</p>
+          <p style="margin:6px 0"><span id="profile-level" class="level-pill">⚡ Novice</span></p>
           <p class="muted small" id="profile-meta"></p>
           <button class="btn btn-ghost btn-sm" id="edit-profile-btn" style="margin-top:8px">Edit profile</button>
         </div>
@@ -42,6 +43,19 @@
   <section class="section" style="padding-top:24px">
     <div class="container">
       <div class="dash-grid" id="profile-stats"></div>
+
+      <div class="dash-card" style="margin-top:20px">
+        <h3>🎓 Certificates</h3>
+        <p class="muted small">Complete every lesson in a track to unlock its certificate.</p>
+        <div id="profile-certs" style="margin-top:8px"></div>
+      </div>
+
+      <div class="dash-card" style="margin-top:20px">
+        <h3>📊 Topic mastery</h3>
+        <p class="muted small">Where your completed lessons live, GitHub-language-bar style.</p>
+        <div class="mastery-bar" id="profile-mastery-bar"></div>
+        <div class="mastery-legend" id="profile-mastery-legend"></div>
+      </div>
 
       <div class="dash-card" style="margin-top:20px">
         <h3>🟩 Activity <span class="muted small" id="activity-total"></span></h3>
@@ -95,7 +109,10 @@
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js"></script>
 <script src="assets/js/sync.js"></script>
-<script src="assets/js/learn.js"></script>
+<script src="assets/js/lessons-b.js?v=1"></script>
+<script src="assets/js/lessons-i.js?v=1"></script>
+<script src="assets/js/lessons-a.js?v=1"></script>
+<script src="assets/js/learn.js?v=4"></script>
 <script src="assets/js/practice-data.js"></script>
 <script src="assets/js/profile.js"></script>
 </body>
