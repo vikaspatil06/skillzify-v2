@@ -4,98 +4,155 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Flowchart Lab — Skillzify</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <style>
   :root {
-    --bg: #0d1117; --panel: #161b22; --border: #30363d;
-    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
-    --green: #3fb950; --red: #f85149; --orange: #d29922;
+    --bg: #0a0f22; --bg-soft: #0e1430; --card: #141b3d;
+    --card-border: rgba(255,255,255,.08);
+    --text: #eef1ff; --muted: #9aa3c7;
+    --primary: #6c7bff; --primary-2: #9d6bff; --accent: #22d3ee;
+    --success: #34d399; --warning: #fbbf24; --danger: #f87171;
+    --gradient: linear-gradient(135deg,#6c7bff 0%,#9d6bff 55%,#22d3ee 130%);
+    --shadow: 0 12px 40px rgba(0,0,0,.35); --radius: 16px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  body { font-family: "Inter",-apple-system,"Segoe UI",Roboto,sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-  header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; }
-  header .logo { font-size: 28px; }
-  header h1 { font-size: 20px; font-weight: 600; }
-  header .tag { font-size: 11px; background: var(--orange); color: #000; padding: 3px 10px; border-radius: 12px; font-weight: 700; letter-spacing: .5px; }
-  header .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  /* nav like the main site */
+  .nav { height: 68px; display: flex; align-items: center; padding: 0 max(20px,4vw);
+         border-bottom: 1px solid var(--card-border); background: rgba(10,15,34,.85);
+         backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 50; }
+  .nav .brand { font-weight: 800; font-size: 1.25rem; letter-spacing: -.02em;
+                background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .nav .crumb { color: var(--muted); font-size: .9rem; margin-left: 14px; }
+  .nav .pill { margin-left: auto; font-size: .72rem; font-weight: 700; letter-spacing: .08em;
+               background: rgba(251,191,36,.15); color: var(--warning);
+               border: 1px solid rgba(251,191,36,.35); padding: 5px 14px; border-radius: 20px; }
 
-  .tabs { display: flex; gap: 4px; padding: 0 28px; border-bottom: 1px solid var(--border); background: var(--panel); }
-  .tab { padding: 14px 22px; cursor: pointer; font-size: 14px; color: var(--muted); border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 8px; transition: all .15s; }
-  .tab:hover { color: var(--text); }
-  .tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  .hero { padding: 34px max(20px,4vw) 10px; }
+  .hero h1 { font-size: clamp(1.6rem,3.4vw,2.4rem); font-weight: 800; letter-spacing: -.03em; }
+  .hero h1 .grad { background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p { color: var(--muted); margin-top: 6px; font-size: .95rem; }
 
-  main { display: grid; grid-template-columns: 1fr 1fr; gap: 0; height: calc(100vh - 130px); }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; height: auto; } }
+  /* mode tabs as cards */
+  .modes { display: flex; gap: 12px; padding: 20px max(20px,4vw) 0; flex-wrap: wrap; }
+  .mode-card { flex: 1; min-width: 180px; background: var(--card); border: 1px solid var(--card-border);
+               border-radius: var(--radius); padding: 16px 18px; cursor: pointer; transition: all .18s; }
+  .mode-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+  .mode-card.active { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary), var(--shadow); }
+  .mode-card .ico { font-size: 22px; }
+  .mode-card .t { font-weight: 700; margin-top: 6px; font-size: .95rem; }
+  .mode-card .d { color: var(--muted); font-size: .8rem; margin-top: 4px; line-height: 1.45; }
 
-  .editor-pane { border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 28px; overflow: hidden; }
-  .preview-pane { display: flex; flex-direction: column; padding: 20px 28px; overflow: hidden; background: #fff; }
+  main { display: grid; grid-template-columns: 1fr 1.15fr; gap: 20px; padding: 20px max(20px,4vw) 40px; }
+  @media (max-width: 960px) { main { grid-template-columns: 1fr; } }
 
-  .pane-label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 10px; font-weight: 600; }
-  .preview-pane .pane-label { color: #666; }
+  .card { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius);
+          padding: 20px; display: flex; flex-direction: column; min-height: 480px; box-shadow: var(--shadow); }
+  .card-head { display: flex; align-items: center; margin-bottom: 14px; }
+  .card-head h2 { font-size: 1rem; font-weight: 700; }
+  .card-head .spacer { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 
-  textarea, input[type=text] { flex: 1; background: #0d1117; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace; font-size: 13px; line-height: 1.6; resize: none; min-height: 200px; }
-  textarea:focus, input[type=text]:focus { outline: none; border-color: var(--accent); }
-  input[type=text] { flex: none; min-height: auto; }
+  textarea, .q-input { background: #0b1128; color: var(--text); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 14px; font-family: "JetBrains Mono","Fira Code",Consolas,monospace;
+    font-size: .85rem; line-height: 1.65; width: 100%; }
+  textarea { flex: 1; min-height: 300px; resize: vertical; }
+  textarea:focus, .q-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .q-input { font-family: inherit; }
 
-  .toolbar { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
-  .btn { padding: 10px 22px; border-radius: 7px; border: none; cursor: pointer; font-size: 14px; font-weight: 600; transition: all .15s; display: inline-flex; align-items: center; gap: 8px; }
-  .btn-primary { background: var(--accent); color: #fff; }
-  .btn-primary:hover { background: #4493f8; }
-  .btn-primary:disabled { background: #333; color: #777; cursor: wait; }
-  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 22px; border-radius: 12px;
+         border: none; font-weight: 700; font-size: .9rem; cursor: pointer; transition: all .15s;
+         background: var(--gradient); color: #fff; }
+  .btn:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: .55; cursor: wait; transform: none; }
+  .btn-ghost { background: transparent; border: 1px solid var(--card-border); color: var(--muted); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); box-shadow: none; }
+  .btn-sm { padding: 8px 14px; font-size: .8rem; border-radius: 10px; }
 
-  .preview-toolbar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
-  .preview-toolbar .btn { padding: 7px 14px; font-size: 12px; }
-  .btn-light { background: #f0f0f0; color: #333; border: 1px solid #ddd; }
-  .btn-light:hover { background: #e0e0e0; }
+  .toolbar { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .hint { color: var(--muted); font-size: .78rem; margin-top: 12px; line-height: 1.7; }
+  .hint code { background: rgba(255,255,255,.07); padding: 2px 7px; border-radius: 6px; font-size: .72rem; }
 
-  #flowchart-output { flex: 1; overflow: auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px; display: flex; align-items: flex-start; justify-content: center; background: #fff; }
+  #status { margin-top: 12px; font-size: .85rem; min-height: 22px; display: flex; align-items: center; gap: 8px; }
+  #status.ok { color: var(--success); } #status.err { color: var(--danger); } #status.working { color: var(--accent); }
+  .spin { width: 14px; height: 14px; border: 2px solid var(--card-border); border-top-color: var(--accent);
+          border-radius: 50%; animation: sp .7s linear infinite; display: inline-block; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+
+  /* flowchart canvas */
+  #canvas-wrap { flex: 1; background: #fff; border-radius: 12px; overflow: auto; position: relative; min-height: 340px; }
+  #flowchart-output { padding: 28px; min-height: 100%; display: flex; align-items: flex-start; justify-content: center; }
   #flowchart-output svg { max-width: 100%; height: auto; }
-  #flowchart-output .placeholder { color: #999; text-align: center; margin: auto; }
-  #flowchart-output .placeholder .big { font-size: 48px; margin-bottom: 12px; }
+  #flowchart-output .node { cursor: pointer; }
+  #flowchart-output .node:hover filter, #flowchart-output .node:hover { filter: brightness(1.08) drop-shadow(0 2px 6px rgba(108,123,255,.4)); }
+  .fc-active .node-shape, .fc-active rect, .fc-active polygon, .fc-active ellipse, .fc-active path.node-shape {
+    stroke: #6c7bff !important; stroke-width: 3px !important;
+    filter: drop-shadow(0 0 10px rgba(108,123,255,.55)) !important; }
+  .fc-done rect, .fc-done polygon, .fc-done ellipse { stroke: #34d399 !important; }
 
-  #status { margin-top: 12px; font-size: 13px; min-height: 20px; display: flex; align-items: center; gap: 8px; }
-  #status.ok { color: var(--green); }
-  #status.err { color: var(--red); }
-  #status.working { color: var(--accent); }
-  .spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .canvas-bar { display: flex; gap: 8px; align-items: center; }
+  .canvas-bar .stats { color: var(--muted); font-size: .78rem; }
+  .icon-btn { width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--card-border);
+              background: transparent; color: var(--muted); cursor: pointer; font-size: 15px; }
+  .icon-btn:hover { color: var(--text); border-color: var(--muted); }
 
-  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
-  .hint code { background: #21262d; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+  /* trace controls */
+  #trace-bar { display: none; gap: 8px; align-items: center; margin-top: 12px; padding: 12px 14px;
+               background: rgba(108,123,255,.08); border: 1px solid rgba(108,123,255,.3); border-radius: 12px; }
+  #trace-bar.on { display: flex; flex-wrap: wrap; }
+  #trace-label { font-size: .82rem; color: var(--text); font-weight: 600; }
+  #trace-step { font-size: .78rem; color: var(--muted); }
 
-  .panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+  /* node inspector */
+  #inspector { display: none; margin-top: 12px; background: rgba(34,211,238,.06);
+               border: 1px solid rgba(34,211,238,.25); border-radius: 12px; padding: 14px 16px; }
+  #inspector.on { display: block; }
+  #inspector .k { font-size: .7rem; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); font-weight: 700; }
+  #inspector .v { font-size: .9rem; margin: 4px 0 10px; font-family: "JetBrains Mono",Consolas,monospace;
+                  background: rgba(0,0,0,.25); padding: 8px 10px; border-radius: 8px; word-break: break-word; }
+  #inspector .why { font-size: .8rem; color: var(--muted); line-height: 1.6; }
+
+  .panel { display: none; flex-direction: column; flex: 1; }
   .panel.active { display: flex; }
-
-  .zoom-controls { display: flex; gap: 6px; margin-left: auto; }
-  .zoom-controls button { width: 28px; height: 28px; border: 1px solid #ddd; background: #fff; border-radius: 5px; cursor: pointer; font-size: 14px; }
-  .zoom-controls button:hover { background: #f0f0f0; }
-
-  .stats { font-size: 12px; color: #888; }
+  #ai-preview { display: none; margin-top: 12px; }
+  #ai-preview.on { display: block; }
 </style>
 </head>
 <body>
 
-<header>
-  <div class="logo">🔀</div>
-  <div>
-    <h1>Flowchart Lab <span class="tag">TEST</span></h1>
-    <div class="sub">Generate flowcharts from Python code, algorithms, or questions</div>
-  </div>
-</header>
+<nav class="nav">
+  <div class="brand">Skillzify</div>
+  <div class="crumb">/ Flowchart Lab</div>
+  <div class="pill">TEST BUILD</div>
+</nav>
 
-<div class="tabs">
-  <div class="tab active" data-tab="code">🐍 Python Code</div>
-  <div class="tab" data-tab="algo">📝 Algorithm</div>
-  <div class="tab" data-tab="question">❓ Question</div>
+<div class="hero">
+  <h1>Turn logic into <span class="grad">flowcharts</span></h1>
+  <p>Paste Python code, write an algorithm, or ask a question — then trace the execution step by step.</p>
+</div>
+
+<div class="modes">
+  <div class="mode-card active" data-tab="code">
+    <div class="ico">🐍</div><div class="t">Python Code</div>
+    <div class="d">AST-parsed. if/else, loops, functions mapped exactly.</div>
+  </div>
+  <div class="mode-card" data-tab="algo">
+    <div class="ico">📝</div><div class="t">Algorithm</div>
+    <div class="d">Structured pseudocode with START, IF, FOR, WHILE…</div>
+  </div>
+  <div class="mode-card" data-tab="question">
+    <div class="ico">❓</div><div class="t">Question</div>
+    <div class="d">AI writes the code, then we chart it.</div>
+  </div>
 </div>
 
 <main>
-  <div class="editor-pane">
-    <div class="pane-label">Input</div>
+  <div class="card">
+    <div class="card-head"><h2>✏️ Input</h2></div>
 
     <div class="panel active" id="panel-code">
       <textarea id="code-input" spellcheck="false">n = int(input("Enter n: "))
@@ -107,11 +164,9 @@ for i in range(1, n + 1):
         total -= i
 print("Result:", total)</textarea>
       <div class="toolbar">
-        <button class="btn btn-primary" id="btn-code" onclick="genFromCode()">⚡ Generate</button>
-        <button class="btn btn-ghost" onclick="loadExample('code')">📋 Example</button>
-        <button class="btn btn-ghost" onclick="clearInput('code-input')">🗑 Clear</button>
+        <button class="btn" id="btn-code" onclick="genFromCode()">⚡ Generate</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadExample('code')">Example</button>
       </div>
-      <p class="hint">Paste any Python code. <code>if/else</code>, <code>for</code>, <code>while</code>, functions, and <code>print/input</code> are mapped to flowchart shapes automatically.</p>
     </div>
 
     <div class="panel" id="panel-algo">
@@ -128,242 +183,318 @@ END FOR
 PRINT total
 END</textarea>
       <div class="toolbar">
-        <button class="btn btn-primary" id="btn-algo" onclick="genFromAlgo()">⚡ Generate</button>
-        <button class="btn btn-ghost" onclick="loadExample('algo')">📋 Example</button>
-        <button class="btn btn-ghost" onclick="clearInput('algo-input')">🗑 Clear</button>
+        <button class="btn" id="btn-algo" onclick="genFromAlgo()">⚡ Generate</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadExample('algo')">Example</button>
       </div>
-      <p class="hint">Keywords: <code>START</code> <code>END</code> <code>INPUT</code> <code>PRINT</code> <code>SET</code> <code>IF/THEN/ELSE/END IF</code> <code>WHILE/END WHILE</code> <code>FOR/FROM/TO/END FOR</code> <code>REPEAT/UNTIL</code></p>
+      <p class="hint"><code>START</code> <code>END</code> <code>INPUT</code> <code>PRINT</code> <code>SET</code> <code>IF/THEN/ELSE/END IF</code> <code>WHILE/END WHILE</code> <code>FOR/FROM/TO/END FOR</code> <code>REPEAT/UNTIL</code></p>
     </div>
 
     <div class="panel" id="panel-question">
-      <input type="text" id="question-input" placeholder="e.g. Write a program to find the factorial of a number" value="Write a program to check if a number is prime">
+      <input class="q-input" id="question-input" value="Write a program to check if a number is prime" placeholder="e.g. Write a program to find the factorial of a number">
       <div class="toolbar">
-        <button class="btn btn-primary" id="btn-question" onclick="genFromQuestion()">🤖 AI → Code → Flowchart</button>
-        <button class="btn btn-ghost" onclick="clearInput('question-input')">🗑 Clear</button>
+        <button class="btn" id="btn-question" onclick="genFromQuestion()">🤖 AI → Flowchart</button>
       </div>
-      <p class="hint">Describe the problem. The AI writes Python code, then the flowchart is generated from that code. The generated code appears in the <b>Python Code</b> tab for transparency.</p>
-      <div id="ai-code-preview" style="margin-top:12px; display:none;">
-        <div class="pane-label">AI-generated code</div>
-        <textarea id="ai-code-text" readonly style="min-height:120px; font-size:12px;"></textarea>
+      <div id="ai-preview">
+        <p class="hint">AI-generated code:</p>
+        <textarea id="ai-code-text" readonly style="min-height:110px;font-size:.78rem;"></textarea>
       </div>
     </div>
 
     <div id="status"></div>
   </div>
 
-  <div class="preview-pane">
-    <div class="pane-label">Flowchart</div>
-    <div class="preview-toolbar">
-      <span class="stats" id="graph-stats"></span>
-      <div class="zoom-controls">
-        <button onclick="zoomIn()" title="Zoom in">+</button>
-        <button onclick="zoomOut()" title="Zoom out">−</button>
-        <button onclick="zoomReset()" title="Reset">⟲</button>
+  <div class="card">
+    <div class="card-head">
+      <h2>🔀 Flowchart</h2>
+      <div class="spacer canvas-bar">
+        <span class="stats" id="graph-stats"></span>
+        <button class="icon-btn" onclick="zoomIn()" title="Zoom in">+</button>
+        <button class="icon-btn" onclick="zoomOut()" title="Zoom out">−</button>
+        <button class="icon-btn" onclick="zoomReset()" title="Reset zoom">⟲</button>
+        <button class="btn btn-ghost btn-sm" onclick="downloadSVG()">⬇ SVG</button>
       </div>
-      <button class="btn btn-light" onclick="downloadSVG()">⬇ SVG</button>
     </div>
-    <div id="flowchart-output">
-      <div class="placeholder">
-        <div class="big">🔀</div>
-        <p>Your flowchart will appear here</p>
+
+    <div id="canvas-wrap">
+      <div id="flowchart-output">
+        <div style="color:#9aa3c7;text-align:center;margin:auto;">
+          <div style="font-size:44px;">🔀</div>
+          <p style="margin-top:10px;font-size:.9rem;">Generate a flowchart to explore it here.<br>Click any node for details · trace execution step by step.</p>
+        </div>
       </div>
+    </div>
+
+    <div class="toolbar" style="margin-top:12px;">
+      <button class="btn btn-ghost btn-sm" id="btn-trace" onclick="toggleTrace()" disabled>▶ Trace execution</button>
+      <button class="btn btn-ghost btn-sm" onclick="resetTrace()" id="btn-trace-reset" style="display:none;">⟲ Reset</button>
+    </div>
+
+    <div id="trace-bar">
+      <button class="btn btn-sm" onclick="tracePrev()">← Prev</button>
+      <button class="btn btn-sm" onclick="traceNext()">Next →</button>
+      <span id="trace-label">Ready</span>
+      <span id="trace-step"></span>
+    </div>
+
+    <div id="inspector">
+      <div class="k">Node</div><div class="v" id="insp-label"></div>
+      <div class="k">Type</div><div class="v" id="insp-type" style="font-family:inherit;"></div>
+      <div class="why" id="insp-why"></div>
     </div>
   </div>
 </main>
 
 <script>
-let pyodide = null;
-let currentZoom = 1;
-let currentSVG = null;
+let pyodide = null, currentGraph = null, currentSVG = null, currentZoom = 1;
 const API_BASE = 'https://skillzify-v2.onrender.com';
-
 mermaid.initialize({ startOnLoad: false, theme: 'default', flowchart: { useMaxWidth: true } });
 
-// Tabs
-document.querySelectorAll('.tab').forEach(t => {
-  t.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+/* ---------- tabs ---------- */
+document.querySelectorAll('.mode-card').forEach(c => {
+  c.addEventListener('click', () => {
+    document.querySelectorAll('.mode-card').forEach(x => x.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
-    t.classList.add('active');
-    document.getElementById('panel-' + t.dataset.tab).classList.add('active');
+    c.classList.add('active');
+    document.getElementById('panel-' + c.dataset.tab).classList.add('active');
   });
 });
 
-function setStatus(msg, type = '') {
+function setStatus(msg, type='') {
   const el = document.getElementById('status');
   el.className = type;
-  el.innerHTML = (type === 'working' ? '<span class="spinner"></span> ' : '') + msg;
+  el.innerHTML = (type==='working' ? '<span class="spin"></span> ' : '') + msg;
 }
-
-function setBtnLoading(id, loading) {
-  const btn = document.getElementById(id);
-  if (btn) btn.disabled = loading;
-}
+function setBtn(id, loading) { const b = document.getElementById(id); if (b) b.disabled = loading; }
 
 async function init() {
-  setStatus('Loading Python engine...', 'working');
+  setStatus('Loading Python engine…', 'working');
   try {
     pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.23.4/full/' });
     const [gen, algo] = await Promise.all([
       fetch('assets/js/flowchart-gen.py').then(r => r.text()),
       fetch('assets/js/flowchart-algo.py').then(r => r.text())
     ]);
-    pyodide.runPython(gen);
-    pyodide.runPython(algo);
-    setStatus('✓ Ready', 'ok');
-  } catch (e) {
-    setStatus('✗ Failed to load: ' + e.message, 'err');
-  }
+    pyodide.runPython(gen); pyodide.runPython(algo);
+    setStatus('✓ Ready — pick a mode and hit Generate', 'ok');
+  } catch(e) { setStatus('✗ ' + e.message, 'err'); }
 }
 
-// Robust Mermaid escaping: use entity codes for special chars
+/* ---------- mermaid ---------- */
 function mermaidEsc(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '#lt;')
-    .replace(/>/g, '#gt;')
-    .replace(/"/g, '#quot;')
-    .replace(/#/g, '#35;')
-    .replace(/\n/g, ' ')
-    .trim();
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'#lt;').replace(/>/g,'#gt;')
+    .replace(/"/g,'#quot;').replace(/#/g,'#35;').replace(/\n/g,' ').trim();
 }
-
-function graphToMermaid(graph) {
+function graphToMermaid(g) {
   let out = 'flowchart TD\n';
-  for (const n of graph.nodes) {
-    const label = mermaidEsc(n.label);
-    const id = n.id;
-    switch (n.type) {
-      case 'start': case 'end': out += `    ${id}(["${label}"])\n`; break;
-      case 'decision': out += `    ${id}{"${label}"}\n`; break;
-      case 'io': out += `    ${id}[/"${label}"/]\n`; break;
-      case 'subroutine': out += `    ${id}[["${label}"]]\n`; break;
-      default: out += `    ${id}["${label}"]\n`;
-    }
+  for (const n of g.nodes) {
+    const l = mermaidEsc(n.label), id = n.id;
+    if (n.type==='start'||n.type==='end') out += `    ${id}(["${l}"])\n`;
+    else if (n.type==='decision') out += `    ${id}{"${l}"}\n`;
+    else if (n.type==='io') out += `    ${id}[/"${l}"/]\n`;
+    else if (n.type==='subroutine') out += `    ${id}[["${l}"]]\n`;
+    else out += `    ${id}["${l}"]\n`;
   }
-  for (const e of graph.edges) {
+  for (const e of g.edges) {
     const lbl = e.label ? `|"${mermaidEsc(e.label)}"|` : '';
     out += `    ${e.from} -->${lbl} ${e.to}\n`;
   }
   return out;
 }
 
-function applyZoom() {
+/* ---------- render + interactivity ---------- */
+function nodeById(id) { return currentGraph.nodes.find(n => n.id === id); }
+function outEdges(id) { return currentGraph.edges.filter(e => e.from === id); }
+
+const TYPE_WHY = {
+  start: 'Entry point — execution begins here.',
+  end: 'Termination — the program finishes.',
+  process: 'A computation or assignment happens here.',
+  decision: 'A yes/no question. The path taken depends on the answer.',
+  io: 'Data enters or leaves the program here (input / print / return).',
+  subroutine: 'A named block (like a function) is defined or called here.'
+};
+
+function wireNodes() {
   const svg = document.querySelector('#flowchart-output svg');
-  if (svg) svg.style.transform = `scale(${currentZoom})`;
+  if (!svg || !currentGraph) return;
+  // Mermaid v10 wraps each node in g.node with id like "flowchart-n1-12"
+  svg.querySelectorAll('g.node').forEach(g => {
+    const m = (g.id || '').match(/flowchart-(n\d+)-/);
+    if (!m) return;
+    const nid = m[1];
+    g.style.cursor = 'pointer';
+    g.addEventListener('click', ev => { ev.stopPropagation(); inspectNode(nid); });
+  });
 }
-function zoomIn() { currentZoom = Math.min(3, currentZoom + 0.2); applyZoom(); }
-function zoomOut() { currentZoom = Math.max(0.3, currentZoom - 0.2); applyZoom(); }
+
+function inspectNode(nid) {
+  const n = nodeById(nid); if (!n) return;
+  document.getElementById('insp-label').textContent = n.label;
+  document.getElementById('insp-type').textContent = n.type;
+  document.getElementById('insp-why').textContent = TYPE_WHY[n.type] || '';
+  document.getElementById('inspector').classList.add('on');
+  if (tracing) highlightTraceNode(nid);
+}
+
+function clearHighlight() {
+  document.querySelectorAll('#flowchart-output g.node').forEach(g => g.classList.remove('fc-active','fc-done'));
+}
+function markNode(nid, cls) {
+  const g = document.querySelector(`#flowchart-output g.node[id^="flowchart-${nid}-"]`);
+  if (g) { g.classList.remove('fc-active'); g.classList.add(cls); }
+}
+
+/* ---------- trace mode ---------- */
+let tracing = false, tracePath = [], traceIdx = -1;
+
+function toggleTrace() {
+  if (!currentGraph) return;
+  tracing ? stopTrace() : startTrace();
+}
+function startTrace() {
+  const start = currentGraph.nodes.find(n => n.type === 'start');
+  if (!start) return;
+  tracing = true; tracePath = [start.id]; traceIdx = 0;
+  document.getElementById('trace-bar').classList.add('on');
+  document.getElementById('btn-trace').innerHTML = '⏸ Stop trace';
+  document.getElementById('btn-trace-reset').style.display = '';
+  updateTraceUI();
+}
+function stopTrace() {
+  tracing = false; tracePath = []; traceIdx = -1; clearHighlight();
+  document.getElementById('trace-bar').classList.remove('on');
+  document.getElementById('btn-trace').innerHTML = '▶ Trace execution';
+  document.getElementById('btn-trace-reset').style.display = 'none';
+}
+function resetTrace() { if (tracing) startTrace(); }
+
+function highlightTraceNode(nid) {
+  clearHighlight();
+  tracePath.forEach(id => { if (id !== nid) markNode(id, 'fc-done'); });
+  markNode(nid, 'fc-active');
+}
+
+function updateTraceUI() {
+  const nid = tracePath[traceIdx];
+  const n = nodeById(nid);
+  highlightTraceNode(nid);
+  inspectNodeSilent(n);
+  document.getElementById('trace-label').textContent = (n.type==='decision' ? '◆ ' : '● ') + n.label;
+  document.getElementById('trace-step').textContent = `step ${traceIdx+1} of ${tracePath.length}`;
+}
+function inspectNodeSilent(n) {
+  if (!n) return;
+  document.getElementById('insp-label').textContent = n.label;
+  document.getElementById('insp-type').textContent = n.type;
+  document.getElementById('insp-why').textContent = TYPE_WHY[n.type] || '';
+  document.getElementById('inspector').classList.add('on');
+}
+
+function traceNext() {
+  if (!tracing) return;
+  const cur = tracePath[traceIdx];
+  const outs = outEdges(cur);
+  if (!outs.length) { setStatus('Reached the end of this path ✓', 'ok'); return; }
+  const node = nodeById(cur);
+  if (node.type === 'decision' && outs.length > 1) {
+    const yes = outs.find(e => /yes/i.test(e.label || ''));
+    const no = outs.find(e => /no/i.test(e.label || ''));
+    const choice = prompt(`◆ ${node.label}\n\nWhich branch? Type "yes" or "no":`, 'yes');
+    if (choice === null) return;
+    const pick = /^\s*y/i.test(choice) ? (yes || outs[0]) : (no || outs[1] || outs[0]);
+    tracePath = tracePath.slice(0, traceIdx+1); tracePath.push(pick.to); traceIdx++;
+  } else {
+    // avoid infinite loops: cap path length
+    if (tracePath.length > 200) { setStatus('Stopped: loop detected (200 steps) — this is a cycle in the chart.', 'err'); return; }
+    tracePath.push(outs[0].to); traceIdx++;
+  }
+  updateTraceUI();
+}
+function tracePrev() {
+  if (!tracing || traceIdx <= 0) return;
+  traceIdx--; updateTraceUI();
+}
+document.addEventListener('keydown', e => {
+  if (!tracing) return;
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); traceNext(); }
+  if (e.key === 'ArrowLeft') tracePrev();
+  if (e.key === 'Escape') stopTrace();
+});
+
+/* ---------- zoom / download ---------- */
+function applyZoom() { const s = document.querySelector('#flowchart-output svg'); if (s) s.style.transform = `scale(${currentZoom})`; }
+function zoomIn() { currentZoom = Math.min(3, currentZoom+.2); applyZoom(); }
+function zoomOut() { currentZoom = Math.max(.3, currentZoom-.2); applyZoom(); }
 function zoomReset() { currentZoom = 1; applyZoom(); }
-
 function downloadSVG() {
-  if (!currentSVG) { setStatus('Generate a flowchart first', 'err'); return; }
-  const blob = new Blob([currentSVG], { type: 'image/svg+xml' });
+  if (!currentSVG) return;
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'flowchart.svg';
-  a.click();
-  URL.revokeObjectURL(a.href);
+  a.href = URL.createObjectURL(new Blob([currentSVG], {type:'image/svg+xml'}));
+  a.download = 'flowchart.svg'; a.click();
 }
 
-async function renderGraph(graphJson) {
-  const output = document.getElementById('flowchart-output');
+async function renderGraph(json) {
+  const out = document.getElementById('flowchart-output');
   const stats = document.getElementById('graph-stats');
-  let graph;
+  stopTrace();
+  let g;
+  try { g = JSON.parse(json); } catch(e) { setStatus('✗ Bad generator output','err'); return; }
+  if (g.error) { setStatus('✗ '+g.error,'err'); return; }
+  if (!g.nodes.length) { setStatus('✗ Empty flowchart','err'); return; }
+  currentGraph = g;
   try {
-    graph = JSON.parse(graphJson);
-  } catch (e) {
-    setStatus('✗ Invalid response from generator', 'err');
-    return;
-  }
-  if (graph.error) { setStatus('✗ ' + graph.error, 'err'); return; }
-  if (!graph.nodes.length) { setStatus('✗ No flowchart generated', 'err'); return; }
-
-  const code = graphToMermaid(graph);
-  try {
-    const { svg } = await mermaid.render('fc' + Date.now(), code);
-    currentSVG = svg;
-    currentZoom = 1;
-    output.innerHTML = svg;
-    applyZoom();
-    stats.textContent = `${graph.nodes.length} nodes · ${graph.edges.length} edges` +
-      (graph.truncated ? ' · truncated' : '');
-    setStatus('✓ Flowchart generated', 'ok');
-  } catch (e) {
-    console.error('Mermaid error:', e, '\nCode:\n' + code);
-    setStatus('✗ Diagram render failed: ' + e.message, 'err');
-    stats.textContent = '';
-  }
+    const { svg } = await mermaid.render('fc'+Date.now(), graphToMermaid(g));
+    currentSVG = svg; currentZoom = 1;
+    out.innerHTML = svg; applyZoom(); wireNodes();
+    stats.textContent = `${g.nodes.length} nodes · ${g.edges.length} edges` + (g.truncated?' · truncated':'');
+    document.getElementById('btn-trace').disabled = false;
+    setStatus('✓ Flowchart ready — click any node, or hit Trace execution','ok');
+  } catch(e) { setStatus('✗ Render failed: '+e.message,'err'); }
 }
 
 async function genFromCode() {
-  if (!pyodide) { setStatus('Engine still loading...', 'err'); return; }
-  setBtnLoading('btn-code', true);
-  setStatus('Analyzing Python code...', 'working');
+  if (!pyodide) return setStatus('Engine loading…','err');
+  setBtn('btn-code', true); setStatus('Analyzing Python code…','working');
   try {
     pyodide.globals.set('__uc', document.getElementById('code-input').value);
-    const result = pyodide.runPython('flowchart_json(__uc)');
-    await renderGraph(result);
-  } catch (e) {
-    setStatus('✗ ' + e.message, 'err');
-  }
-  setBtnLoading('btn-code', false);
+    await renderGraph(pyodide.runPython('flowchart_json(__uc)'));
+  } catch(e) { setStatus('✗ '+e.message,'err'); }
+  setBtn('btn-code', false);
 }
-
 async function genFromAlgo() {
-  if (!pyodide) { setStatus('Engine still loading...', 'err'); return; }
-  setBtnLoading('btn-algo', true);
-  setStatus('Parsing algorithm...', 'working');
+  if (!pyodide) return setStatus('Engine loading…','err');
+  setBtn('btn-algo', true); setStatus('Parsing algorithm…','working');
   try {
     pyodide.globals.set('__ua', document.getElementById('algo-input').value);
-    const result = pyodide.runPython('algo_flowchart_json(__ua)');
-    await renderGraph(result);
-  } catch (e) {
-    setStatus('✗ ' + e.message, 'err');
-  }
-  setBtnLoading('btn-algo', false);
+    await renderGraph(pyodide.runPython('algo_flowchart_json(__ua)'));
+  } catch(e) { setStatus('✗ '+e.message,'err'); }
+  setBtn('btn-algo', false);
 }
-
 async function genFromQuestion() {
   const q = document.getElementById('question-input').value.trim();
-  if (!q) { setStatus('Type a question first', 'err'); return; }
-  if (!pyodide) { setStatus('Engine still loading...', 'err'); return; }
-  setBtnLoading('btn-question', true);
-  setStatus('🤖 AI is writing Python code...', 'working');
+  if (!q) return setStatus('Type a question first','err');
+  if (!pyodide) return setStatus('Engine loading…','err');
+  setBtn('btn-question', true); setStatus('🤖 AI is writing Python code…','working');
   try {
-    const resp = await fetch(API_BASE + '/api/explain', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: 'flowchart', code: q })
-    });
-    if (!resp.ok) throw new Error('AI backend unavailable (status ' + resp.status + ')');
-    const data = await resp.json();
-    let code = (data.explanation || data.code || '').trim();
-    code = code.replace(/```python\n?/gi, '').replace(/```\n?/g, '').trim();
+    const r = await fetch(API_BASE + '/api/explain', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ mode:'flowchart', code: q }) });
+    if (!r.ok) throw new Error('AI backend unavailable ('+r.status+') — redeploy Render for the flowchart mode');
+    const d = await r.json();
+    let code = (d.explanation||d.code||'').replace(/```python\n?/gi,'').replace(/```\n?/g,'').trim();
     if (!code) throw new Error('AI returned empty code');
-
-    // Show the AI code for transparency
-    document.getElementById('ai-code-preview').style.display = 'block';
+    document.getElementById('ai-preview').classList.add('on');
     document.getElementById('ai-code-text').value = code;
     document.getElementById('code-input').value = code;
-
-    setStatus('Generating flowchart from AI code...', 'working');
+    setStatus('Generating flowchart…','working');
     pyodide.globals.set('__uc', code);
-    const result = pyodide.runPython('flowchart_json(__uc)');
-    await renderGraph(result);
-  } catch (e) {
-    setStatus('✗ ' + e.message, 'err');
-  }
-  setBtnLoading('btn-question', false);
-}
-
-function clearInput(id) {
-  document.getElementById(id).value = '';
+    await renderGraph(pyodide.runPython('flowchart_json(__uc)'));
+  } catch(e) { setStatus('✗ '+e.message,'err'); }
+  setBtn('btn-question', false);
 }
 
 function loadExample(kind) {
-  if (kind === 'code') {
-    document.getElementById('code-input').value =
+  if (kind==='code') document.getElementById('code-input').value =
 `def is_prime(n):
     if n < 2:
         return False
@@ -377,8 +508,7 @@ if is_prime(num):
     print(num, "is prime")
 else:
     print(num, "is not prime")`;
-  } else {
-    document.getElementById('algo-input').value =
+  else document.getElementById('algo-input').value =
 `START
 INPUT n
 SET is_prime = True
@@ -397,7 +527,6 @@ ELSE
     PRINT "Not prime"
 END IF
 END`;
-  }
 }
 
 init();
