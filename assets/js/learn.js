@@ -782,7 +782,34 @@
     return s;
   }
 
-  /* ================= Unlock logic ================= */
+  /* ============ Extended catalog (95 lessons) ============
+   Per-track data files (lessons-b/i/a.js) load BEFORE this file and
+   expose window.LESSONS_NEW_{BEGINNER,INTERMEDIATE,ADVANCED}.
+   Splice each block right after its original track block (b10/i12/a10)
+   so display order, numbering and the unlock chain stay correct.
+   Idempotent: skips ids that are already present. */
+  (function mergeExtraCatalog() {
+    var blocks = [
+      { key: "LESSONS_NEW_BEGINNER", after: "b10" },
+      { key: "LESSONS_NEW_INTERMEDIATE", after: "i12" },
+      { key: "LESSONS_NEW_ADVANCED", after: "a10" }
+    ];
+    var seen = {};
+    LESSONS.forEach(function (l) { seen[l.id] = 1; });
+    blocks.forEach(function (bm) {
+      var extra = window[bm.key];
+      if (!extra || !extra.length) return;
+      var fresh = extra.filter(function (l) { return l && l.id && !seen[l.id]; });
+      if (!fresh.length) return;
+      var at = -1;
+      for (var i = 0; i < LESSONS.length; i++) if (LESSONS[i].id === bm.after) at = i;
+      if (at < 0) at = LESSONS.length - 1;
+      LESSONS.splice.apply(LESSONS, [at + 1, 0].concat(fresh));
+      fresh.forEach(function (l) { seen[l.id] = 1; });
+    });
+  })();
+
+/* ================= Unlock logic ================= */
   function idxOf(id) { for (var i = 0; i < LESSONS.length; i++) if (LESSONS[i].id === id) return i; return -1; }
   function isDone(id) { return !!getProgress()[id]; }
   function isUnlocked(gi) {
@@ -924,6 +951,64 @@
     return card;
   }
 
+  /* True when this track holds the learner's current lesson (stays expanded). */
+  function shouldExpand(trackId) {
+    var i = currentIdx();
+    if (i < 0) return trackId === "beginner";
+    return LESSONS[i].track === trackId;
+  }
+
+  function renderContinue() {
+    var box = document.getElementById("continue-card");
+    if (!box) return;
+    var i = currentIdx();
+    if (i < 0) {
+      box.innerHTML = '<div class="cc-done">\u{1F389} All ' + LESSONS.length + " lessons complete — you're a Python master. Time to build!</div>";
+      return;
+    }
+    var l = LESSONS[i];
+    box.innerHTML = '<div class="cc-label">\u25B6 Continue learning</div>' +
+      '<div class="cc-title"><span class="cc-num">#' + (i + 1) + "</span> " + esc(l.title) + "</div>" +
+      '<button class="btn" id="cc-go">Resume lesson \u2192</button>';
+    document.getElementById("cc-go").addEventListener("click", function () { openLesson(i); });
+  }
+
+  function initSearch() {
+    var inp = document.getElementById("lesson-search");
+    if (!inp || inp.dataset.wired) return;
+    inp.dataset.wired = "1";
+    inp.addEventListener("input", function () {
+      var q = inp.value.trim().toLowerCase();
+      var anyMatch = false;
+      document.querySelectorAll("#tracks .track-section").forEach(function (sec) {
+        var matches = 0, total = 0;
+        sec.querySelectorAll(".node-row").forEach(function (row) {
+          total++;
+          var lbl = row.querySelector(".node-label");
+          var hit = !q || (lbl && lbl.textContent.toLowerCase().indexOf(q) >= 0);
+          row.style.display = hit ? "" : "none";
+          if (hit) matches++;
+        });
+        var badge = sec.querySelector(".t-count");
+        if (q) {
+          sec.classList.remove("collapsed");
+          if (badge) badge.textContent = matches + "/" + total + " match" + (matches === 1 ? "" : "es");
+          if (matches) anyMatch = true;
+        } else if (badge) {
+          badge.textContent = total + " lessons";
+          var tid = sec.dataset.track;
+          var c = !shouldExpand(tid);
+          sec.classList.toggle("collapsed", c);
+          var head = sec.querySelector(".track-head");
+          if (head) head.setAttribute("aria-expanded", c ? "false" : "true");
+        }
+      });
+      var nores = document.getElementById("no-results");
+      if (nores) nores.hidden = !(q && !anyMatch);
+      if (q) requestAnimationFrame(drawPaths);
+    });
+  }
+
   function renderTracks() {
     var mount = document.getElementById("tracks");
     if (!mount) return;
@@ -931,11 +1016,17 @@
     var lessonNum = 0;
     TRACKS.forEach(function (t) {
       var sec = el("section", "track-section");
-      var head = el("div", "track-head",
+      sec.dataset.track = t.id;
+      var pct = trackPct(t.id);
+      var nLessons = trackLessons(t.id).length;
+      var head = el("button", "track-head",
         '<span class="t-icon">' + t.icon + "</span>" +
-        "<div><h2>" + esc(t.name) + "</h2>" +
-        '<div class="t-desc">' + esc(t.desc) + "</div></div>" +
-        '<span class="t-pct">' + trackPct(t.id) + "%</span>");
+        '<span class="t-text"><span class="t-name">' + esc(t.name) + "</span>" +
+        '<span class="t-desc">' + esc(t.desc) + "</span></span>" +
+        '<span class="t-count">' + nLessons + ' lessons</span>' +
+        '<span class="t-pct">' + pct + "%</span>" +
+        '<span class="t-chev" aria-hidden="true">\u25BE</span>');
+      head.setAttribute("aria-expanded", "true");
       sec.appendChild(head);
       if (!trackUnlocked(t.id)) {
         sec.appendChild(lockedTrackCard(t));
@@ -952,6 +1043,14 @@
           path.appendChild(nodeRow(l, idxOf(l.id), lessonNum));
         });
         sec.appendChild(path);
+        var collapsed = !shouldExpand(t.id);
+        sec.classList.toggle("collapsed", collapsed);
+        head.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        head.addEventListener("click", function () {
+          var c = sec.classList.toggle("collapsed");
+          head.setAttribute("aria-expanded", c ? "false" : "true");
+          if (!c) requestAnimationFrame(drawPaths);
+        });
       }
       mount.appendChild(sec);
     });
@@ -1006,7 +1105,7 @@
   }
 
   function renderAll() {
-    renderHero(); renderProgress(); renderTracks();
+    renderHero(); renderProgress(); renderContinue(); renderTracks(); initSearch();
     requestAnimationFrame(function () { drawPaths(); scrollToCurrent(); });
   }
 
