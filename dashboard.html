@@ -103,15 +103,18 @@
           <div id="dash-tracks" style="margin-top:8px"></div>
         </div>
       </div>
-      <div class="dash-grid-2">
-        <div class="dash-card">
-          <h3>Recent compiler runs</h3>
+      <div class="dash-card" style="margin-top:20px">
+        <h3>🟩 This week's activity</h3>
+        <div id="dash-heatmap" style="overflow-x:auto;margin-top:8px"></div>
+        <p style="margin-top:10px"><a href="profile.html">Full year on your profile →</a></p>
+      </div>
+      <div class="dash-card collapsible" id="dash-runs-card" data-collapsed="1" style="margin-top:20px">
+        <button class="coll-head" type="button" aria-expanded="false">
+          <span class="coll-title">🖥️ Recent compiler runs</span>
+          <span class="coll-caret">▾</span>
+        </button>
+        <div class="coll-body">
           <div id="dash-runs" style="margin-top:8px"></div>
-        </div>
-        <div class="dash-card">
-          <h3>🟩 This week's activity</h3>
-          <div id="dash-heatmap" style="overflow-x:auto;margin-top:8px"></div>
-          <p style="margin-top:10px"><a href="profile.html">Full year on your profile →</a></p>
         </div>
       </div>
       <div class="dash-card" style="margin-top:20px">
@@ -152,7 +155,7 @@
 </footer>
 
 <script src="assets/js/nav.js?v=1"></script>
-<script src="assets/js/app.js"></script>
+<script src="assets/js/app.js?v=4"></script>
 <script src="assets/js/activity.js"></script>
 <script src="assets/js/palette.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
