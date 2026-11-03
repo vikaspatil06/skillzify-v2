@@ -73,9 +73,14 @@
         <div id="profile-achievements" class="ach-grid"></div>
       </div>
 
-      <div class="dash-card" style="margin-top:20px">
-        <h3>📰 Activity feed</h3>
-        <div id="profile-feed" class="feed"></div>
+      <div class="dash-card collapsible" id="profile-feed-card" data-collapsed="1" style="margin-top:20px">
+        <button class="coll-head" type="button" aria-expanded="false">
+          <span class="coll-title">📰 Activity feed</span>
+          <span class="coll-caret">▾</span>
+        </button>
+        <div class="coll-body">
+          <div id="profile-feed" class="feed"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -101,7 +106,7 @@
 </div>
 
 <script src="assets/js/nav.js?v=1"></script>
-<script src="assets/js/app.js?v=3"></script>
+<script src="assets/js/app.js?v=4"></script>
 <script src="assets/js/activity.js"></script>
 <script src="assets/js/palette.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
