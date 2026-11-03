@@ -1385,6 +1385,6 @@
     getProgress: getProgress, trackPct: trackPct,
     totalLessons: LESSONS.length,
     nextLesson: nextLesson, highlight: highlightPython,
-    getXP: getXP, levelFor: levelFor
+    getXP: getXP, levelFor: levelFor, nextLevel: nextLevel
   };
 })();
