@@ -3,35 +3,89 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Flowchart Lab — Skillzify (TEST PAGE, not pushed)</title>
+<title>Flowchart Lab — Skillzify</title>
 <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --orange: #d29922;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: system-ui, sans-serif; background: #0f1117; color: #e6e6e6; padding: 20px; }
-  h1 { font-size: 22px; margin-bottom: 4px; }
-  .sub { color: #888; font-size: 13px; margin-bottom: 16px; }
-  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
-  .tab { padding: 10px 20px; background: #1a1d27; border: 1px solid #2a2e3d; border-radius: 8px 8px 0 0; cursor: pointer; font-size: 14px; }
-  .tab.active { background: #252a3a; border-bottom: 2px solid #4f8cff; }
-  .panel { display: none; background: #1a1d27; border: 1px solid #2a2e3d; border-radius: 0 8px 8px 8px; padding: 16px; }
-  .panel.active { display: block; }
-  textarea, input[type=text] { width: 100%; background: #0d0f14; color: #e6e6e6; border: 1px solid #2a2e3d; border-radius: 6px; padding: 12px; font-family: 'Consolas', monospace; font-size: 13px; }
-  textarea { min-height: 180px; resize: vertical; }
-  .btn { background: #4f8cff; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; margin-top: 12px; }
-  .btn:hover { background: #3d7bef; }
-  .btn:disabled { background: #333; cursor: wait; }
-  #output { margin-top: 16px; background: #fff; border-radius: 8px; padding: 20px; min-height: 200px; overflow: auto; }
-  #output svg { max-width: 100%; }
-  #status { margin-top: 8px; font-size: 13px; color: #888; }
-  #status.error { color: #ff6b6b; }
-  .hint { font-size: 12px; color: #666; margin-top: 8px; }
-  .example { font-size: 12px; color: #4f8cff; cursor: pointer; margin-top: 4px; display: inline-block; }
+  body { font-family: -apple-system, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; }
+  header .logo { font-size: 28px; }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header .tag { font-size: 11px; background: var(--orange); color: #000; padding: 3px 10px; border-radius: 12px; font-weight: 700; letter-spacing: .5px; }
+  header .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+  .tabs { display: flex; gap: 4px; padding: 0 28px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  .tab { padding: 14px 22px; cursor: pointer; font-size: 14px; color: var(--muted); border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 8px; transition: all .15s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: 0; height: calc(100vh - 130px); }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; height: auto; } }
+
+  .editor-pane { border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 28px; overflow: hidden; }
+  .preview-pane { display: flex; flex-direction: column; padding: 20px 28px; overflow: hidden; background: #fff; }
+
+  .pane-label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 10px; font-weight: 600; }
+  .preview-pane .pane-label { color: #666; }
+
+  textarea, input[type=text] { flex: 1; background: #0d1117; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace; font-size: 13px; line-height: 1.6; resize: none; min-height: 200px; }
+  textarea:focus, input[type=text]:focus { outline: none; border-color: var(--accent); }
+  input[type=text] { flex: none; min-height: auto; }
+
+  .toolbar { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
+  .btn { padding: 10px 22px; border-radius: 7px; border: none; cursor: pointer; font-size: 14px; font-weight: 600; transition: all .15s; display: inline-flex; align-items: center; gap: 8px; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #4493f8; }
+  .btn-primary:disabled { background: #333; color: #777; cursor: wait; }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+  .preview-toolbar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+  .preview-toolbar .btn { padding: 7px 14px; font-size: 12px; }
+  .btn-light { background: #f0f0f0; color: #333; border: 1px solid #ddd; }
+  .btn-light:hover { background: #e0e0e0; }
+
+  #flowchart-output { flex: 1; overflow: auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px; display: flex; align-items: flex-start; justify-content: center; background: #fff; }
+  #flowchart-output svg { max-width: 100%; height: auto; }
+  #flowchart-output .placeholder { color: #999; text-align: center; margin: auto; }
+  #flowchart-output .placeholder .big { font-size: 48px; margin-bottom: 12px; }
+
+  #status { margin-top: 12px; font-size: 13px; min-height: 20px; display: flex; align-items: center; gap: 8px; }
+  #status.ok { color: var(--green); }
+  #status.err { color: var(--red); }
+  #status.working { color: var(--accent); }
+  .spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
+  .hint code { background: #21262d; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+
+  .panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+  .panel.active { display: flex; }
+
+  .zoom-controls { display: flex; gap: 6px; margin-left: auto; }
+  .zoom-controls button { width: 28px; height: 28px; border: 1px solid #ddd; background: #fff; border-radius: 5px; cursor: pointer; font-size: 14px; }
+  .zoom-controls button:hover { background: #f0f0f0; }
+
+  .stats { font-size: 12px; color: #888; }
 </style>
 </head>
 <body>
-<h1>🔀 Flowchart Lab</h1>
-<p class="sub">TEST PAGE — iterate here. Nothing here is pushed to GitHub yet.</p>
+
+<header>
+  <div class="logo">🔀</div>
+  <div>
+    <h1>Flowchart Lab <span class="tag">TEST</span></h1>
+    <div class="sub">Generate flowcharts from Python code, algorithms, or questions</div>
+  </div>
+</header>
 
 <div class="tabs">
   <div class="tab active" data-tab="code">🐍 Python Code</div>
@@ -39,8 +93,12 @@
   <div class="tab" data-tab="question">❓ Question</div>
 </div>
 
-<div class="panel active" id="panel-code">
-  <textarea id="code-input" placeholder="Paste Python code here...">n = int(input("Enter n: "))
+<main>
+  <div class="editor-pane">
+    <div class="pane-label">Input</div>
+
+    <div class="panel active" id="panel-code">
+      <textarea id="code-input" spellcheck="false">n = int(input("Enter n: "))
 total = 0
 for i in range(1, n + 1):
     if i % 2 == 0:
@@ -48,11 +106,16 @@ for i in range(1, n + 1):
     else:
         total -= i
 print("Result:", total)</textarea>
-  <br><button class="btn" onclick="genFromCode()">Generate Flowchart</button>
-</div>
+      <div class="toolbar">
+        <button class="btn btn-primary" id="btn-code" onclick="genFromCode()">⚡ Generate</button>
+        <button class="btn btn-ghost" onclick="loadExample('code')">📋 Example</button>
+        <button class="btn btn-ghost" onclick="clearInput('code-input')">🗑 Clear</button>
+      </div>
+      <p class="hint">Paste any Python code. <code>if/else</code>, <code>for</code>, <code>while</code>, functions, and <code>print/input</code> are mapped to flowchart shapes automatically.</p>
+    </div>
 
-<div class="panel" id="panel-algo">
-  <textarea id="algo-input" placeholder="Write algorithm steps...">START
+    <div class="panel" id="panel-algo">
+      <textarea id="algo-input" spellcheck="false">START
 INPUT n
 SET total = 0
 FOR i FROM 1 TO n
@@ -64,27 +127,59 @@ FOR i FROM 1 TO n
 END FOR
 PRINT total
 END</textarea>
-  <br><button class="btn" onclick="genFromAlgo()">Generate Flowchart</button>
-  <p class="hint">Keywords: START, END, INPUT, PRINT, SET, IF/THEN/ELSE/END IF, WHILE/END WHILE, FOR/FROM/TO/END FOR, REPEAT/UNTIL</p>
-</div>
+      <div class="toolbar">
+        <button class="btn btn-primary" id="btn-algo" onclick="genFromAlgo()">⚡ Generate</button>
+        <button class="btn btn-ghost" onclick="loadExample('algo')">📋 Example</button>
+        <button class="btn btn-ghost" onclick="clearInput('algo-input')">🗑 Clear</button>
+      </div>
+      <p class="hint">Keywords: <code>START</code> <code>END</code> <code>INPUT</code> <code>PRINT</code> <code>SET</code> <code>IF/THEN/ELSE/END IF</code> <code>WHILE/END WHILE</code> <code>FOR/FROM/TO/END FOR</code> <code>REPEAT/UNTIL</code></p>
+    </div>
 
-<div class="panel" id="panel-question">
-  <input type="text" id="question-input" placeholder="e.g. Write a program to check if a number is prime" style="margin-bottom:0">
-  <br><button class="btn" onclick="genFromQuestion()">AI → Code → Flowchart</button>
-  <p class="hint">The AI writes Python code for your question, then we generate the flowchart from that code.</p>
-</div>
+    <div class="panel" id="panel-question">
+      <input type="text" id="question-input" placeholder="e.g. Write a program to find the factorial of a number" value="Write a program to check if a number is prime">
+      <div class="toolbar">
+        <button class="btn btn-primary" id="btn-question" onclick="genFromQuestion()">🤖 AI → Code → Flowchart</button>
+        <button class="btn btn-ghost" onclick="clearInput('question-input')">🗑 Clear</button>
+      </div>
+      <p class="hint">Describe the problem. The AI writes Python code, then the flowchart is generated from that code. The generated code appears in the <b>Python Code</b> tab for transparency.</p>
+      <div id="ai-code-preview" style="margin-top:12px; display:none;">
+        <div class="pane-label">AI-generated code</div>
+        <textarea id="ai-code-text" readonly style="min-height:120px; font-size:12px;"></textarea>
+      </div>
+    </div>
 
-<div id="status">Loading Pyodide...</div>
-<div id="output"><p style="color:#999">Flowchart will appear here</p></div>
+    <div id="status"></div>
+  </div>
+
+  <div class="preview-pane">
+    <div class="pane-label">Flowchart</div>
+    <div class="preview-toolbar">
+      <span class="stats" id="graph-stats"></span>
+      <div class="zoom-controls">
+        <button onclick="zoomIn()" title="Zoom in">+</button>
+        <button onclick="zoomOut()" title="Zoom out">−</button>
+        <button onclick="zoomReset()" title="Reset">⟲</button>
+      </div>
+      <button class="btn btn-light" onclick="downloadSVG()">⬇ SVG</button>
+    </div>
+    <div id="flowchart-output">
+      <div class="placeholder">
+        <div class="big">🔀</div>
+        <p>Your flowchart will appear here</p>
+      </div>
+    </div>
+  </div>
+</main>
 
 <script>
 let pyodide = null;
-let flowchartGenCode = null;
-let flowchartAlgoCode = null;
+let currentZoom = 1;
+let currentSVG = null;
+const API_BASE = 'https://skillzify-v2.onrender.com';
 
-mermaid.initialize({ startOnLoad: false, theme: 'default' });
+mermaid.initialize({ startOnLoad: false, theme: 'default', flowchart: { useMaxWidth: true } });
 
-// Tab switching
+// Tabs
 document.querySelectorAll('.tab').forEach(t => {
   t.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
@@ -94,149 +189,214 @@ document.querySelectorAll('.tab').forEach(t => {
   });
 });
 
+function setStatus(msg, type = '') {
+  const el = document.getElementById('status');
+  el.className = type;
+  el.innerHTML = (type === 'working' ? '<span class="spinner"></span> ' : '') + msg;
+}
+
+function setBtnLoading(id, loading) {
+  const btn = document.getElementById(id);
+  if (btn) btn.disabled = loading;
+}
+
 async function init() {
-  const status = document.getElementById('status');
+  setStatus('Loading Python engine...', 'working');
   try {
     pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.23.4/full/' });
-    // Load our generators
-    const [genRes, algoRes] = await Promise.all([
+    const [gen, algo] = await Promise.all([
       fetch('assets/js/flowchart-gen.py').then(r => r.text()),
       fetch('assets/js/flowchart-algo.py').then(r => r.text())
     ]);
-    flowchartGenCode = genRes;
-    flowchartAlgoCode = algoRes;
-    pyodide.runPython(flowchartGenCode);
-    pyodide.runPython(flowchartAlgoCode);
-    status.textContent = '✓ Ready — Pyodide loaded with flowchart generators';
-    status.style.color = '#4caf50';
+    pyodide.runPython(gen);
+    pyodide.runPython(algo);
+    setStatus('✓ Ready', 'ok');
   } catch (e) {
-    status.textContent = '✗ Failed to load: ' + e.message;
-    status.className = 'error';
+    setStatus('✗ Failed to load: ' + e.message, 'err');
   }
 }
 
+// Robust Mermaid escaping: use entity codes for special chars
+function mermaidEsc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '#lt;')
+    .replace(/>/g, '#gt;')
+    .replace(/"/g, '#quot;')
+    .replace(/#/g, '#35;')
+    .replace(/\n/g, ' ')
+    .trim();
+}
+
 function graphToMermaid(graph) {
-  const shape = {
-    start: id => `${id}([${esc(graph.nodes.find(n => n.id === id).label)}])`,
-    end: id => `${id}([${esc(graph.nodes.find(n => n.id === id).label)}])`,
-    process: id => `${id}[${esc(graph.nodes.find(n => n.id === id).label)}]`,
-    decision: id => `${id}{${esc(graph.nodes.find(n => n.id === id).label)}}`,
-    io: id => `${id}[/${esc(graph.nodes.find(n => n.id === id).label)}/]`,
-    subroutine: id => `${id}[[${esc(graph.nodes.find(n => n.id === id).label)}]]`
-  };
   let out = 'flowchart TD\n';
   for (const n of graph.nodes) {
-    out += '    ' + (shape[n.type] ? shape[n.type](n.id) : `${n.id}[${esc(n.label)}]`) + '\n';
+    const label = mermaidEsc(n.label);
+    const id = n.id;
+    switch (n.type) {
+      case 'start': case 'end': out += `    ${id}(["${label}"])\n`; break;
+      case 'decision': out += `    ${id}{"${label}"}\n`; break;
+      case 'io': out += `    ${id}[/"${label}"/]\n`; break;
+      case 'subroutine': out += `    ${id}[["${label}"]]\n`; break;
+      default: out += `    ${id}["${label}"]\n`;
+    }
   }
   for (const e of graph.edges) {
-    const label = e.label ? `|${e.label}|` : '';
-    out += `    ${e.from} -->${label} ${e.to}\n`;
+    const lbl = e.label ? `|"${mermaidEsc(e.label)}"|` : '';
+    out += `    ${e.from} -->${lbl} ${e.to}\n`;
   }
   return out;
 }
 
-function esc(s) {
-  return String(s).replace(/[#"]/g, '').replace(/\n/g, ' ').trim();
+function applyZoom() {
+  const svg = document.querySelector('#flowchart-output svg');
+  if (svg) svg.style.transform = `scale(${currentZoom})`;
+}
+function zoomIn() { currentZoom = Math.min(3, currentZoom + 0.2); applyZoom(); }
+function zoomOut() { currentZoom = Math.max(0.3, currentZoom - 0.2); applyZoom(); }
+function zoomReset() { currentZoom = 1; applyZoom(); }
+
+function downloadSVG() {
+  if (!currentSVG) { setStatus('Generate a flowchart first', 'err'); return; }
+  const blob = new Blob([currentSVG], { type: 'image/svg+xml' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'flowchart.svg';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 async function renderGraph(graphJson) {
-  const status = document.getElementById('status');
-  const output = document.getElementById('output');
-  const graph = JSON.parse(graphJson);
-
-  if (graph.error) {
-    status.textContent = '✗ ' + graph.error;
-    status.className = 'error';
-    return;
-  }
-  if (graph.nodes.length === 0) {
-    status.textContent = '✗ No flowchart generated';
-    status.className = 'error';
-    return;
-  }
-
-  const mermaidCode = graphToMermaid(graph);
-  console.log('Mermaid:\n' + mermaidCode);
-
+  const output = document.getElementById('flowchart-output');
+  const stats = document.getElementById('graph-stats');
+  let graph;
   try {
-    const { svg } = await mermaid.render('fc-' + Date.now(), mermaidCode);
-    output.innerHTML = svg;
-    status.textContent = `✓ ${graph.nodes.length} nodes, ${graph.edges.length} edges` +
-      (graph.truncated ? ' (truncated at 60 nodes)' : '');
-    status.className = '';
-    status.style.color = '#4caf50';
+    graph = JSON.parse(graphJson);
   } catch (e) {
-    status.textContent = '✗ Render error: ' + e.message;
-    status.className = 'error';
-    output.innerHTML = '<pre style="color:#333">' + mermaidCode.replace(/</g, '&lt;') + '</pre>';
+    setStatus('✗ Invalid response from generator', 'err');
+    return;
+  }
+  if (graph.error) { setStatus('✗ ' + graph.error, 'err'); return; }
+  if (!graph.nodes.length) { setStatus('✗ No flowchart generated', 'err'); return; }
+
+  const code = graphToMermaid(graph);
+  try {
+    const { svg } = await mermaid.render('fc' + Date.now(), code);
+    currentSVG = svg;
+    currentZoom = 1;
+    output.innerHTML = svg;
+    applyZoom();
+    stats.textContent = `${graph.nodes.length} nodes · ${graph.edges.length} edges` +
+      (graph.truncated ? ' · truncated' : '');
+    setStatus('✓ Flowchart generated', 'ok');
+  } catch (e) {
+    console.error('Mermaid error:', e, '\nCode:\n' + code);
+    setStatus('✗ Diagram render failed: ' + e.message, 'err');
+    stats.textContent = '';
   }
 }
 
 async function genFromCode() {
-  const status = document.getElementById('status');
-  if (!pyodide) { status.textContent = 'Wait for Pyodide to load...'; return; }
-  const code = document.getElementById('code-input').value;
-  status.textContent = 'Generating...';
-  status.style.color = '#888';
+  if (!pyodide) { setStatus('Engine still loading...', 'err'); return; }
+  setBtnLoading('btn-code', true);
+  setStatus('Analyzing Python code...', 'working');
   try {
-    pyodide.globals.set('__user_code', code);
-    const result = pyodide.runPython('flowchart_json(__user_code)');
+    pyodide.globals.set('__uc', document.getElementById('code-input').value);
+    const result = pyodide.runPython('flowchart_json(__uc)');
     await renderGraph(result);
   } catch (e) {
-    status.textContent = '✗ ' + e.message;
-    status.className = 'error';
+    setStatus('✗ ' + e.message, 'err');
   }
+  setBtnLoading('btn-code', false);
 }
 
 async function genFromAlgo() {
-  const status = document.getElementById('status');
-  if (!pyodide) { status.textContent = 'Wait for Pyodide to load...'; return; }
-  const algo = document.getElementById('algo-input').value;
-  status.textContent = 'Generating...';
-  status.style.color = '#888';
+  if (!pyodide) { setStatus('Engine still loading...', 'err'); return; }
+  setBtnLoading('btn-algo', true);
+  setStatus('Parsing algorithm...', 'working');
   try {
-    pyodide.globals.set('__user_algo', algo);
-    const result = pyodide.runPython('algo_flowchart_json(__user_algo)');
+    pyodide.globals.set('__ua', document.getElementById('algo-input').value);
+    const result = pyodide.runPython('algo_flowchart_json(__ua)');
     await renderGraph(result);
   } catch (e) {
-    status.textContent = '✗ ' + e.message;
-    status.className = 'error';
+    setStatus('✗ ' + e.message, 'err');
   }
+  setBtnLoading('btn-algo', false);
 }
 
 async function genFromQuestion() {
-  const status = document.getElementById('status');
   const q = document.getElementById('question-input').value.trim();
-  if (!q) { status.textContent = 'Enter a question first'; return; }
-  if (!pyodide) { status.textContent = 'Wait for Pyodide to load...'; return; }
-
-  status.textContent = '🤖 AI is writing Python code...';
-  status.style.color = '#888';
+  if (!q) { setStatus('Type a question first', 'err'); return; }
+  if (!pyodide) { setStatus('Engine still loading...', 'err'); return; }
+  setBtnLoading('btn-question', true);
+  setStatus('🤖 AI is writing Python code...', 'working');
   try {
-    // Call the existing AI backend
-    const resp = await fetch('/api/explain', {
+    const resp = await fetch(API_BASE + '/api/explain', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        code: `# Question: ${q}\n# Write ONLY the Python code that solves this. No explanation.`,
-        mode: 'tutor',
-        prompt: `Write ONLY clean Python code that solves this problem: ${q}. Output code only, no markdown, no explanation.`
-      })
+      body: JSON.stringify({ mode: 'flowchart', code: q })
     });
+    if (!resp.ok) throw new Error('AI backend unavailable (status ' + resp.status + ')');
     const data = await resp.json();
-    let code = data.explanation || data.code || '';
-    // Strip markdown code fences if present
-    code = code.replace(/```python\n?/g, '').replace(/```\n?/g, '').trim();
+    let code = (data.explanation || data.code || '').trim();
+    code = code.replace(/```python\n?/gi, '').replace(/```\n?/g, '').trim();
+    if (!code) throw new Error('AI returned empty code');
 
-    status.textContent = 'Generating flowchart from AI code...';
-    // Put the AI code in the code tab for transparency
+    // Show the AI code for transparency
+    document.getElementById('ai-code-preview').style.display = 'block';
+    document.getElementById('ai-code-text').value = code;
     document.getElementById('code-input').value = code;
-    pyodide.globals.set('__user_code', code);
-    const result = pyodide.runPython('flowchart_json(__user_code)');
+
+    setStatus('Generating flowchart from AI code...', 'working');
+    pyodide.globals.set('__uc', code);
+    const result = pyodide.runPython('flowchart_json(__uc)');
     await renderGraph(result);
   } catch (e) {
-    status.textContent = '✗ ' + e.message;
-    status.className = 'error';
+    setStatus('✗ ' + e.message, 'err');
+  }
+  setBtnLoading('btn-question', false);
+}
+
+function clearInput(id) {
+  document.getElementById(id).value = '';
+}
+
+function loadExample(kind) {
+  if (kind === 'code') {
+    document.getElementById('code-input').value =
+`def is_prime(n):
+    if n < 2:
+        return False
+    for i in range(2, int(n ** 0.5) + 1):
+        if n % i == 0:
+            return False
+    return True
+
+num = int(input("Enter number: "))
+if is_prime(num):
+    print(num, "is prime")
+else:
+    print(num, "is not prime")`;
+  } else {
+    document.getElementById('algo-input').value =
+`START
+INPUT n
+SET is_prime = True
+IF n < 2 THEN
+    SET is_prime = False
+ELSE
+    FOR i FROM 2 TO sqrt(n)
+        IF n % i == 0 THEN
+            SET is_prime = False
+        END IF
+    END FOR
+END IF
+IF is_prime THEN
+    PRINT "Prime"
+ELSE
+    PRINT "Not prime"
+END IF
+END`;
   }
 }
 
