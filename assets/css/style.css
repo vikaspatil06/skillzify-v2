@@ -465,6 +465,17 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 .weak-row .bar { margin: 0 0 6px; }
 .weak-row.is-weak .bar span { background: linear-gradient(90deg, #f87171, #fb923c); }
 .weak-link { font-size: 0.85rem; font-weight: 700; }
+/* ---------- Collapsible cards (dashboard runs, profile feed) ---------- */
+.coll-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  width: 100%; background: none; border: 0; color: inherit; font: inherit;
+  cursor: pointer; padding: 0; text-align: left;
+}
+.coll-title { font-size: 1.15rem; font-weight: 800; }
+.coll-caret { color: var(--muted); font-size: 1.2rem; line-height: 1; transition: transform .2s ease; }
+.collapsible .coll-body { display: none; }
+.collapsible.open .coll-body { display: block; }
+.collapsible.open .coll-caret { transform: rotate(180deg); }
 /* ---------- Learn page: accordion tracks + search + continue ---------- */
 button.track-head {
   width: 100%; background: none; border: 0; font: inherit; color: inherit;
