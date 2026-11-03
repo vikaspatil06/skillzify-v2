@@ -181,7 +181,144 @@
     document.head.appendChild(s);
   }
 
-  /* ================= terminal ================= */
+  /* ================= interactive stdin bridge =================
+     Python's input() is AST-rewritten to await __skillzify_input(),
+     which awaits a JS Promise. The terminal shows an inline prompt
+     and resolves the promise when the user presses Enter. */
+  var stdinResolver = null;
+  var runOut = [];        // batched stdout of the active run
+  var killTimer = null;
+
+  function drainOut() {
+    runOut.forEach(function (l) { printLine(l); });
+    runOut.length = 0;
+  }
+
+  globalThis.__stdin_flush = function () { drainOut(); };
+  globalThis.__stdin_read = function (promptText) {
+    return new Promise(function (resolve) {
+      stdinResolver = resolve;
+      showStdinPrompt(promptText || "");
+    });
+  };
+
+  function showStdinPrompt(promptText) {
+    // pause the runaway watchdog while the human thinks
+    if (killTimer) { clearTimeout(killTimer); killTimer = null; }
+    var con = document.getElementById("console");
+    var line = document.createElement("div");
+    line.className = "stdin-line";
+    var p = document.createElement("span");
+    p.className = "stdin-prompt";
+    p.textContent = promptText;
+    var inp = document.createElement("input");
+    inp.className = "stdin-field";
+    inp.setAttribute("spellcheck", "false");
+    inp.setAttribute("autocomplete", "off");
+    inp.setAttribute("aria-label", "Program input");
+    var eofBtn = document.createElement("button");
+    eofBtn.className = "stdin-eof";
+    eofBtn.textContent = "EOF ⏻";
+    eofBtn.title = "Send end-of-input (Ctrl+D)";
+    line.appendChild(p); line.appendChild(inp); line.appendChild(eofBtn);
+    con.appendChild(line);
+    con.scrollTop = con.scrollHeight;
+    inp.focus();
+    var done = false;
+    function submit(eof) {
+      if (done) return;
+      done = true;
+      var val = eof ? null : inp.value;
+      // turn the input line into a static echoed line, like a real terminal
+      var echo = document.createElement("div");
+      echo.textContent = promptText + (eof ? "" : val);
+      if (eof) { var s = document.createElement("span"); s.className = "dim"; s.textContent = " [EOF]"; echo.appendChild(s); }
+      con.replaceChild(echo, line);
+      var r = stdinResolver;
+      stdinResolver = null;
+      restartKillTimer();
+      if (r) r(val);
+    }
+    inp.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); submit(false); }
+      else if (e.key === "d" && e.ctrlKey) { e.preventDefault(); submit(true); }
+    });
+    eofBtn.addEventListener("click", function () { submit(true); });
+  }
+
+  function cancelStdin() {
+    if (stdinResolver) {
+      var r = stdinResolver;
+      stdinResolver = null;
+      var line = document.querySelector("#console .stdin-line");
+      if (line) line.remove();
+      r(null); // EOF -> Python raises EOFError, run already abandoned via runToken
+    }
+  }
+
+  function restartKillTimer() {
+    if (killTimer) clearTimeout(killTimer);
+    var my = runToken;
+    killTimer = setTimeout(function () {
+      if (my !== runToken) return;
+      runToken++;
+      cancelStdin();
+      drainOut();
+      printLine("⏱ Stopped: ran over 15s with no output — likely an infinite loop.", "err");
+      pushOutHist(false, 15000);
+      recordRun(false, 15000);
+      setRunUI(false);
+      killTimer = null;
+    }, RUN_TIMEOUT_MS);
+  }
+  function clearKillTimer() {
+    if (killTimer) { clearTimeout(killTimer); killTimer = null; }
+  }
+
+  /* Python bootstrap: rewrites input() -> await __skillzify_input() via AST,
+     wraps the module in "async def __skillzify_main__" (hoisting any
+     __future__ imports), then awaits it. __USER_CODE__ is replaced with
+     a JSON string literal (valid Python too). */
+  var BOOTSTRAP = [
+    "import ast as __ast",
+    "__uc = __USER_CODE__",
+    "__tree = __ast.parse(__uc)",
+    "__shadowed = False",
+    "for __n in __ast.walk(__tree):",
+    "    if isinstance(__n, (__ast.FunctionDef, __ast.AsyncFunctionDef)) and __n.name == 'input':",
+    "        __shadowed = True; break",
+    "    if isinstance(__n, __ast.Assign):",
+    "        for __t in __n.targets:",
+    "            if isinstance(__t, __ast.Name) and __t.id == 'input': __shadowed = True; break",
+    "    if isinstance(__n, __ast.AnnAssign) and isinstance(__n.target, __ast.Name) and __n.target.id == 'input':",
+    "        __shadowed = True; break",
+    "from js import __stdin_read as __js_read, __stdin_flush as __js_flush",
+    "async def __skillzify_input(__p=''):",
+    "    __js_flush()",
+    "    __v = await __js_read(str(__p))",
+    "    if __v is None: raise EOFError('EOF when reading a line')",
+    "    return __v",
+    "if not __shadowed:",
+    "    class __IT(__ast.NodeTransformer):",
+    "        def visit_Call(self, __node):",
+    "            self.generic_visit(__node)",
+    "            if isinstance(__node.func, __ast.Name) and __node.func.id == 'input':",
+    "                __node.func.id = '__skillzify_input'",
+    "                return __ast.copy_location(__ast.Await(value=__node), __node)",
+    "            return __node",
+    "    __tree = __IT().visit(__tree)",
+    "    __ast.fix_missing_locations(__tree)",
+    "__future = [__n for __n in __tree.body if isinstance(__n, __ast.ImportFrom) and __n.module == '__future__']",
+    "__rest = [__n for __n in __tree.body if not (isinstance(__n, __ast.ImportFrom) and __n.module == '__future__')]",
+    "__func = __ast.AsyncFunctionDef(name='__skillzify_main__',",
+    "    args=__ast.arguments(posonlyargs=[], args=[], kwonlyargs=[], kw_defaults=[], defaults=[]),",
+    "    body=__rest if __rest else [__ast.Pass()], decorator_list=[])",
+    "__mod = __ast.Module(body=__future + [__func], type_ignores=[])",
+    "__ast.fix_missing_locations(__mod)",
+    "__ns = {'__name__': '__main__', '__skillzify_input': __skillzify_input}",
+    "exec(compile(__mod, '<code-studio>', 'exec'), __ns)",
+    "await __ns['__skillzify_main__']()"
+  ].join("\n");
   function printLine(text, cls) {
     var con = document.getElementById("console");
     var d = document.createElement("div");
@@ -208,12 +345,10 @@
     persistActiveFile();
     saveWS();
     var code = ws.files[ws.active];
-    var inputText = document.getElementById("terminal-input").value;
-    var lines = inputText.split("\n");
-    if (lines.length && lines[lines.length - 1] === "") lines.pop();
 
     switchPtab("terminal");
     clearTerminal();
+    cancelStdin();
     setRunUI(true);
     printLine("$ python " + ws.active, "dim");
 
@@ -224,30 +359,28 @@
       });
     } catch (e) {}
 
-    var out = [];
-    pyodide.setStdout({ batched: function (s) { out.push(s); } });
-    pyodide.setStderr({ batched: function (s) { out.push(s); } });
-    try { pyodide.setStdin(makeStdin(lines)); } catch (e) {}
+    runOut = [];
+    pyodide.setStdout({ batched: function (s) { runOut.push(s); } });
+    pyodide.setStderr({ batched: function (s) { runOut.push(s); } });
+    // sys.stdin reads (not via input()) get immediate EOF; input() is interactive
+    try { pyodide.setStdin({ stdin: function () { return null; } }); } catch (e) {}
 
     var my = ++runToken;
     var t0 = performance.now();
-    var timer = setTimeout(function () {
-      if (my !== runToken) return;
-      runToken++;
-      out.forEach(function (l) { printLine(l); });
-      printLine("⏱ Stopped: ran over 15s — likely an infinite loop.", "err");
-      pushOutHist(false, 15000);
-      recordRun(false, 15000);
-      setRunUI(false);
-    }, RUN_TIMEOUT_MS);
+    restartKillTimer();
 
     var p;
-    try { p = pyodide.runPythonAsync(code); } catch (e) { p = Promise.reject(e); }
+    try {
+      // replacer FUNCTION: user code may contain $& / $' which replace() would otherwise interpret
+      var src = BOOTSTRAP.replace("__USER_CODE__", function () { return JSON.stringify(code); });
+      p = pyodide.runPythonAsync(src);
+    } catch (e) { p = Promise.reject(e); }
     p.then(function () {
       if (my !== runToken) return;
-      clearTimeout(timer);
+      clearKillTimer();
+      cancelStdin();
       var ms = Math.round(performance.now() - t0);
-      out.forEach(function (l) { printLine(l); });
+      drainOut();
       printLine("✅ Finished in " + ms + " ms", "ok-meta");
       lastError = "";
       pushOutHist(true, ms);
@@ -257,10 +390,11 @@
       setRunUI(false);
     }).catch(function (e) {
       if (my !== runToken) return;
-      clearTimeout(timer);
+      clearKillTimer();
+      cancelStdin();
       var ms = Math.round(performance.now() - t0);
       var short = simplifyTraceback(String((e && e.message) || e));
-      out.forEach(function (l) { printLine(l); });
+      drainOut();
       printLine(short, "err");
       printLine("❌ Error after " + ms + " ms — see PROBLEMS or ask AI →", "err");
       lastError = short;
@@ -274,6 +408,9 @@
   function stopRun() {
     if (!runToken) return;
     runToken++;
+    clearKillTimer();
+    cancelStdin();
+    drainOut();
     printLine("⏹ Stopped by user.", "err");
     setRunUI(false);
   }
