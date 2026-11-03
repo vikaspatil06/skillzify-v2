@@ -1,0 +1,423 @@
+var LESSONS_NEW_ADVANCED = [
+  {
+    id: "a11", track: "advanced", title: "Decorators with Arguments & functools.wraps",
+    explain: "A decorator factory is a function that takes arguments and returns the real decorator. Inside it, @functools.wraps(fn) copies the wrapped function's name, docstring, and metadata onto the wrapper so debugging and docs keep working.",
+    takeaways: ["A decorator with arguments is really a factory: outer call takes args, inner function is the decorator.", "Always apply @functools.wraps(fn) to your wrapper to preserve __name__ and __doc__.", "The wrapper usually takes (*args, **kwargs) so it works with any signature."],
+    code: 'import functools\n\ndef repeat(n):\n    def decorator(fn):\n        @functools.wraps(fn)\n        def wrapper(*a, **k):\n            return [fn(*a, **k) for _ in range(n)]\n        return wrapper\n    return decorator\n\n@repeat(2)\ndef greet(name):\n    return "hi " + name\n\nprint(greet("Ava"), greet.__name__)',
+    quiz: [
+      { q: "What does @functools.wraps(fn) do inside a decorator?",
+        options: ["Copies __name__, __doc__ and other metadata from fn onto the wrapper", "Makes the wrapper run faster", "Prevents the decorator from being applied twice", "Turns fn into a generator"],
+        answer: 0, why: "wraps updates the wrapper's metadata to look like the original function." },
+      { q: "In the example, what does repeat(2) return?",
+        options: ["A decorator: a function that takes fn and returns the wrapper", "The number 2", "The wrapped function's return value", "A list of two functions"],
+        answer: 0, why: "repeat(2) returns decorator, which is then applied to greet as @repeat(2)." },
+      { q: "Without functools.wraps, what would greet.__name__ be after decoration?",
+        options: ["'wrapper'", "'greet'", "'repeat'", "It would raise AttributeError"],
+        answer: 0, why: "Without wraps, the name of the replacement function (wrapper) leaks through." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'def tag(name):\n    def deco(fn):\n        fn.label = name\n        return fn\n    return deco\n\n@tag("math")\ndef add(a, b):\n    return a + b\n\nprint(add.label, add(2, 3))',
+      options: ["math 5", "add 5", "math 6", "Error"], answer: 0,
+      hint: "tag('math') runs first and returns deco; deco then receives add." }
+  },
+  {
+    id: "a12", track: "advanced", title: "Concurrency I: Threading Basics",
+    explain: "Threads let one program juggle several tasks that spend most of their time waiting, like downloads or file reads. You start them with threading.Thread, wait with join(), and protect shared data with a Lock.",
+    takeaways: ["Threads shine for I/O-bound work, not CPU-bound number crunching (see the GIL lesson).", "Always join() every thread you start so the main program waits for them.", "Guard shared mutable state with threading.Lock to avoid race conditions."],
+    code: 'import threading\n\nresults = []\nlock = threading.Lock()\n\ndef work(n):\n    with lock:\n        results.append(n * n)\n\nthreads = [threading.Thread(target=work, args=(i,)) for i in range(5)]\nfor t in threads:\n    t.start()\nfor t in threads:\n    t.join()\nprint(sorted(results))',
+    quiz: [
+      { q: "Why do we call t.join() on each thread?",
+        options: ["To wait until the thread finishes before the program continues", "To terminate the thread immediately", "To give the thread a higher priority", "To duplicate the thread"],
+        answer: 0, why: "join() blocks the calling thread until that thread completes." },
+      { q: "What is threading.Lock() used for?",
+        options: ["Stopping two threads from mutating shared data at the same time", "Locking the computer screen", "Encrypting data in transit", "Pausing the main thread forever"],
+        answer: 0, why: "Only one thread can hold the lock, so the critical section runs atomically." },
+      { q: "Threads in CPython are a poor fit for which workload?",
+        options: ["CPU-heavy computation, because of the GIL", "Downloading many files", "Reading many files from disk", "Handling many network connections"],
+        answer: 0, why: "The GIL stops threads from running Python bytecode in parallel on multiple cores." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'import threading\n\nnums = []\n\ndef add(x):\n    nums.append(x)\n\nts = [threading.Thread(target=add, args=(i,)) for i in range(3)]\nfor t in ts:\n    t.start()\nfor t in ts:\n    t.join()\nprint(sorted(nums))',
+      options: ["[0, 1, 2]", "[0, 1, 2, 3]", "[]", "Error"], answer: 0,
+      hint: "join() guarantees every thread finished appending before the print runs." }
+  },
+  {
+    id: "a13", track: "advanced", title: "Concurrency II: asyncio Basics",
+    explain: "asyncio runs many tasks on a single thread with an event loop. Coroutines declared with async def pause at await, letting other tasks run while they wait — no threads, no GIL fights.",
+    takeaways: ["Write coroutines with async def and pause them with await.", "asyncio.gather() runs coroutines concurrently and returns results in order.", "asyncio.run(main()) starts the event loop from normal synchronous code."],
+    code: 'import asyncio\n\nasync def fetch(name):\n    await asyncio.sleep(0)\n    return "data:" + name\n\nasync def main():\n    out = await asyncio.gather(fetch("a"), fetch("b"), fetch("c"))\n    print(out)\n\nasyncio.run(main())',
+    quiz: [
+      { q: "What does await do inside a coroutine?",
+        options: ["Pauses this coroutine so the event loop can run others until the awaited thing completes", "Freezes the entire program", "Starts a new operating-system thread", "Cancels the coroutine"],
+        answer: 0, why: "await yields control back to the event loop instead of blocking." },
+      { q: "asyncio.gather(a(), b(), c()) returns results in which order?",
+        options: ["The order the coroutines were passed in", "The order they finish", "Random order", "Reverse order"],
+        answer: 0, why: "gather preserves argument order regardless of completion order." },
+      { q: "Which call runs an async main() from regular code?",
+        options: ["asyncio.run(main())", "main.start()", "await main() at module top level", "asyncio.thread(main())"],
+        answer: 0, why: "asyncio.run() creates the event loop, runs the coroutine, and closes the loop." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'import asyncio\n\nasync def double(x):\n    await asyncio.sleep(0)\n    return x * 2\n\nasync def main():\n    print(await asyncio.gather(double(1), double(2), double(3)))\n\nasyncio.run(main())',
+      options: ["[2, 4, 6]", "[6, 4, 2]", "(2, 4, 6)", "Error"], answer: 0,
+      hint: "gather keeps the order of its arguments in the result list." }
+  },
+  {
+    id: "a14", track: "advanced", title: "The GIL & Multiprocessing",
+    explain: "The Global Interpreter Lock lets only one thread execute Python bytecode at a time, so threads can't speed up CPU-bound code. The multiprocessing module sidesteps the GIL with separate processes, each with its own interpreter and memory.",
+    takeaways: ["The GIL means one thread runs Python bytecode at a time per process.", "multiprocessing gives true parallelism for CPU-bound work via separate processes.", "Processes don't share memory: data is pickled back and forth, so keep payloads small."],
+    code: 'import multiprocessing\n\ndef square(n):\n    return n * n\n\nif __name__ == "__main__":\n    with multiprocessing.Pool(2) as pool:\n        print(pool.map(square, [1, 2, 3, 4]))',
+    quiz: [
+      { q: "What does the GIL actually prevent?",
+        options: ["Two threads executing Python bytecode truly in parallel", "Two separate processes running at once", "Importing C extensions", "Using more than one CPU core for separate programs"],
+        answer: 0, why: "The GIL is per-process; separate processes each have their own." },
+      { q: "Why guard multiprocessing code with if __name__ == \"__main__\"?",
+        options: ["So child processes re-importing the module don't spawn more children", "It makes the code run faster", "It is required for every Python script", "It disables the GIL"],
+        answer: 0, why: "On some platforms children re-import the module, which would re-execute the spawn code." },
+      { q: "How do processes exchange data compared to threads?",
+        options: ["They don't share memory; data is serialized (pickled) between them", "They share all memory freely", "Through threading.Lock", "They cannot exchange data at all"],
+        answer: 0, why: "Each process has isolated memory, so arguments and results are pickled." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'import multiprocessing\n\ndef cube(n):\n    return n ** 3\n\nif __name__ == "__main__":\n    with multiprocessing.Pool(2) as pool:\n        print(pool.map(cube, [1, 2, 3]))',
+      options: ["[1, 8, 27]", "[1, 2, 3]", "[3, 2, 1]", "Error"], answer: 0,
+      hint: "Pool.map applies the function to each item and preserves input order." }
+  },
+  {
+    id: "a15", track: "advanced", title: "Writing Your Own Context Managers",
+    explain: "Any class with __enter__ and __exit__ works with the with statement. __enter__ sets things up, and __exit__ always runs afterward — even when the block raises — making it perfect for cleanup.",
+    takeaways: ["__enter__ sets up and usually returns the resource bound by 'as'.", "__exit__ always runs: put cleanup there, not after the with block.", "Return True from __exit__ to suppress an exception; return False (or None) to let it propagate."],
+    code: 'import time\n\nclass Timer:\n    def __enter__(self):\n        self.t0 = time.perf_counter()\n        return self\n    def __exit__(self, exc_type, exc, tb):\n        self.elapsed = time.perf_counter() - self.t0\n        return False\n\nwith Timer() as t:\n    total = sum(range(1000))\nprint(t.elapsed >= 0)',
+    quiz: [
+      { q: "When is __exit__ called?",
+        options: ["Always: whether the block ends normally or raises", "Only when an exception occurs", "Only when no exception occurs", "Never, it is just documentation"],
+        answer: 0, why: "Guaranteed cleanup is the whole point of context managers." },
+      { q: "How can a context manager suppress an exception from the with block?",
+        options: ["__exit__ returns True", "__enter__ returns None", "Raise a different exception inside", "Delete the exception object"],
+        answer: 0, why: "A truthy return from __exit__ tells Python the exception was handled." },
+      { q: "What does __enter__ typically return?",
+        options: ["The resource that 'with ... as name' binds to", "Always None", "The exception, if one occurred", "A boolean flag"],
+        answer: 0, why: "The as-target receives whatever __enter__ returns." }
+    ],
+    challenge: { type: "blank", prompt: "Fill in the blank so this prints: open",
+      code: 'class Door:\n    def __enter__(self):\n        return "open"\n    def __exit__(self, *exc):\n        return False\n\nwith Door() as d:\n    x = ____\nprint(x)',
+      answer: ["d"],
+      hint: "The as-target receives whatever __enter__ returned." }
+  },
+  {
+    id: "a16", track: "advanced", title: "Generators: send(), Coroutines & Pipelines",
+    explain: "Calling .send(value) on a generator feeds a value in as the result of the currently-paused yield expression. That turns generators into coroutines you can chain into lazy data-processing pipelines.",
+    takeaways: ["yield both produces a value outward and receives the next send() value inward.", "Prime a coroutine with next(gen) before the first send().", "Chain small generators so each stage lazily transforms the stream."],
+    code: 'def averager():\n    total = 0.0\n    count = 0\n    while True:\n        x = yield total / count if count else 0.0\n        total += x\n        count += 1\n\navg = averager()\nnext(avg)\navg.send(10)\navg.send(20)\nprint(avg.send(30))',
+    quiz: [
+      { q: "In 'x = yield 10', what does gen.send(99) do?",
+        options: ["Resumes the generator with x bound to 99", "Yields 99 out to the caller", "Restarts the generator from the top", "Immediately raises StopIteration"],
+        answer: 0, why: "send() resumes at the paused yield and the expression evaluates to the sent value." },
+      { q: "Why call next(gen) before the first send()?",
+        options: ["The generator must run to its first yield before it can receive a value", "It clears the generator's memory", "send() only works after close()", "It is optional style with no effect"],
+        answer: 0, why: "A just-created generator hasn't started; only None can be sent before the first yield." },
+      { q: "What do generator-based pipelines buy you?",
+        options: ["Lazy, memory-efficient stage-by-stage data processing", "Faster CPU arithmetic", "Automatic multithreading", "Free disk persistence"],
+        answer: 0, why: "Each stage yields items on demand instead of building giant intermediate lists." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'def doubler():\n    total = 0\n    while True:\n        x = yield total\n        total += x * 2\n\ng = doubler()\nnext(g)\nprint(g.send(5))\nprint(g.send(3))',
+      options: ["10\n16", "5\n8", "0\n10", "Error"], answer: 0,
+      hint: "Trace it: after send(5), total is 0 + 5*2 = 10, which is then yielded." }
+  },
+  {
+    id: "a17", track: "advanced", title: "Descriptors & the Descriptor Protocol",
+    explain: "A descriptor is any object defining __get__, __set__, or __delete__. Python calls these hooks automatically on attribute access — it's the machinery behind @property, @staticmethod, and most ORMs.",
+    takeaways: ["Descriptors intercept attribute access via __get__ / __set__ / __delete__.", "__set_name__ tells the descriptor which attribute name it was assigned to.", "@property is just a convenient built-in descriptor."],
+    code: 'class Positive:\n    def __set_name__(self, owner, name):\n        self.name = name\n    def __get__(self, obj, objtype=None):\n        return obj.__dict__[self.name]\n    def __set__(self, obj, value):\n        if value < 0:\n            raise ValueError("must be positive")\n        obj.__dict__[self.name] = value\n\nclass Item:\n    price = Positive()\n    def __init__(self, price):\n        self.price = price\n\nprint(Item(7).price)',
+    quiz: [
+      { q: "Which methods make a class a descriptor?",
+        options: ["__get__, __set__, or __delete__", "__init__ and __repr__", "__enter__ and __exit__", "__iter__ and __next__"],
+        answer: 0, why: "Defining any of these hooks opts the class into the descriptor protocol." },
+      { q: "In 'class Item: price = Positive()', when is Positive.__set__ called?",
+        options: ["When you assign item.price = ...", "When the class body is defined", "When you read item.price", "Never: descriptors only work via @property"],
+        answer: 0, why: "__set__ fires on attribute assignment; __get__ fires on reads." },
+      { q: "What is @property built on?",
+        options: ["The descriptor protocol", "Metaclasses", "Multiple inheritance", "The GIL"],
+        answer: 0, why: "property is a class implementing __get__/__set__/__delete__." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'class Shout:\n    def __get__(self, obj, objtype=None):\n        return obj._name.upper()\n    def __set__(self, obj, value):\n        obj._name = value\n\nclass User:\n    name = Shout()\n\nu = User()\nu.name = "ava"\nprint(u.name)',
+      options: ["AVA", "ava", "None", "Error"], answer: 0,
+      hint: "Assignment triggers __set__; reading triggers __get__, which uppercases." }
+  },
+  {
+    id: "a18", track: "advanced", title: "How Classes Work: type() & Metaclasses Intro",
+    explain: "Classes are objects, and type(name, bases, dict) is the call that creates them — class X: ... is syntax sugar for it. A metaclass is the class of a class: Python calls it to build every class, letting you customize class creation itself.",
+    takeaways: ["type('X', (Base,), {...}) creates a class dynamically at runtime.", "The metaclass of a normal class is type.", "Metaclass hooks run at class-definition time, not when you instantiate."],
+    code: 'def init(self, v):\n    self.v = v\n\nPoint = type("Point", (), {"__init__": init})\np = Point(5)\nprint(type(p).__name__, p.v)',
+    quiz: [
+      { q: "What does type('A', (B,), {'x': 1}) return?",
+        options: ["A new class named A inheriting B with class attribute x = 1", "An instance of B", "The string 'A'", "A tuple"],
+        answer: 0, why: "The three-argument form of type() is the class factory." },
+      { q: "What is the metaclass of a normal class?",
+        options: ["type", "object", "The class itself", "None"],
+        answer: 0, why: "type is the default metaclass; classes are instances of type." },
+      { q: "When does a metaclass's __new__ run?",
+        options: ["When the class statement executes (class-creation time)", "Each time you instantiate the class", "When you call a method", "Only when the metaclass module is imported"],
+        answer: 0, why: "Metaclasses customize class creation, which happens once at definition." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'def init(self, v):\n    self.v = v\n\nK = type("K", (), {"__init__": init, "double": lambda self: self.v * 2})\nprint(K(21).double())',
+      options: ["42", "21", "84", "Error"], answer: 0,
+      hint: "The dict passed to type() becomes the class namespace: methods and all." }
+  },
+  {
+    id: "a19", track: "advanced", title: "functools Toolkit: lru_cache, partial, reduce",
+    explain: "functools packs three high-leverage helpers: lru_cache memoizes expensive pure functions, partial freezes some arguments of a function, and reduce folds an iterable into a single value.",
+    takeaways: ["@lru_cache(maxsize=None) memoizes pure functions: same args, instant answer.", "partial(fn, a) returns a new callable with argument a pre-filled.", "reduce(fn, iterable, start) folds left; pair it with the operator module for clean code."],
+    code: 'from functools import lru_cache, reduce\nimport operator\n\n@lru_cache(maxsize=None)\ndef fib(n):\n    return n if n < 2 else fib(n - 1) + fib(n - 2)\n\nprint(fib(10))\nprint(reduce(operator.mul, [1, 2, 3, 4], 1))',
+    quiz: [
+      { q: "What does @lru_cache do?",
+        options: ["Caches return values so repeated calls with the same arguments are instant", "Deletes old function definitions", "Runs the function on multiple cores", "Converts recursion into iteration"],
+        answer: 0, why: "It memoizes: a cache keyed by arguments stores past results." },
+      { q: "What does partial(int, base=2) return?",
+        options: ["A callable like int but with base pre-set to 2", "The integer 2", "A syntax error", "A new class"],
+        answer: 0, why: "partial freezes arguments, returning a new callable awaiting the rest." },
+      { q: "reduce(operator.add, [1, 2, 3], 10) equals?",
+        options: ["16", "6", "10", "12310"],
+        answer: 0, why: "Start at 10, then 10+1+2+3 = 16." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'from functools import lru_cache\n\ncalls = []\n\n@lru_cache(maxsize=None)\ndef f(x):\n    calls.append(x)\n    return x * 10\n\nf(2)\nf(2)\nf(3)\nprint(len(calls), f(2))',
+      options: ["2 20", "3 20", "2 2", "3 30"], answer: 0,
+      hint: "The second f(2) hits the cache, so the body runs only twice total." }
+  },
+  {
+    id: "a20", track: "advanced", title: "Dataclasses: Less Boilerplate OOP",
+    explain: "The @dataclass decorator generates __init__, __repr__, and __eq__ from simple annotated field declarations. For mutable defaults like lists, use field(default_factory=list) — a plain [] default is rejected.",
+    takeaways: ["@dataclass writes __init__, __repr__, and __eq__ for you.", "Annotate each field; mutable defaults need field(default_factory=...).", "Dataclass instances compare by value with ==, not by identity."],
+    code: 'from dataclasses import dataclass, field\n\n@dataclass\nclass Student:\n    name: str\n    grades: list = field(default_factory=list)\n    def average(self):\n        g = self.grades\n        return sum(g) / len(g) if g else 0\n\ns = Student("Ava", [80, 100])\nprint(s.name, s.average())',
+    quiz: [
+      { q: "Why field(default_factory=list) instead of grades: list = []?",
+        options: ["A plain [] would be shared across all instances", "It runs faster", "Lists are banned as defaults entirely", "It makes the list immutable"],
+        answer: 0, why: "default_factory calls list() fresh for each instance; a literal default is one shared object." },
+      { q: "Which methods does @dataclass generate by default?",
+        options: ["__init__, __repr__, and __eq__", "Only __init__", "Only __str__ and __hash__", "None: it is just documentation"],
+        answer: 0, why: "Those three are the core boilerplate it writes for you." },
+      { q: "Student('Ava', [80]) == Student('Ava', [80]) evaluates to?",
+        options: ["True: dataclasses compare by value", "False: they are different objects", "It raises TypeError", "None"],
+        answer: 0, why: "The generated __eq__ compares field tuples, not identity." }
+    ],
+    challenge: { type: "blank", prompt: "Fill in the blank so this prints: Point(x=3, y=0)",
+      code: 'from dataclasses import dataclass\n\n@dataclass\nclass Point:\n    x: int\n    y: int = ____\n\nprint(Point(3))',
+      answer: ["0"],
+      hint: "y needs a default value so it can be omitted." }
+  },
+  {
+    id: "a21", track: "advanced", title: "Type Hints & Static Checking",
+    explain: "Type hints like def f(x: int) -> int document intent and let tools like mypy catch bugs before runtime. Python itself ignores them completely — they're metadata for humans and checkers, not enforcement.",
+    takeaways: ["Hints are documentation plus tooling; Python never enforces them at runtime.", "Use list[int], dict[str, int], and X | None for modern container and optional hints.", "Run mypy or pyright in CI to catch type errors before they ship."],
+    code: 'def add(a: int, b: int) -> int:\n    return a + b\n\nprint(add(2, 3))\nprint(add.__annotations__)',
+    quiz: [
+      { q: "Does Python enforce type hints at runtime?",
+        options: ["No: they are ignored at runtime; tools like mypy check them statically", "Yes: wrong types raise TypeError", "Only for int hints", "Only inside classes"],
+        answer: 0, why: "Hints live in __annotations__; nothing checks them unless you run a checker." },
+      { q: "What does add.__annotations__ hold?",
+        options: ["The parameter and return annotations as a dict", "The function's source code", "The types of local variables", "Nothing: the attribute does not exist"],
+        answer: 0, why: "Annotations are stored in a plain dict on the function object." },
+      { q: "How do you hint 'a list of ints' on modern Python (3.9+)?",
+        options: ["list[int]", "List<int>", "int[]", "Array[int]"],
+        answer: 0, why: "Builtin generics like list[int] work since Python 3.9." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'def add(a: int, b: int) -> int:\n    return a + b\n\nprint(add("x", "y"))',
+      options: ["xy", "Error", "None", "0"],
+      answer: 0,
+      hint: "Hints are not enforced: 'x' + 'y' is perfectly valid string concatenation." }
+  },
+  {
+    id: "a22", track: "advanced", title: "Logging Done Right",
+    explain: "The logging module replaces print-debugging with leveled, configurable output. Get a logger per module with getLogger(__name__), log at the right level, and configure handlers and formatting once at startup.",
+    takeaways: ["Use logging.getLogger(__name__) per module instead of the root logger directly.", "Levels ascend: DEBUG < INFO < WARNING < ERROR < CRITICAL.", "Configure once with basicConfig or dictConfig; library code should never print()."],
+    code: 'import logging\n\nlogging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")\nlog = logging.getLogger("app")\nlog.debug("hidden")\nlog.info("started")\nlog.warning("careful")',
+    quiz: [
+      { q: "With level=logging.INFO, which call produces no output?",
+        options: ["log.debug('x')", "log.info('x')", "log.warning('x')", "log.error('x')"],
+        answer: 0, why: "DEBUG is below the INFO threshold, so it is filtered out." },
+      { q: "Why prefer logging over print() for diagnostics?",
+        options: ["Levels, timestamps, and routing to files or handlers without code changes", "It is faster to type", "print() is deprecated", "Logging uses less memory"],
+        answer: 0, why: "Logging separates the decision to record from where the record goes." },
+      { q: "What does logging.getLogger('app') return on the second call?",
+        options: ["The same logger object as the first call", "A brand-new logger", "None", "It raises an error"],
+        answer: 0, why: "Loggers are cached by name in a registry; same name, same object." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'import logging\nlog = logging.getLogger("demo")\nprint(log.name)\nprint(log.getEffectiveLevel() == logging.WARNING)',
+      options: ["demo\nTrue", "demo\nFalse", "root\nTrue", "Error"], answer: 0,
+      hint: "A fresh logger inherits the default WARNING level from the root logger." }
+  },
+  {
+    id: "a23", track: "advanced", title: "Debugging with pdb",
+    explain: "pdb is Python's built-in debugger: calling breakpoint() drops you into an interactive shell at that line. Step with n, continue with c, inspect values with p, and quit with q.",
+    takeaways: ["breakpoint() starts a pdb session at that line (Python 3.7+).", "n runs the next line, c continues, p <expr> prints a value, q quits.", "Use pp for pretty-printing and l to see surrounding source."],
+    code: 'def divide(a, b):\n    # breakpoint()  <- drop in here: try p a, then n, then c\n    return a / b\n\nprint(divide(10, 2))',
+    quiz: [
+      { q: "What does breakpoint() do?",
+        options: ["Opens an interactive pdb session at that line", "Stops the program permanently", "Deletes the enclosing function", "Runs the test suite"],
+        answer: 0, why: "It invokes the built-in debugger right where it is called." },
+      { q: "In pdb, what does the 'n' command do?",
+        options: ["Executes the current line and moves to the next one", "Creates a new breakpoint", "Prints all local variables", "Exits the debugger"],
+        answer: 0, why: "n means next: step over the current line." },
+      { q: "How do you inspect a variable's value inside pdb?",
+        options: ["p varname", "print is the only way", "show varname", "echo varname"],
+        answer: 0, why: "p evaluates and prints the expression in the current frame." }
+    ],
+    challenge: { type: "predict", prompt: "If you put breakpoint() on the s += x line, pdb would show s as 1, then 3, then 6. What does the program print?",
+      code: 'def total(xs):\n    s = 0\n    for x in xs:\n        s += x\n    return s\n\nprint(total([1, 2, 3]))',
+      options: ["6", "5", "3", "Error"], answer: 0,
+      hint: "The debugger only observes; the loop still sums 1 + 2 + 3." }
+  },
+  {
+    id: "a24", track: "advanced", title: "Packaging: Ship Your Own pip Package",
+    explain: "Shipping a package means a pyproject.toml describing your project plus your code in a package directory. pip install -e . installs it editable for development, and python -m build plus twine take it to PyPI.",
+    takeaways: ["pyproject.toml holds name, version, dependencies, and the build backend.", "Keep importable code in a package directory with an __init__.py.", "pip install -e . for local development; build with python -m build."],
+    code: '# myapp/__init__.py\n__version__ = "1.0.0"\n\ndef hello(name):\n    return "Hello, " + name + "!"\n\nprint(__version__)\nprint(hello("pip"))',
+    quiz: [
+      { q: "What does pyproject.toml describe?",
+        options: ["Project metadata: name, version, dependencies, build system", "Only the Python interpreter version", "Your IDE settings", "Git history"],
+        answer: 0, why: "It is the standard manifest pip and build tools read." },
+      { q: "What does pip install -e . do?",
+        options: ["Installs the local package in editable mode so changes take effect immediately", "Erases the installed package", "Installs from the internet only", "Encrypts your source code"],
+        answer: 0, why: "Editable installs link to your working directory instead of copying." },
+      { q: "Where does importable package code live?",
+        options: ["In a directory with an __init__.py (or a namespace-package directory)", "Only inside site-packages", "Inside pyproject.toml itself", "In any .txt file"],
+        answer: 0, why: "The package directory is what Python puts on the import path." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: '__version__ = "2.5.0"\nmajor, minor, patch = __version__.split(".")\nprint(major, int(minor) + int(patch))',
+      options: ["2 5", "2.5.0 5", "2 7", "Error"], answer: 0,
+      hint: "split('.') gives ['2', '5', '0']; add the last two as integers." }
+  },
+  {
+    id: "a25", track: "advanced", title: "Design Patterns in Python",
+    explain: "Design patterns are reusable solutions to common problems: Singleton (one shared instance), Observer (publish/subscribe), Factory (create objects without naming the class). Python often implements them with dunders, decorators, or first-class functions instead of heavy class hierarchies.",
+    takeaways: ["Singleton: override __new__ to return the existing instance.", "Observer: keep a list of subscriber callbacks and notify them on change.", "Prefer simple Pythonic tools (functions, context managers) over heavyweight pattern machinery."],
+    code: 'class Logger:\n    _instance = None\n    def __new__(cls):\n        if cls._instance is None:\n            cls._instance = super().__new__(cls)\n            cls._instance.records = []\n        return cls._instance\n    def log(self, msg):\n        self.records.append(msg)\n\na = Logger()\nb = Logger()\na.log("x")\nprint(a is b, len(b.records))',
+    quiz: [
+      { q: "How does the Singleton ensure a single instance?",
+        options: ["__new__ returns the existing instance instead of creating a new one", "__init__ raises an error on second use", "It relies on a global variable alone", "Python does this automatically for all classes"],
+        answer: 0, why: "__new__ controls instance creation, so it can return the cached object." },
+      { q: "In the Observer pattern, what does the subject keep?",
+        options: ["A list of subscriber callbacks to notify on changes", "A database connection", "A thread pool", "A deep copy of every object"],
+        answer: 0, why: "Observers subscribe callbacks; the subject calls them when state changes." },
+      { q: "What is the most Pythonic 'factory'?",
+        options: ["A plain function that returns instances", "A five-class inheritance hierarchy", "Always a metaclass", "eval() on class-name strings"],
+        answer: 0, why: "Functions are first-class; a simple function beats pattern ceremony." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'class Config:\n    _inst = None\n    def __new__(cls):\n        if cls._inst is None:\n            cls._inst = super().__new__(cls)\n            cls._inst.mode = "dev"\n        return cls._inst\n\nc1 = Config()\nc2 = Config()\nc1.mode = "prod"\nprint(c2.mode)',
+      options: ["prod", "dev", "None", "Error"], answer: 0,
+      hint: "c1 and c2 are the same object, so the mutation is visible through both." }
+  },
+  {
+    id: "a26", track: "advanced", title: "SQLite Databases with Python",
+    explain: "The sqlite3 module is in the standard library and stores a full SQL database in one file — or in RAM with :memory:. Always use ? placeholders for values; never format them into SQL strings yourself.",
+    takeaways: ["sqlite3.connect(':memory:') gives you a throwaway database for experiments.", "Use ? placeholders to prevent SQL injection.", "commit() persists writes; close connections with a context manager or try/finally."],
+    code: 'import sqlite3\n\ndb = sqlite3.connect(":memory:")\ndb.execute("CREATE TABLE users (name TEXT, age INTEGER)")\ndb.executemany("INSERT INTO users VALUES (?, ?)", [("Ava", 30), ("Bo", 25)])\ndb.commit()\nrows = db.execute("SELECT name FROM users WHERE age > 26 ORDER BY name").fetchall()\nprint(rows)\ndb.close()',
+    quiz: [
+      { q: "Why use ? placeholders instead of f-strings in SQL?",
+        options: ["To prevent SQL injection attacks", "They are faster to type", "f-strings cannot be used with SQL", "Placeholders are required by law"],
+        answer: 0, why: "The driver safely escapes bound values; string formatting lets attackers inject SQL." },
+      { q: "What does commit() do?",
+        options: ["Persists pending writes to the database", "Deletes the table", "Opens a new connection", "Prints the schema"],
+        answer: 0, why: "Writes sit in a transaction until committed." },
+      { q: "What is sqlite3.connect(':memory:')?",
+        options: ["A temporary database kept in RAM", "A connection to a remote server", "A read-only database file", "An error"],
+        answer: 0, why: ":memory: is the special name for a private in-RAM database." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'import sqlite3\ndb = sqlite3.connect(":memory:")\ndb.execute("CREATE TABLE t (v INTEGER)")\ndb.executemany("INSERT INTO t VALUES (?)", [(1,), (2,), (3,)])\nn = db.execute("SELECT SUM(v) FROM t").fetchone()[0]\nprint(n)',
+      options: ["6", "123", "(6,)", "Error"], answer: 0,
+      hint: "fetchone() returns one row tuple; [0] takes its first column." }
+  },
+  {
+    id: "a27", track: "advanced", title: "Talking to APIs: requests & JSON",
+    explain: "The requests library turns HTTP into one-liners: requests.get(url).json() fetches a URL and parses the JSON body. Always set a timeout, check the status code, and parse defensively since APIs change shape.",
+    takeaways: ["requests.get(url, timeout=10).json() is the core API-call pattern.", "Always set a timeout and check response.status_code before trusting the body.", "Parse defensively with .get() and defaults: API responses change."],
+    code: 'import json\n\n# this is what requests.get(url).json() would hand you:\nsample = \'{"name": "Skillzify", "users": 1200, "tags": ["python", "learn"]}\'\ndata = json.loads(sample)\nprint(data["name"], data["users"])\nprint(data["tags"][1].upper())',
+    quiz: [
+      { q: "What does requests.get(url).json() do?",
+        options: ["Fetches the URL and parses the response body as JSON", "Downloads a file to disk", "Sends JSON data to the server", "Opens the URL in a browser"],
+        answer: 0, why: ".json() decodes the response bytes into Python objects." },
+      { q: "Why pass timeout=10 to requests.get?",
+        options: ["So a hung server cannot freeze your program forever", "It makes the server respond faster", "It is required for JSON responses", "It enables response caching"],
+        answer: 0, why: "Without a timeout, a dead server can block your call indefinitely." },
+      { q: "How should you read a possibly-missing key from API JSON?",
+        options: ["data.get('key') with a sensible default", "data['key'] and hope for the best", "eval() on the raw text", "Assume the key always exists"],
+        answer: 0, why: ".get() avoids KeyError when the API shape drifts." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'import json\nraw = \'{"items": [{"id": 1}, {"id": 2}, {"id": 3}]}\'\ndata = json.loads(raw)\nprint(len(data["items"]), data["items"][-1]["id"])',
+      options: ["3 3", "3 2", "2 3", "Error"], answer: 0,
+      hint: "Three dicts in the list; [-1] is the last one, whose id is 3." }
+  },
+  {
+    id: "a28", track: "advanced", title: "Profiling & Optimization",
+    explain: "Profile before you optimize: cProfile shows where your program really spends time, and timeit gives trustworthy micro-benchmarks. Most real wins come from better algorithms, not micro-tweaks.",
+    takeaways: ["cProfile plus pstats finds the actual hotspots: measure, don't guess.", "timeit.repeat avoids one-off timing noise for fair comparisons.", "Optimize algorithms first; readability beats cleverness everywhere else."],
+    code: 'import cProfile, pstats, io\n\ndef slow():\n    return sum(i * i for i in range(10000))\n\npr = cProfile.Profile()\npr.enable()\nslow()\npr.disable()\nout = io.StringIO()\npstats.Stats(pr, stream=out).print_stats(1)\nprint("profiled ok")',
+    quiz: [
+      { q: "What is cProfile for?",
+        options: ["Measuring where your program spends its time", "Checking code style", "Compressing files", "Encrypting data"],
+        answer: 0, why: "It records per-function call counts and cumulative time." },
+      { q: "Why use timeit instead of time.time() around code once?",
+        options: ["It repeats the measurement and reduces timing noise for stable results", "It is shorter to type", "time.time() is deprecated", "It runs the code in parallel"],
+        answer: 0, why: "Repetition plus setup control makes micro-benchmarks trustworthy." },
+      { q: "What is the first rule of optimization?",
+        options: ["Measure first: profile before changing anything", "Rewrite everything in C", "Delete all comments", "Use shorter variable names"],
+        answer: 0, why: "Guessing hotspots wastes effort; profilers show the truth." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'import timeit\nt1 = timeit.timeit(\'"-".join(str(n) for n in range(100))\', number=100)\nt2 = timeit.timeit(\'"-".join(map(str, range(100)))\', number=100)\nprint(t1 > 0 and t2 > 0)',
+      options: ["True", "False", "0", "Error"], answer: 0,
+      hint: "Both timings are positive durations, so the comparison is always True." }
+  },
+  {
+    id: "a29", track: "advanced", title: "Capstone: argparse CLI Application",
+    explain: "argparse turns a script into a real command-line tool: positional arguments, --flags, help text, and type conversion come free. parse_args() reads sys.argv, but you can pass an explicit list when testing.",
+    takeaways: ["add_argument defines positionals ('name') and optionals ('--shout').", "type=int converts input; action='store_true' makes boolean flags.", "--help is generated automatically from your help= strings."],
+    code: 'import argparse\n\ndef build_parser():\n    p = argparse.ArgumentParser(description="Greet someone")\n    p.add_argument("name")\n    p.add_argument("--shout", action="store_true")\n    return p\n\nargs = build_parser().parse_args(["Ava", "--shout"])\nmsg = "Hello, " + args.name + "!"\nprint(msg.upper() if args.shout else msg)',
+    quiz: [
+      { q: "What does add_argument('--shout', action='store_true') create?",
+        options: ["A boolean flag that is False unless --shout is passed", "A required string argument", "A subcommand", "An environment variable"],
+        answer: 0, why: "store_true flips the default False to True when the flag appears." },
+      { q: "How do you test argparse code without real command-line arguments?",
+        options: ["parser.parse_args(['Ava', '--shout']) with an explicit list", "You cannot: it only ever reads sys.argv", "By editing sys.path", "With input() prompts"],
+        answer: 0, why: "parse_args optionally takes the argument list, which makes it testable." },
+      { q: "What does --help do for an argparse program?",
+        options: ["Prints auto-generated usage from your declared arguments", "Opens a web browser", "Deletes the parser", "Nothing at all"],
+        answer: 0, why: "argparse builds the help screen from your arguments and help= strings." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'import argparse\np = argparse.ArgumentParser()\np.add_argument("x", type=int)\np.add_argument("--times", type=int, default=1)\na = p.parse_args(["5", "--times", "3"])\nprint(a.x * a.times)',
+      options: ["15", "8", "53", "Error"], answer: 0,
+      hint: "x becomes int 5, --times becomes int 3; multiply them." }
+  },
+  {
+    id: "a30", track: "advanced", title: "Pythonic Idioms Masterclass",
+    explain: "Pythonic code leans on the language: comprehensions, zip, enumerate, any/all, unpacking, and context managers. These idioms are shorter, often faster, and instantly readable to experienced Python developers.",
+    takeaways: ["Prefer comprehensions and any()/all() over manual accumulator loops.", "Unpack with a, b = ... and a, *rest = ...; iterate pairs with zip and enumerate.", "Idiomatic code is a feature: it signals intent to every Python reader."],
+    code: 'words = ["  Hello ", "WORLD", " python "]\nclean = [w.strip().lower() for w in words]\nprint(clean)\npairs = dict(zip(["a", "b"], [1, 2]))\nprint(pairs)\nprint(any(x > 5 for x in [1, 9, 3]))',
+    quiz: [
+      { q: "Which is the most Pythonic way to build a doubled list?",
+        options: ["[x * 2 for x in xs]", "A for loop with result.append(x * 2)", "map() with a lambda stored in a variable", "A while loop with a manual index"],
+        answer: 0, why: "The comprehension states the transformation directly and idiomatically." },
+      { q: "What does a, *rest = [1, 2, 3, 4] bind?",
+        options: ["a = 1, rest = [2, 3, 4]", "a = [1], rest = [2, 3, 4]", "It raises ValueError", "a = 4, rest = [1, 2, 3]"],
+        answer: 0, why: "The starred target collects all remaining items into a list." },
+      { q: "Why is any(x > 5 for x in xs) better than a manual loop?",
+        options: ["It short-circuits on the first match and reads as pure intent", "It is always measurably faster", "for loops are deprecated", "It only saves indentation"],
+        answer: 0, why: "any() stops early and the generator expresses the condition directly." }
+    ],
+    challenge: { type: "predict", prompt: "What will this print?",
+      code: 'data = [("a", 1), ("b", 2), ("c", 3)]\nletters, nums = zip(*data)\nprint(letters)\nprint(sum(nums))',
+      options: ["('a', 'b', 'c')\n6", "('a', 1)\n6", "abc\n6", "Error"], answer: 0,
+      hint: "zip(*data) unzips: first elements together, second elements together." }
+  }
+];
