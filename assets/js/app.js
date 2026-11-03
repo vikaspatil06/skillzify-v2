@@ -6,6 +6,16 @@
   "use strict";
 
   var THEME_KEY = "skillzify_theme";
+  var ACCENT_KEY = "skillzify_accent";
+
+  var ACCENTS = [
+    { id: "indigo",   name: "Indigo",   c1: "#6c7bff", c2: "#9d6bff" },
+    { id: "ocean",    name: "Ocean",    c1: "#22d3ee", c2: "#38bdf8" },
+    { id: "sunset",   name: "Sunset",   c1: "#fb923c", c2: "#f472b6" },
+    { id: "forest",   name: "Forest",   c1: "#34d399", c2: "#22d3ee" },
+    { id: "amethyst", name: "Amethyst", c1: "#9d6bff", c2: "#e879f9" },
+    { id: "rose",     name: "Rose",     c1: "#fb7185", c2: "#f472b6" }
+  ];
 
   /* ---------- Theme ---------- */
   function logoFor(theme) {
@@ -20,12 +30,70 @@
     });
     var btns = document.querySelectorAll("[data-theme-toggle]");
     btns.forEach(function (b) { b.textContent = theme === "light" ? "🌙" : "☀️"; });
+    document.querySelectorAll(".mode-btn").forEach(function (b) {
+      b.classList.toggle("selected", b.dataset.mode === theme);
+    });
+  }
+
+  function applyAccent(accent) {
+    if (accent === "indigo") document.documentElement.removeAttribute("data-accent");
+    else document.documentElement.setAttribute("data-accent", accent);
+    try { localStorage.setItem(ACCENT_KEY, accent); } catch (e) {}
+    document.querySelectorAll(".swatch").forEach(function (s) {
+      s.classList.toggle("selected", s.dataset.accent === accent);
+    });
+  }
+
+  function buildPicker() {
+    // Inject a palette button + dropdown next to the theme toggle
+    var toggle = document.querySelector("[data-theme-toggle]");
+    if (!toggle || document.querySelector(".theme-picker-wrap")) return;
+    var wrap = document.createElement("span");
+    wrap.className = "theme-picker-wrap";
+    var btn = document.createElement("button");
+    btn.className = "icon-btn";
+    btn.setAttribute("aria-label", "Choose color theme");
+    btn.textContent = "🎨";
+    var drop = document.createElement("div");
+    drop.className = "theme-picker";
+    drop.innerHTML =
+      "<h4>Mode</h4><div class='mode-row'>" +
+        "<button class='mode-btn' data-mode='dark'>🌙 Dark</button>" +
+        "<button class='mode-btn' data-mode='light'>☀️ Light</button>" +
+      "</div><h4>Accent</h4><div class='swatch-row'>" +
+      ACCENTS.map(function (a) {
+        return "<button class='swatch' data-accent='" + a.id + "' title='" + a.name + "'" +
+          " style='background:linear-gradient(135deg," + a.c1 + " 0%," + a.c2 + " 100%)'" +
+          " aria-label='" + a.name + " accent'></button>";
+      }).join("") + "</div>";
+    wrap.appendChild(btn);
+    wrap.appendChild(drop);
+    toggle.parentNode.insertBefore(wrap, toggle.nextSibling);
+
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      drop.classList.toggle("open");
+    });
+    document.addEventListener("click", function (e) {
+      if (!wrap.contains(e.target)) drop.classList.remove("open");
+    });
+    drop.querySelectorAll(".mode-btn").forEach(function (b) {
+      b.addEventListener("click", function () { applyTheme(b.dataset.mode); });
+    });
+    drop.querySelectorAll(".swatch").forEach(function (s) {
+      s.addEventListener("click", function () { applyAccent(s.dataset.accent); });
+    });
   }
 
   function initTheme() {
-    var saved = null;
-    try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
+    var saved = null, accent = null;
+    try {
+      saved = localStorage.getItem(THEME_KEY);
+      accent = localStorage.getItem(ACCENT_KEY);
+    } catch (e) {}
+    buildPicker();
     applyTheme(saved === "light" ? "light" : "dark"); // dark mode default
+    applyAccent(accent || "indigo");
     document.querySelectorAll("[data-theme-toggle]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var cur = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
