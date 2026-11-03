@@ -326,6 +326,8 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 
 /* ---------- Dashboard ---------- */
 .dash-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 30px; }
+/* Two-column dashboard rows — collapses to one column on mobile (no inline styles!) */
+.dash-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
 .dash-card { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); padding: 26px; }
 .dash-card .big { font-size: 2.6rem; font-weight: 800; }
 .ring-wrap { display: flex; align-items: center; gap: 18px; }
@@ -396,6 +398,14 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
   .nav-menu a { padding: 10px 14px; font-size: 0.95rem; }
   .hamburger { display: inline-flex; }
   .grid-4, .grid-3, .testimonials, .dash-grid { grid-template-columns: 1fr; }
+  .dash-grid-2 { grid-template-columns: 1fr; }
+  /* Dashboard mobile polish */
+  .dash-card .big { font-size: 2rem; }
+  .ring-wrap { flex-wrap: wrap; }
+  .next-card { padding: 18px; }
+  .next-actions { align-items: stretch; width: 100%; }
+  .next-actions .btn { text-align: center; }
+  .run-item { flex-wrap: wrap; }
   .section { padding: 52px 0; }
   .hero { padding: 64px 0 48px; }
   #account-link { display: none; }
@@ -428,6 +438,23 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 .track-head .t-desc { color: var(--muted); font-size: 0.92rem; }
 .track-head .t-pct { margin-left: auto; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
 
+/* ---------- Dashboard: next-step hero + level pill ---------- */
+.next-card {
+  margin-bottom: 20px; padding: 22px 26px; border-radius: var(--radius);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 14%, var(--card)), var(--card));
+  border: 1px solid var(--card-border); box-shadow: var(--shadow);
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap; justify-content: space-between;
+}
+.next-card .cc-title { font-size: 1.35rem; font-weight: 800; margin-top: 4px; }
+.next-actions { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+.next-quick { display: flex; gap: 8px; align-items: center; font-size: 0.88rem; color: var(--muted); }
+.next-quick a { color: var(--muted); font-weight: 600; }
+.next-quick a:hover { color: var(--text); }
+.level-pill {
+  display: inline-block; font-size: 0.85rem; font-weight: 800; color: #fff;
+  background: var(--gradient); border-radius: 999px; padding: 5px 16px;
+  box-shadow: var(--shadow);
+}
 /* ---------- Learn page: accordion tracks + search + continue ---------- */
 button.track-head {
   width: 100%; background: none; border: 0; font: inherit; color: inherit;
