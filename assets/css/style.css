@@ -455,6 +455,16 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
   background: var(--gradient); border-radius: 999px; padding: 5px 16px;
   box-shadow: var(--shadow);
 }
+/* ---------- Dashboard: weak spots ---------- */
+.weak-summary { font-size: 0.95rem; margin: 0 0 12px; }
+.weak-row { padding: 10px 0; border-bottom: 1px solid var(--card-border); }
+.weak-row:last-child { border-bottom: 0; }
+.weak-row .weak-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.weak-row .lbl { font-weight: 700; }
+.weak-row .pct { font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.weak-row .bar { margin: 0 0 6px; }
+.weak-row.is-weak .bar span { background: linear-gradient(90deg, #f87171, #fb923c); }
+.weak-link { font-size: 0.85rem; font-weight: 700; }
 /* ---------- Learn page: accordion tracks + search + continue ---------- */
 button.track-head {
   width: 100%; background: none; border: 0; font: inherit; color: inherit;
