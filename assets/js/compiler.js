@@ -276,11 +276,13 @@
   }
 
   /* Python bootstrap: rewrites input() -> await __skillzify_input() via AST,
-     wraps the module in "async def __skillzify_main__" (hoisting any
-     __future__ imports), then awaits it. __USER_CODE__ is replaced with
-     a JSON string literal (valid Python too). */
+     compiles with top-level-await enabled, and eval()s the module code
+     object — eval returns the coroutine, which we await. True module
+     semantics: global statements, __name__, __future__ all behave exactly
+     like real Python. __USER_CODE__ is replaced with a JSON string literal
+     (valid Python too). */
   var BOOTSTRAP = [
-    "import ast as _ast",
+    "import ast as _ast, inspect as _inspect",
     "__uc = __USER_CODE__",
     "__tree = _ast.parse(__uc)",
     "__shadowed = False",
@@ -308,16 +310,10 @@
     "            return __node",
     "    __tree = __IT().visit(__tree)",
     "    _ast.fix_missing_locations(__tree)",
-    "__future = [__n for __n in __tree.body if isinstance(__n, _ast.ImportFrom) and __n.module == '__future__']",
-    "__rest = [__n for __n in __tree.body if not (isinstance(__n, _ast.ImportFrom) and __n.module == '__future__')]",
-    "__func = _ast.AsyncFunctionDef(name='__skillzify_main__',",
-    "    args=_ast.arguments(posonlyargs=[], args=[], kwonlyargs=[], kw_defaults=[], defaults=[]),",
-    "    body=__rest if __rest else [_ast.Pass()], decorator_list=[])",
-    "__mod = _ast.Module(body=__future + [__func], type_ignores=[])",
-    "_ast.fix_missing_locations(__mod)",
+    "__co = compile(__tree, '<code-studio>', 'exec', flags=_ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)",
     "__ns = {'__name__': '__main__', '__skillzify_input': __skillzify_input}",
-    "exec(compile(__mod, '<code-studio>', 'exec'), __ns)",
-    "await __ns['__skillzify_main__']()"
+    "__r = eval(__co, __ns)",
+    "if _inspect.iscoroutine(__r): await __r"
   ].join("\n");
   function printLine(text, cls) {
     var con = document.getElementById("console");
