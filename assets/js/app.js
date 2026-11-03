@@ -149,6 +149,28 @@
     });
   }
 
+  // Collapsible cards: <div class="dash-card collapsible" id="x" data-collapsed="1">
+  // with a <button class="coll-head">. State persists per card id in localStorage.
+  function initCollapsibles() {
+    document.querySelectorAll(".collapsible").forEach(function (card) {
+      var key = "skillzify_coll_" + (card.id || "noid");
+      var stored = storeGet(key, null);
+      var collapsed = stored !== null ? stored === "1"
+                                      : card.getAttribute("data-collapsed") === "1";
+      var head = card.querySelector(".coll-head");
+      function apply() {
+        card.classList.toggle("open", !collapsed);
+        if (head) head.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      }
+      apply();
+      if (head) head.addEventListener("click", function () {
+        collapsed = !collapsed;
+        storeSet(key, collapsed ? "1" : "0");
+        apply();
+      });
+    });
+  }
+
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -159,6 +181,7 @@
     initTheme();
     initNav();
     setYear();
+    initCollapsibles();
   });
 
   // Public API
