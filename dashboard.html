@@ -34,14 +34,18 @@
 
   <section class="section" style="padding-top:24px">
     <div class="container" id="dash-root">
-      <div class="card" style="margin-bottom:18px">
-        <div class="daily-inner">
-          <div><h3 style="margin:0 0 6px">🚀 Keep going</h3>
-          <p class="hint" style="margin:0">Practice, follow a path, or build a project.</p></div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <a class="btn btn-sm" href="practice.html">🏋️ Practice</a>
-            <a class="btn btn-sm btn-ghost" href="paths.html">🗺️ Paths</a>
-            <a class="btn btn-sm btn-ghost" href="projects.html">🛠️ Projects</a>
+      <div class="next-card">
+        <div>
+          <div class="cc-label">🎯 Up next</div>
+          <div class="cc-title" id="dash-next-title">Loading your next step…</div>
+          <p class="hint" id="dash-next-sub" style="margin:6px 0 0"></p>
+        </div>
+        <div class="next-actions">
+          <a class="btn" href="learn.html">Resume lesson →</a>
+          <div class="next-quick">
+            <a href="practice.html">🏋️ Practice</a><span>·</span>
+            <a href="paths.html">🗺️ Paths</a><span>·</span>
+            <a href="projects.html">🛠️ Projects</a>
           </div>
         </div>
       </div>
@@ -71,36 +75,14 @@
           <a href="compiler.html" class="btn btn-sm" style="margin-top:10px">Keep it going →</a>
         </div>
         <div class="dash-card">
-          <h3>🎯 Next step</h3>
-          <p class="hint" id="dash-next" style="margin-top:12px">Continue where you left off.</p>
-          <a href="learn.html" class="btn btn-sm" style="margin-top:10px">Continue learning →</a>
+          <h3>⚡ Level</h3>
+          <div class="big" id="dash-level-name" style="margin-top:12px">Novice</div>
+          <p class="hint" id="dash-level-sub">0 XP</p>
+          <div class="bar" style="margin-top:10px"><span id="dash-level-bar" style="width:0%"></span></div>
         </div>
       </div>
 
-      <div class="dash-grid" style="grid-template-columns:1fr 1fr;margin-top:20px">
-        <div class="dash-card">
-          <h3>Progress by track</h3>
-          <div id="dash-tracks" style="margin-top:8px"></div>
-        </div>
-        <div class="dash-card">
-          <h3>Recent compiler runs</h3>
-          <div id="dash-runs" style="margin-top:8px"></div>
-        </div>
-      </div>
-      <div class="dash-grid" style="grid-template-columns:1fr 1fr;margin-top:20px">
-        <div class="dash-card">
-          <h3>📊 Topic mastery</h3>
-          <p class="muted small">Where your XP lives, GitHub-language-bar style.</p>
-          <div class="mastery-bar" id="dash-mastery-bar"></div>
-          <div class="mastery-legend" id="dash-mastery-legend"></div>
-        </div>
-        <div class="dash-card">
-          <h3>🟩 This week's activity</h3>
-          <div id="dash-heatmap" style="overflow-x:auto;margin-top:8px"></div>
-          <p style="margin-top:10px"><a href="profile.html">Full profile →</a></p>
-        </div>
-      </div>
-      <div class="dash-grid" style="grid-template-columns:1fr 1fr;margin-top:20px">
+      <div class="dash-grid-2">
         <div class="dash-card">
           <h3>📅 Today's challenge</h3>
           <div id="dash-daily"></div>
@@ -110,27 +92,31 @@
           <div id="dash-revision"></div>
         </div>
       </div>
-      <div class="dash-grid" style="grid-template-columns:1fr 1fr;margin-top:20px">
+      <div class="dash-grid-2">
         <div class="dash-card">
-          <h3>🎯 Exercise accuracy by topic</h3>
-          <p class="muted small">Solved exercises per topic — your weak spots, highlighted.</p>
+          <h3>🎯 Weak spots</h3>
+          <p class="muted small">Exercise accuracy by topic — low scores need a revisit.</p>
           <div id="dash-topic-acc" style="margin-top:8px"></div>
         </div>
         <div class="dash-card">
-          <h3>🎓 Certificates</h3>
-          <p class="muted small">Complete a full track to unlock its certificate.</p>
-          <div id="dash-certs" style="margin-top:8px"></div>
+          <h3>Progress by track</h3>
+          <div id="dash-tracks" style="margin-top:8px"></div>
         </div>
       </div>
-      <div class="dash-grid" style="grid-template-columns:1fr 1fr;margin-top:20px">
+      <div class="dash-grid-2">
         <div class="dash-card">
-          <h3>🏆 Latest achievements</h3>
-          <div id="dash-achievements" class="ach-grid"></div>
+          <h3>Recent compiler runs</h3>
+          <div id="dash-runs" style="margin-top:8px"></div>
         </div>
         <div class="dash-card">
-          <h3>📰 Recent activity</h3>
-          <div id="dash-feed" class="feed"></div>
+          <h3>🟩 This week's activity</h3>
+          <div id="dash-heatmap" style="overflow-x:auto;margin-top:8px"></div>
+          <p style="margin-top:10px"><a href="profile.html">Full year on your profile →</a></p>
         </div>
+      </div>
+      <div class="dash-card" style="margin-top:20px">
+        <h3>🏆 Latest achievements</h3>
+        <div id="dash-achievements" class="ach-grid"></div>
       </div>
     </div>
   </section>
@@ -174,18 +160,23 @@
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js"></script>
 <script src="assets/js/sync.js"></script>
-<script src="assets/js/learn.js"></script>
+<script src="assets/js/lessons-b.js?v=1"></script>
+<script src="assets/js/lessons-i.js?v=1"></script>
+<script src="assets/js/lessons-a.js?v=1"></script>
+<script src="assets/js/learn.js?v=4"></script>
 <script src="assets/js/practice-data.js"></script>
 <script src="assets/js/dashboard.js"></script>
 <script>
-// "Next step" hint: first incomplete lesson
+// "Up next" hero: first incomplete lesson
 document.addEventListener("DOMContentLoaded", function () {
   var L = window.SkillzifyLearn, p = L.getProgress();
+  var done = L.LESSONS.filter(function (l) { return p[l.id]; }).length;
   var next = L.LESSONS.filter(function (l) { return !p[l.id]; })[0];
-  var el = document.getElementById("dash-next");
-  if (el) el.textContent = next
-    ? "Up next: " + next.title + " (" + next.track + " track)."
-    : "All lessons complete — you're a Python star! 🌟";
+  var t = document.getElementById("dash-next-title"), s = document.getElementById("dash-next-sub");
+  if (t) t.textContent = next ? next.title : "All 95 lessons complete — you're a Python star! 🌟";
+  if (s) s.textContent = next
+    ? "Lesson " + (L.LESSONS.indexOf(next) + 1) + " of " + L.totalLessons + " · " + next.track + " track · " + done + " done so far"
+    : "Time to build something of your own.";
 });
 </script>
 </body>
