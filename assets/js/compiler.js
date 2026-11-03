@@ -17,11 +17,18 @@
   var AI_KEY = "skillzify_ai_key";
   var AI_BASE_KEY = "skillzify_ai_base";
   var AI_MODEL_KEY = "skillzify_ai_model";
+  var HIST_KEY = "skillzify_code_history";
+  var THEME_KEY2 = "skillzify_cm_theme";
+  var FONT_KEY = "skillzify_cm_font";
 
   var pyodide = null;
   var editor = null;
   var lastCode = "";
   var lastError = "";
+
+  /* run-output history (paged console) */
+  var outHistory = [];   // {html, ok, ms, t}
+  var outIdx = -1;
 
   var SNIPPETS = {
     hello: { name: "👋 Hello World", code: 'print("Hello, Skillzify!")\nname = input("Your name: ")\nprint(f"Welcome, {name}! 🎉")' },
@@ -146,7 +153,9 @@
       out.forEach(function (l) { printLine(l); });
       printLine("———\n✅ Finished in " + ms + " ms", "ok-meta");
       lastError = "";
+      pushOutputHistory(true, ms);
       recordRun(true, ms);
+      saveCodeHistory();
       setStatus("ready", "Python ready ✓");
     }).catch(function (err) {
       if (myToken !== runToken) return; // abandoned (stop/timeout)
@@ -159,12 +168,43 @@
       printLine(short, "err");
       printLine("———\n❌ Error after " + ms + " ms — see AI Explain →", "err");
       lastError = short;
+      pushOutputHistory(false, ms);
       recordRun(false, ms);
+      saveCodeHistory();
       setStatus("ready", "Python ready ✓");
     }).finally(function () {
       if (myToken !== runToken) return;
       setRunningUI(false);
     });
+  }
+
+  /* ---------- paged run-output history ---------- */
+  function pushOutputHistory(ok, ms) {
+    var con = document.getElementById("console");
+    outHistory.push({ html: con.innerHTML, ok: ok, ms: ms, t: Date.now(), code: lastCode });
+    if (outHistory.length > 20) outHistory.shift();
+    outIdx = outHistory.length - 1;
+    updateRunPager();
+  }
+  function updateRunPager() {
+    var n = outHistory.length;
+    document.getElementById("run-page").textContent = n ? ("Run " + (outIdx + 1) + "/" + n) : "Run 0/0";
+    document.getElementById("run-prev").disabled = !(n && outIdx > 0);
+    document.getElementById("run-next").disabled = !(n && outIdx < n - 1);
+  }
+  function showOutputAt(i) {
+    if (i < 0 || i >= outHistory.length) return;
+    outIdx = i;
+    document.getElementById("console").innerHTML = outHistory[i].html;
+    updateRunPager();
+  }
+  function copyOutput() {
+    var text = document.getElementById("console").innerText;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        window.Skillzify.toast("Output copied 📋", "success");
+      });
+    } else { fallbackCopy(text); window.Skillzify.toast("Output copied 📋", "success"); }
   }
 
   function stopRun() {
@@ -488,20 +528,220 @@
     });
   }
 
+  /* ---------- local code history (auto-saved versions) ---------- */
+  function saveCodeHistory() {
+    var code = currentCode().trim();
+    if (!code) return;
+    var h = window.Skillzify.storeGet(HIST_KEY, []);
+    if (h.length && h[0].code === code) return; // unchanged since last save
+    h.unshift({ t: Date.now(), code: code, lines: code.split("\n").length });
+    h = h.slice(0, 30);
+    window.Skillzify.storeSet(HIST_KEY, h);
+  }
+  function openHistory() {
+    var h = window.Skillzify.storeGet(HIST_KEY, []);
+    var host = document.getElementById("hist-list");
+    if (!h.length) { host.innerHTML = '<p class="hint" style="padding:20px">No saved versions yet — run some code and versions will appear here automatically.</p>'; }
+    else {
+      host.innerHTML = h.map(function (v, i) {
+        return '<div class="hist-item"><div class="meta">' +
+          new Date(v.t).toLocaleString() + ' · ' + v.lines + ' lines</div>' +
+          '<pre>' + esc(v.code.slice(0, 300)) + (v.code.length > 300 ? "…" : "") + '</pre>' +
+          '<div class="row"><button class="btn btn-sm" data-restore="' + i + '">Restore this version</button>' +
+          '<button class="btn btn-sm btn-ghost" data-delhist="' + i + '">Delete</button></div></div>';
+      }).join("");
+      host.querySelectorAll("[data-restore]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var v = window.Skillzify.storeGet(HIST_KEY, [])[+b.getAttribute("data-restore")];
+          if (v) {
+            if (editor) editor.setValue(v.code); else document.getElementById("code-fallback").value = v.code;
+            document.getElementById("hist-modal").classList.remove("on");
+            window.Skillzify.toast("Version restored 🕘", "success");
+          }
+        });
+      });
+      host.querySelectorAll("[data-delhist]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var hh = window.Skillzify.storeGet(HIST_KEY, []);
+          hh.splice(+b.getAttribute("data-delhist"), 1);
+          window.Skillzify.storeSet(HIST_KEY, hh);
+          openHistory();
+        });
+      });
+    }
+    document.getElementById("hist-modal").classList.add("on");
+  }
+
+  /* ---------- find & replace ---------- */
+  var findState = { cursor: null, query: "" };
+  function openFind(replaceMode) {
+    var bar = document.getElementById("findbar");
+    bar.classList.add("on");
+    document.getElementById("replace-input").style.display = replaceMode ? "" : "none";
+    document.getElementById("replace-one").style.display = replaceMode ? "" : "none";
+    document.getElementById("replace-all").style.display = replaceMode ? "" : "none";
+    var fi = document.getElementById("find-input");
+    if (editor && editor.getSelection()) fi.value = editor.getSelection();
+    fi.focus(); fi.select();
+    if (fi.value) doFind(1);
+  }
+  function closeFind() {
+    document.getElementById("findbar").classList.remove("on");
+    findState.cursor = null;
+    document.getElementById("find-count").textContent = "";
+    if (editor) editor.focus();
+  }
+  function doFind(dir) {
+    if (!editor || !window.CodeMirror) return;
+    var q = document.getElementById("find-input").value;
+    if (!q) { document.getElementById("find-count").textContent = ""; return; }
+    if (q !== findState.query || !findState.cursor) {
+      findState.query = q;
+      findState.cursor = editor.getSearchCursor(q, editor.getCursor(), { caseFold: true });
+    }
+    var found = dir > 0 ? findState.cursor.findNext() : findState.cursor.findPrevious();
+    if (!found) { // wrap around
+      findState.cursor = editor.getSearchCursor(q, dir > 0 ? { line: 0, ch: 0 } : editor.getCursor(), { caseFold: true });
+      found = dir > 0 ? findState.cursor.findNext() : findState.cursor.findPrevious();
+    }
+    if (found) {
+      editor.setSelection(findState.cursor.from(), findState.cursor.to());
+      editor.scrollIntoView({ from: findState.cursor.from(), to: findState.cursor.to() }, 60);
+      document.getElementById("find-count").textContent = "match ✓";
+    } else {
+      document.getElementById("find-count").textContent = "no matches";
+    }
+  }
+  function doReplace(all) {
+    if (!editor || !findState.cursor) return;
+    var q = document.getElementById("find-input").value;
+    var rep = document.getElementById("replace-input").value;
+    if (!q) return;
+    if (all) {
+      var cur = editor.getSearchCursor(q, { line: 0, ch: 0 }, { caseFold: true });
+      var n = 0;
+      editor.operation(function () {
+        while (cur.findNext()) { cur.replace(rep); n++; }
+      });
+      document.getElementById("find-count").textContent = n + " replaced";
+      findState.cursor = null;
+    } else {
+      if (findState.cursor.from && editor.getSelection()) {
+        findState.cursor.replace(rep);
+        document.getElementById("find-count").textContent = "replaced ✓";
+      }
+      doFind(1);
+    }
+  }
+
+  /* ---------- editor theme + font size ---------- */
+  function applyCmTheme(t) {
+    if (editor) editor.setOption("theme", t);
+    try { localStorage.setItem(THEME_KEY2, t); } catch (e) {}
+    var sel = document.getElementById("theme-select");
+    if (sel) sel.value = t;
+  }
+  function applyCmFont(px) {
+    px = Math.max(10, Math.min(24, px));
+    var host = document.getElementById("editor-host");
+    if (host) host.querySelector(".CodeMirror").style.fontSize = px + "px";
+    if (editor) editor.refresh();
+    try { localStorage.setItem(FONT_KEY, String(px)); } catch (e) {}
+  }
+  function cmFont() {
+    try { return parseInt(localStorage.getItem(FONT_KEY) || "14", 10) || 14; } catch (e) { return 14; }
+  }
+  function updateStatusBar() {
+    if (!editor) return;
+    var c = editor.getCursor();
+    document.getElementById("cursor-pos").textContent = "Ln " + (c.line + 1) + ", Col " + (c.ch + 1);
+    var lines = editor.lineCount();
+    document.getElementById("code-stats").textContent = lines + " line" + (lines === 1 ? "" : "s");
+  }
+
+  /* ---------- AI Generate + Fix ---------- */
+  function aiGenerate() {
+    var desc = prompt("Describe what you want the code to do:", "a function that checks if a number is prime");
+    if (desc == null || !desc.trim()) return;
+    renderAiBox('<p class="hint">✨ Generating code…</p>');
+    aiRemote({ mode: "generate", code: desc.trim() }, function (html) {
+      renderAiBox(html);
+    }, function (code) {
+      // on success, load the generated code into the editor
+      if (editor) editor.setValue(code);
+      else document.getElementById("code-fallback").value = code;
+      window.Skillzify.toast("Code generated ✨ — review it, then press Run", "success");
+    });
+  }
+  function aiFix() {
+    if (!lastError) { renderAiBox('<p class="hint">Run some code first — when it errors, I\'ll fix it here.</p>'); return; }
+    renderAiBox('<p class="hint">🔧 Analyzing the error and fixing your code…</p>');
+    aiRemote({ mode: "fix", code: lastCode, error: lastError }, function (html) {
+      renderAiBox(html);
+    }, function (code) {
+      if (editor) editor.setValue(code);
+      else document.getElementById("code-fallback").value = code;
+      window.Skillzify.toast("Fixed code loaded 🔧 — press Run to verify", "success");
+    });
+  }
+  // Generic backend call: opts {mode, code, error}; onHtml(html) always; onCode(code) on success with extractable code
+  function aiRemote(opts, onHtml, onCode) {
+    var ctrl = null, timer = null;
+    try {
+      ctrl = new AbortController();
+      timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 60000);
+    } catch (e) {}
+    var fopts = {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts)
+    };
+    if (ctrl) fopts.signal = ctrl.signal;
+    fetch("api/explain", fopts).then(function (r) {
+      if (timer) clearTimeout(timer);
+      if (!r.ok) throw 0;
+      return r.json();
+    }).then(function (data) {
+      var text = data.explanation || "";
+      if (!text) throw 0;
+      // Try to extract a code block for Generate/Fix modes
+      var m = text.match(/```(?:python)?\n?([\s\S]*?)```/i);
+      var code = m ? m[1].trim() : (opts.mode === "generate" || opts.mode === "fix" ? text.trim() : null);
+      if (code && onCode) onCode(code);
+      onHtml("<h4>🤖 AI " + (opts.mode === "generate" ? "generated" : opts.mode === "fix" ? "fix" : "explanation") + "</h4><p>" +
+        window.Skillzify.esc(text).replace(/\n/g, "<br>") + "</p>");
+    }).catch(function () {
+      if (timer) clearTimeout(timer);
+      // fall back to the user's own key, then offline
+      aiExplainViaKey(opts.code || "", opts.error || "");
+    });
+  }
+
   /* ---------- Init ---------- */
   document.addEventListener("DOMContentLoaded", function () {
     if (!document.getElementById("editor-host")) return;
 
     if (window.CodeMirror) {
+      var savedTheme = "dracula", savedFont = 14;
+      try {
+        savedTheme = localStorage.getItem(THEME_KEY2) || "dracula";
+        savedFont = parseInt(localStorage.getItem(FONT_KEY) || "14", 10) || 14;
+      } catch (e) {}
       editor = window.CodeMirror(document.getElementById("editor-host"), {
         mode: "python",
-        theme: "dracula",
+        theme: savedTheme,
         lineNumbers: true,
         indentUnit: 4,
         tabSize: 4,
+        matchBrackets: true,
         value: 'print("Hello, Skillzify! 👋")\n# Press Ctrl+Enter to run'
       });
       editor.addKeyMap({ "Ctrl-Enter": runCode, "Cmd-Enter": runCode });
+      document.getElementById("theme-select").value = savedTheme;
+      applyCmFont(savedFont);
+      editor.on("cursorActivity", updateStatusBar);
+      editor.on("change", function () { updateStatusBar(); });
+      updateStatusBar();
     } else {
       document.getElementById("code-fallback").style.display = "block";
     }
@@ -548,13 +788,103 @@
 
     document.getElementById("run-btn").addEventListener("click", runCode);
     document.getElementById("clear-btn").addEventListener("click", function () {
-      clearConsole();
       if (editor) editor.setValue("");
+      else document.getElementById("code-fallback").value = "";
+      window.Skillzify.toast("Editor cleared", "success");
+    });
+    document.getElementById("clear-out-btn").addEventListener("click", function () {
+      clearConsole();
+      outHistory = []; outIdx = -1; updateRunPager();
       printLine("Console cleared.", "dim");
     });
+    document.getElementById("copy-out-btn").addEventListener("click", copyOutput);
+    document.getElementById("run-prev").addEventListener("click", function () { showOutputAt(outIdx - 1); });
+    document.getElementById("run-next").addEventListener("click", function () { showOutputAt(outIdx + 1); });
     document.getElementById("explain-error-btn").addEventListener("click", explainLastError);
     document.getElementById("explain-code-btn").addEventListener("click", explainCode);
     document.getElementById("save-snippet-btn").addEventListener("click", saveSnippetUI);
+    var genBtn = document.getElementById("ai-generate-btn");
+    if (genBtn) genBtn.addEventListener("click", aiGenerate);
+    var fixBtn = document.getElementById("fix-code-btn");
+    if (fixBtn) fixBtn.addEventListener("click", aiFix);
+
+    /* toolbar: find/replace */
+    document.getElementById("find-btn").addEventListener("click", function () { openFind(false); });
+    document.getElementById("find-close").addEventListener("click", closeFind);
+    document.getElementById("find-next").addEventListener("click", function () { doFind(1); });
+    document.getElementById("find-prev").addEventListener("click", function () { doFind(-1); });
+    document.getElementById("find-input").addEventListener("input", function () { findState.query = ""; doFind(1); });
+    document.getElementById("find-input").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); doFind(e.shiftKey ? -1 : 1); }
+      if (e.key === "Escape") closeFind();
+    });
+    document.getElementById("replace-one").addEventListener("click", function () { doReplace(false); });
+    document.getElementById("replace-all").addEventListener("click", function () { doReplace(true); });
+
+    /* toolbar: edit actions */
+    document.getElementById("undo-btn").addEventListener("click", function () { if (editor) editor.undo(); });
+    document.getElementById("redo-btn").addEventListener("click", function () { if (editor) editor.redo(); });
+    document.getElementById("wrap-btn").addEventListener("click", function () {
+      if (!editor) return;
+      var on = !editor.getOption("lineWrapping");
+      editor.setOption("lineWrapping", on);
+      this.classList.toggle("on", on);
+    });
+    document.getElementById("copy-code-btn").addEventListener("click", function () {
+      var c = currentCode();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(c).then(function () { window.Skillzify.toast("Code copied 📋", "success"); });
+      } else { fallbackCopy(c); window.Skillzify.toast("Code copied 📋", "success"); }
+    });
+    document.getElementById("upload-btn").addEventListener("click", function () {
+      document.getElementById("upload-input").click();
+    });
+    document.getElementById("upload-input").addEventListener("change", function () {
+      var f = this.files[0]; if (!f) return;
+      var r = new FileReader();
+      r.onload = function () {
+        var text = String(r.result || "");
+        if (editor) editor.setValue(text); else document.getElementById("code-fallback").value = text;
+        window.Skillzify.toast("Loaded " + f.name + " 📂", "success");
+      };
+      r.readAsText(f);
+      this.value = "";
+    });
+    document.getElementById("fullscreen-btn").addEventListener("click", function () {
+      document.getElementById("editor-shell").classList.toggle("fullscreen");
+      if (editor) setTimeout(function () { editor.refresh(); }, 50);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        document.getElementById("editor-shell").classList.remove("fullscreen");
+        document.getElementById("hist-modal").classList.remove("on");
+      }
+    });
+
+    /* toolbar: history */
+    document.getElementById("history-btn").addEventListener("click", openHistory);
+    document.getElementById("hist-close").addEventListener("click", function () {
+      document.getElementById("hist-modal").classList.remove("on");
+    });
+    document.getElementById("hist-modal").addEventListener("click", function (e) {
+      if (e.target === this) this.classList.remove("on");
+    });
+
+    /* status bar: theme + font */
+    document.getElementById("theme-select").addEventListener("change", function () { applyCmTheme(this.value); });
+    document.getElementById("fs-up").addEventListener("click", function () { applyCmFont(cmFont() + 1); });
+    document.getElementById("fs-down").addEventListener("click", function () { applyCmFont(cmFont() - 1); });
+
+    /* global shortcuts */
+    document.addEventListener("keydown", function (e) {
+      var mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === "f" && !e.shiftKey) { e.preventDefault(); openFind(false); }
+      if (mod && e.key.toLowerCase() === "h") { e.preventDefault(); openFind(true); }
+      if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); downloadCode(); }
+      if (e.altKey && e.key.toLowerCase() === "z") {
+        e.preventDefault(); document.getElementById("wrap-btn").click();
+      }
+    });
 
     initSettings();
     loadPyodideRuntime();
