@@ -64,8 +64,11 @@ app.post("/api/explain", async (req, res) => {
     "3. Ask one short follow-up question that nudges the student to discover the fix.\n" +
     "4. Keep the whole answer under 120 words. Be encouraging.";
   const useSocratic = mode === "tutor";
+  const useFlowchart = mode === "flowchart";
   const style = useSocratic ? socraticStyle : tutorStyle;
-  const prompt = useSocratic
+  const prompt = useFlowchart
+    ? "Write ONLY clean, simple Python code that solves this problem. Output raw code only — no markdown fences, no explanation, no comments beyond one line:\n\n" + code
+    : useSocratic
     ? "A student is stuck on this Python exercise. Their code is failing. Follow your Socratic rules strictly.\n\n" + code + "\n\n" + errText
     : errText
     ? "A student ran this Python code and got this error. First explain the error in simple terms and exactly how to fix it, then give the walkthrough structure above for the code.\n\nCODE:\n" +
