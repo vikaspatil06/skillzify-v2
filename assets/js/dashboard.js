@@ -33,7 +33,7 @@
 
     // Streak
     var s = window.Skillzify.storeGet("skillzify_streak", { last: null, count: 0 });
-    document.getElementById("dash-streak").textContent = (s.count || 0) + "🔥";
+    document.getElementById("dash-streak").textContent = (s.count || 0) + " 🔥";
 
     // Level
     try {
@@ -84,7 +84,7 @@
     document.getElementById("dash-achievements").innerHTML = ach.length ? ach.map(function (a) {
       return '<div class="ach on" title="' + a.desc + '"><span class="ach-ico">' + a.icon + '</span><span class="ach-name">' + a.name + "</span></div>";
     }).join("") + '<p style="grid-column:1/-1"><a href="profile.html">All achievements →</a></p>'
-      : '<p class="muted">Complete a lesson to earn your first badge. <a href="learn.html">Start →</a></p>';
+      : '<p class="muted" style="grid-column:1/-1">Complete a lesson to earn your first badge. <a href="learn.html">Start →</a></p>';
 
     renderPracticeWidgets();
   }
