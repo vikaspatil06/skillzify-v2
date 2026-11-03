@@ -119,25 +119,51 @@
       }).join("") : '<p class="hint">Nothing to review — clean slate! <a href="practice.html">Practice →</a></p>';
     }
 
-    // Topic accuracy
+    // Weak spots — weakest first, untried topics separated, each one tap from practice
     var ta = document.getElementById("dash-topic-acc");
     if (ta) {
       var topics = {}, order = [];
       EX.forEach(function (ex) {
-        if (!topics[ex.topic]) { topics[ex.topic] = { solved: 0, total: 0 }; order.push(ex.topic); }
-        topics[ex.topic].total++;
+        if (!topics[ex.topic]) { topics[ex.topic] = { solved: 0, tried: 0 }; order.push(ex.topic); }
         var a = atts[ex.id];
-        if (a && a.solved) topics[ex.topic].solved++;
+        if (a && a.attempts > 0) {
+          topics[ex.topic].tried++;
+          if (a.solved) topics[ex.topic].solved++;
+        }
       });
       var labels = { variables: "Variables", strings: "Strings", collections: "Collections", loops: "Loops", functions: "Functions", oop: "OOP", exceptions: "Exceptions", dsa: "Algorithms" };
-      ta.innerHTML = order.map(function (t) {
-        var s = topics[t], pct = s.total ? Math.round(s.solved / s.total * 100) : 0;
-        var weak = s.total >= 2 && pct < 50;
-        return '<div class="progress-row"><span class="lbl">' + esc(labels[t] || t) +
-          (weak ? ' <span class="badge badge-try">weak spot</span>' : "") + "</span>" +
-          '<div class="bar"><span style="width:' + pct + '%"></span></div>' +
-          '<span class="pct">' + s.solved + "/" + s.total + "</span></div>";
-      }).join("");
+      var rows = order.map(function (t) {
+        var s = topics[t];
+        return { topic: t, label: labels[t] || t, solved: s.solved, tried: s.tried,
+                 pct: s.tried ? Math.round(s.solved / s.tried * 100) : null };
+      });
+      var tried = rows.filter(function (r) { return r.tried > 0; })
+                      .sort(function (a, b) { return a.pct - b.pct || b.tried - a.tried; });
+      var untried = rows.filter(function (r) { return r.tried === 0; });
+      var html = "";
+      if (!tried.length) {
+        html = '<p class="hint">No attempts yet — solve a few exercises and your weak spots will surface here, weakest first.</p>' +
+               '<p><a class="btn btn-sm" href="practice.html">Start practicing →</a></p>';
+      } else {
+        var weakest = tried[0];
+        html += '<p class="weak-summary">🎯 Focus next: <strong>' + esc(weakest.label) + "</strong> (" + weakest.pct + "% of " + weakest.tried + " tried)" +
+          (tried.length > 1 ? ' · 💪 Strongest: <strong>' + esc(tried[tried.length - 1].label) + "</strong> (" + tried[tried.length - 1].pct + "%)" : "") + "</p>";
+        html += tried.map(function (r) {
+          var weak = r.tried >= 2 && r.pct < 60;
+          return '<div class="weak-row' + (weak ? " is-weak" : "") + '">' +
+            '<div class="weak-top"><span class="lbl">' + esc(r.label) +
+            (weak ? ' <span class="badge badge-try">weak spot</span>' : "") + "</span>" +
+            '<span class="pct">' + r.solved + "/" + r.tried + " · " + r.pct + "%</span></div>" +
+            '<div class="bar"><span style="width:' + r.pct + '%"></span></div>' +
+            '<a class="weak-link" href="practice.html#topic=' + r.topic + '">Practice ' + esc(r.label) + " →</a>" +
+            "</div>";
+        }).join("");
+      }
+      if (untried.length) {
+        html += '<p class="hint" style="margin-top:10px">Not tried yet: ' +
+          untried.map(function (r) { return esc(r.label); }).join(", ") + "</p>";
+      }
+      ta.innerHTML = html;
     }
 
     // (Certificates + downloadCert moved to profile.js — showcase lives on the profile)
