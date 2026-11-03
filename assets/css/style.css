@@ -35,6 +35,34 @@
   --code-bg: #101737;
 }
 
+/* ---------- Accent color themes (work in dark + light) ---------- */
+[data-accent="ocean"] {
+  --primary: #22d3ee; --primary-2: #38bdf8;
+  --accent: #6c7bff;
+  --gradient: linear-gradient(135deg, #22d3ee 0%, #38bdf8 55%, #6c7bff 130%);
+}
+[data-accent="sunset"] {
+  --primary: #fb923c; --primary-2: #f472b6;
+  --accent: #fbbf24;
+  --gradient: linear-gradient(135deg, #fb923c 0%, #f472b6 55%, #fbbf24 130%);
+}
+[data-accent="forest"] {
+  --primary: #34d399; --primary-2: #22d3ee;
+  --accent: #a3e635;
+  --gradient: linear-gradient(135deg, #34d399 0%, #22d3ee 55%, #a3e635 130%);
+}
+[data-accent="amethyst"] {
+  --primary: #9d6bff; --primary-2: #e879f9;
+  --accent: #6c7bff;
+  --gradient: linear-gradient(135deg, #9d6bff 0%, #e879f9 55%, #6c7bff 130%);
+}
+[data-accent="rose"] {
+  --primary: #fb7185; --primary-2: #f472b6;
+  --accent: #fda4af;
+  --gradient: linear-gradient(135deg, #fb7185 0%, #f472b6 55%, #fda4af 130%);
+}
+/* default "indigo" uses the :root values — no override needed */
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html { scroll-behavior: smooth; }
@@ -97,6 +125,32 @@ img { max-width: 100%; }
 }
 .icon-btn:hover { transform: translateY(-2px); }
 .hamburger { display: none; }
+
+/* ---------- Theme picker ---------- */
+.theme-picker-wrap { position: relative; display: inline-flex; }
+.theme-picker {
+  position: absolute; top: calc(100% + 10px); right: 0; z-index: 200;
+  background: var(--card); border: 1px solid var(--card-border);
+  border-radius: var(--radius); padding: 14px; min-width: 220px;
+  box-shadow: var(--shadow); display: none;
+}
+.theme-picker.open { display: block; }
+.theme-picker h4 { font-size: .72rem; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--muted); margin-bottom: 10px; font-weight: 700; }
+.theme-picker h4:not(:first-child) { margin-top: 14px; }
+.swatch-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.swatch {
+  width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent; transition: all .15s; padding: 0;
+}
+.swatch:hover { transform: scale(1.12); }
+.swatch.selected { border-color: var(--text); box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--text); }
+.mode-row { display: flex; gap: 8px; }
+.mode-btn {
+  flex: 1; padding: 9px; border-radius: 10px; border: 1px solid var(--card-border);
+  background: transparent; color: var(--muted); cursor: pointer; font-size: .82rem; font-weight: 600;
+}
+.mode-btn.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
 
 /* ---------- Buttons ---------- */
 .btn {
