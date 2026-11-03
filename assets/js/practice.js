@@ -506,8 +506,15 @@
   /* ---------------- Router + init ---------------- */
   function route() {
     var m = (location.hash || "").match(/^#ex=([\w-]+)/);
-    if (m) openExercise(m[1]);
-    else showList();
+    if (m) { openExercise(m[1]); return; }
+    // Deep link from dashboard weak spots: practice.html#topic=loops
+    var tm = (location.hash || "").match(/^#topic=([\w-]+)/);
+    if (tm && TOPICS.indexOf(tm[1]) >= 0) {
+      filters.topic = tm[1];
+      var th = $("filter-topic");
+      if (th) th.value = tm[1];
+    }
+    showList();
   }
 
   function initFilters() {
