@@ -1,34 +1,30 @@
 /* ============================================================
-   Skillzify v2 — compiler.js
-   Pyodide-powered Python compiler with:
-   - CodeMirror editor
-   - run with timing, stdout capture, input() support
-   - sample snippets
-   - AI Explain panel:
-       * offline heuristic explainer for common Python errors
-       * optional OpenAI-compatible API (key stored in
-         localStorage ONLY — never hardcoded)
-   Run history is stored for the dashboard ("skillzify_runs").
+   Skillzify v2 — compiler.js (Code Studio)
+   VS Code-like Python IDE:
+   - multi-file workspace (localStorage) with tabs + explorer
+   - Pyodide execution (all files visible to imports)
+   - terminal / problems / output-history panel
+   - search across files, find/replace, code history
+   - AI Generate / Explain / Fix via backend
    ============================================================ */
 (function () {
   "use strict";
 
+  var WS_KEY = "skillzify_ws";
   var RUNS_KEY = "skillzify_runs";
-  var AI_KEY = "skillzify_ai_key";
-  var AI_BASE_KEY = "skillzify_ai_base";
-  var AI_MODEL_KEY = "skillzify_ai_model";
   var HIST_KEY = "skillzify_code_history";
-  var THEME_KEY2 = "skillzify_cm_theme";
-  var FONT_KEY = "skillzify_cm_font";
+  var AI_KEY = "skillzify_ai_key";
+  var CM_THEME_KEY = "skillzify_cm_theme";
+  var CM_FONT_KEY = "skillzify_cm_font";
 
   var pyodide = null;
   var editor = null;
-  var lastCode = "";
+  var ws = null;               // {files:{}, tabs:[], active}
   var lastError = "";
-
-  /* run-output history (paged console) */
-  var outHistory = [];   // {html, ok, ms, t}
-  var outIdx = -1;
+  var runToken = 0;
+  var RUN_TIMEOUT_MS = 15000;
+  var outHistory = [];
+  var problems = [];
 
   var SNIPPETS = {
     hello: { name: "👋 Hello World", code: 'print("Hello, Skillzify!")\nname = input("Your name: ")\nprint(f"Welcome, {name}! 🎉")' },
@@ -43,536 +39,347 @@
     palindrome: { name: "🔤 Palindrome Check", code: 's = input("Enter a word: ")\nclean = "".join(c.lower() for c in s if c.isalnum())\nif clean == clean[::-1]:\n    print(f"\\"{s}\\" is a palindrome! 🎉")\nelse:\n    print(f"\\"{s}\\" is not a palindrome.")' }
   };
 
-  /* ---------- Pyodide loading ---------- */
-  function setStatus(state, text) {
-    var pill = document.getElementById("status-pill");
-    if (pill) { pill.className = "status-pill " + state; pill.textContent = text; }
+  var DEFAULT_CODE = 'print("Hello, Skillzify! 👋")\n# Press Ctrl+Enter to run this file\n# Create more files with ＋ in the Explorer';
+
+  /* ================= workspace ================= */
+  function loadWS() {
+    try {
+      var w = JSON.parse(localStorage.getItem(WS_KEY) || "null");
+      if (w && w.files && Object.keys(w.files).length) return w;
+    } catch (e) {}
+    return { files: { "main.py": DEFAULT_CODE }, tabs: ["main.py"], active: "main.py" };
+  }
+  function saveWS() {
+    try { localStorage.setItem(WS_KEY, JSON.stringify(ws)); } catch (e) {}
+  }
+  function persistActiveFile() {
+    if (ws.active && editor) ws.files[ws.active] = editor.getValue();
+  }
+  function validName(n) {
+    n = String(n || "").trim().replace(/[\/\\]/g, "");
+    if (!/^[A-Za-z0-9_][A-Za-z0-9_\-\.]{0,39}$/.test(n)) return null;
+    if (!n.endsWith(".py")) n += ".py";
+    return n;
   }
 
+  function renderExplorer() {
+    var host = document.getElementById("file-list");
+    var names = Object.keys(ws.files).sort();
+    host.innerHTML = names.map(function (n) {
+      return '<div class="file-item' + (n === ws.active ? " active" : "") + '" data-file="' + esc(n) + '">' +
+        '<span>🐍</span><span class="fname">' + esc(n) + '</span>' +
+        '<button class="fdel" data-del="' + esc(n) + '" title="Delete">✕</button></div>';
+    }).join("");
+    host.querySelectorAll(".file-item").forEach(function (el) {
+      el.addEventListener("click", function (e) {
+        if (e.target.hasAttribute("data-del")) return;
+        openFile(el.getAttribute("data-file"));
+      });
+    });
+    host.querySelectorAll("[data-del]").forEach(function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        deleteFile(b.getAttribute("data-del"));
+      });
+    });
+  }
+
+  function renderTabs() {
+    var host = document.getElementById("tabs");
+    host.innerHTML = ws.tabs.map(function (n) {
+      if (!ws.files.hasOwnProperty(n)) return "";
+      var dirty = editor && n === ws.active && editor.getValue() !== ws.files[n];
+      return '<div class="tab' + (n === ws.active ? " active" : "") + (dirty ? " dirty" : "") + '" data-tab="' + esc(n) + '">' +
+        '<span class="dot"></span><span>🐍 ' + esc(n) + '</span>' +
+        '<button class="x" data-close="' + esc(n) + '">✕</button></div>';
+    }).join("");
+    host.querySelectorAll(".tab").forEach(function (el) {
+      el.addEventListener("click", function (e) {
+        if (e.target.hasAttribute("data-close")) return;
+        openFile(el.getAttribute("data-tab"));
+      });
+    });
+    host.querySelectorAll("[data-close]").forEach(function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        closeTab(b.getAttribute("data-close"));
+      });
+    });
+    var bc = document.getElementById("breadcrumbs");
+    if (bc) bc.innerHTML = ws.active ? ("explorer <span class='sep'>›</span> " + esc(ws.active)) : "no file open";
+    var sf = document.getElementById("st-file");
+    if (sf) sf.textContent = ws.active || "—";
+    document.getElementById("welcome").style.display = ws.active ? "none" : "flex";
+  }
+
+  function openFile(name) {
+    if (!ws.files.hasOwnProperty(name)) return;
+    persistActiveFile();
+    ws.active = name;
+    if (ws.tabs.indexOf(name) < 0) ws.tabs.push(name);
+    if (editor) { editor.setValue(ws.files[name]); editor.focus(); }
+    saveWS(); renderExplorer(); renderTabs(); updateStatusBar();
+  }
+  function closeTab(name) {
+    persistActiveFile();
+    ws.tabs = ws.tabs.filter(function (t) { return t !== name; });
+    if (ws.active === name) ws.active = ws.tabs.length ? ws.tabs[ws.tabs.length - 1] : null;
+    if (editor) editor.setValue(ws.active ? ws.files[ws.active] : "");
+    saveWS(); renderExplorer(); renderTabs(); updateStatusBar();
+  }
+  function newFile() {
+    var n = prompt("New file name:", "script2.py");
+    if (n == null) return;
+    n = validName(n);
+    if (!n) { toast("Invalid name — use letters, numbers, _ or -", "error"); return; }
+    if (ws.files.hasOwnProperty(n)) { toast("File already exists", "error"); return; }
+    persistActiveFile();
+    ws.files[n] = "# " + n + "\n";
+    ws.tabs.push(n); ws.active = n;
+    if (editor) { editor.setValue(ws.files[n]); editor.focus(); }
+    saveWS(); renderExplorer(); renderTabs();
+    toast("Created " + n, "success");
+  }
+  function deleteFile(name) {
+    if (!confirm("Delete " + name + "?")) return;
+    persistActiveFile();
+    delete ws.files[name];
+    ws.tabs = ws.tabs.filter(function (t) { return t !== name; });
+    if (ws.active === name) ws.active = ws.tabs.length ? ws.tabs[ws.tabs.length - 1] : null;
+    if (!Object.keys(ws.files).length) { ws.files["main.py"] = DEFAULT_CODE; ws.tabs = ["main.py"]; ws.active = "main.py"; }
+    if (editor) editor.setValue(ws.active ? ws.files[ws.active] : "");
+    saveWS(); renderExplorer(); renderTabs(); updateStatusBar();
+  }
+
+  /* ================= helpers ================= */
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function toast(m, k) { if (window.Skillzify) window.Skillzify.toast(m, k); }
+  function currentCode() { return editor ? editor.getValue() : ""; }
+
+  /* ================= Pyodide ================= */
+  function setRunUI(running) {
+    document.getElementById("run-btn").disabled = running || !pyodide;
+    document.getElementById("stop-btn").disabled = !running;
+    var sr = document.getElementById("st-run");
+    if (sr) sr.innerHTML = running ? "⏹" : "▶";
+  }
   function loadPyodideRuntime() {
-    setStatus("running", "Loading Python runtime…");
-    var script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js";
-    script.onload = function () {
-      window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/" })
-        .then(function (py) {
-          pyodide = py;
-          setStatus("ready", "Python ready ✓");
-          document.getElementById("run-btn").disabled = false;
-          printLine("✅ Python 3.11 runtime ready (Pyodide). Write code and press Run.", "dim");
-        })
-        .catch(function (err) {
-          setStatus("", "Failed to load");
-          printLine("❌ Could not load the Python runtime. Check your internet connection and reload.", "err");
-          console.error(err);
-        });
+    printLine("⏳ Loading Python 3.11 runtime…", "dim");
+    var s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js";
+    s.onload = function () {
+      window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/" }).then(function (py) {
+        pyodide = py;
+        printLine("✅ Python 3.11 ready (Pyodide). Press ▶ Run.", "dim");
+        setRunUI(false);
+        checkProblems(true);
+      }).catch(function (e) {
+        printLine("❌ Could not load the Python runtime. Check your connection and reload.", "err");
+      });
     };
-    script.onerror = function () {
-      setStatus("", "Failed to load");
-      printLine("❌ Could not download Pyodide. An internet connection is required.", "err");
-    };
-    document.head.appendChild(script);
+    s.onerror = function () { printLine("❌ Could not download Pyodide — internet required.", "err"); };
+    document.head.appendChild(s);
   }
 
-  /* ---------- Console ---------- */
+  /* ================= terminal ================= */
   function printLine(text, cls) {
     var con = document.getElementById("console");
-    var div = document.createElement("div");
-    if (cls) div.className = cls;
-    div.textContent = text;
-    con.appendChild(div);
+    var d = document.createElement("div");
+    if (cls) d.className = cls;
+    d.textContent = text;
+    con.appendChild(d);
     con.scrollTop = con.scrollHeight;
   }
-  function clearConsole() {
-    document.getElementById("console").innerHTML = "";
+  function clearTerminal() { document.getElementById("console").innerHTML = ""; }
+  function copyOutput() {
+    var t = document.getElementById("console").innerText;
+    if (navigator.clipboard) navigator.clipboard.writeText(t).then(function () { toast("Terminal output copied 📋", "success"); });
   }
-
-  /* ---------- stdin (input() support) ---------- */
   function makeStdin(lines) {
     var text = lines.join("\n") + (lines.length ? "\n" : "");
-    var idx = 0;
-    return {
-      stdin: function () {
-        if (idx >= text.length) return null; // EOF -> Python raises EOFError
-        return text.charCodeAt(idx++);
-      }
-    };
+    var i = 0;
+    return { stdin: function () { return i >= text.length ? null : text.charCodeAt(i++); } };
   }
 
-  /* ---------- Run (with stop + timeout) ---------- */
-  var runToken = 0;
-  var RUN_TIMEOUT_MS = 15000;
-
-  function setRunningUI(running) {
-    document.getElementById("run-btn").disabled = running;
-    var stop = document.getElementById("stop-btn");
-    if (stop) stop.disabled = !running;
-  }
-
+  /* ================= run ================= */
   function runCode() {
-    if (!pyodide) { window.Skillzify.toast("Python runtime is still loading…", "error"); return; }
-    var code = editor ? editor.getValue() : document.getElementById("code-fallback").value;
-    lastCode = code;
-    var inputText = document.getElementById("program-input").value;
+    if (!pyodide) { toast("Python runtime is still loading…", "error"); return; }
+    if (!ws.active) { toast("Open a file first", "error"); return; }
+    persistActiveFile();
+    saveWS();
+    var code = ws.files[ws.active];
+    var inputText = document.getElementById("terminal-input").value;
     var lines = inputText.split("\n");
-    // Drop a single trailing empty line from the textarea
     if (lines.length && lines[lines.length - 1] === "") lines.pop();
 
-    clearConsole();
-    setStatus("running", "Running…");
-    setRunningUI(true);
+    switchPtab("terminal");
+    clearTerminal();
+    setRunUI(true);
+    printLine("$ python " + ws.active, "dim");
+
+    // make every workspace file importable
+    try {
+      Object.keys(ws.files).forEach(function (n) {
+        try { pyodide.FS.writeFile(n, ws.files[n]); } catch (e) {}
+      });
+    } catch (e) {}
 
     var out = [];
     pyodide.setStdout({ batched: function (s) { out.push(s); } });
     pyodide.setStderr({ batched: function (s) { out.push(s); } });
-    try { pyodide.setStdin(makeStdin(lines)); } catch (e) { /* older builds */ }
+    try { pyodide.setStdin(makeStdin(lines)); } catch (e) {}
 
-    var myToken = ++runToken;
+    var my = ++runToken;
     var t0 = performance.now();
     var timer = setTimeout(function () {
-      if (myToken !== runToken) return;
-      runToken++; // abandon the runaway execution
+      if (my !== runToken) return;
+      runToken++;
       out.forEach(function (l) { printLine(l); });
-      printLine("———\n⏱ Stopped: your program ran over 15 seconds — likely an infinite loop. The output above is what it printed before the cutoff.", "err");
-      recordRun(false, RUN_TIMEOUT_MS);
-      setStatus("ready", "Python ready ✓");
-      setRunningUI(false);
+      printLine("⏱ Stopped: ran over 15s — likely an infinite loop.", "err");
+      pushOutHist(false, 15000);
+      recordRun(false, 15000);
+      setRunUI(false);
     }, RUN_TIMEOUT_MS);
 
-    var promise;
-    try {
-      promise = pyodide.runPythonAsync(code);
-    } catch (err) {
-      promise = Promise.reject(err);
-    }
-
-    promise.then(function () {
-      if (myToken !== runToken) return; // abandoned (stop/timeout)
+    var p;
+    try { p = pyodide.runPythonAsync(code); } catch (e) { p = Promise.reject(e); }
+    p.then(function () {
+      if (my !== runToken) return;
       clearTimeout(timer);
       var ms = Math.round(performance.now() - t0);
       out.forEach(function (l) { printLine(l); });
-      printLine("———\n✅ Finished in " + ms + " ms", "ok-meta");
+      printLine("✅ Finished in " + ms + " ms", "ok-meta");
       lastError = "";
-      pushOutputHistory(true, ms);
+      pushOutHist(true, ms);
       recordRun(true, ms);
       saveCodeHistory();
-      setStatus("ready", "Python ready ✓");
-    }).catch(function (err) {
-      if (myToken !== runToken) return; // abandoned (stop/timeout)
+      checkProblems(true);
+      setRunUI(false);
+    }).catch(function (e) {
+      if (my !== runToken) return;
       clearTimeout(timer);
       var ms = Math.round(performance.now() - t0);
-      var msg = String(err && err.message ? err.message : err);
-      // Strip Python's noisy traceback down to the last error line + context
-      var short = simplifyTraceback(msg);
+      var short = simplifyTraceback(String((e && e.message) || e));
       out.forEach(function (l) { printLine(l); });
       printLine(short, "err");
-      printLine("———\n❌ Error after " + ms + " ms — see AI Explain →", "err");
+      printLine("❌ Error after " + ms + " ms — see PROBLEMS or ask AI →", "err");
       lastError = short;
-      pushOutputHistory(false, ms);
+      pushOutHist(false, ms);
       recordRun(false, ms);
       saveCodeHistory();
-      setStatus("ready", "Python ready ✓");
-    }).finally(function () {
-      if (myToken !== runToken) return;
-      setRunningUI(false);
+      checkProblems(true);
+      setRunUI(false);
     });
   }
-
-  /* ---------- paged run-output history ---------- */
-  function pushOutputHistory(ok, ms) {
-    var con = document.getElementById("console");
-    outHistory.push({ html: con.innerHTML, ok: ok, ms: ms, t: Date.now(), code: lastCode });
-    if (outHistory.length > 20) outHistory.shift();
-    outIdx = outHistory.length - 1;
-    updateRunPager();
-  }
-  function updateRunPager() {
-    var n = outHistory.length;
-    document.getElementById("run-page").textContent = n ? ("Run " + (outIdx + 1) + "/" + n) : "Run 0/0";
-    document.getElementById("run-prev").disabled = !(n && outIdx > 0);
-    document.getElementById("run-next").disabled = !(n && outIdx < n - 1);
-  }
-  function showOutputAt(i) {
-    if (i < 0 || i >= outHistory.length) return;
-    outIdx = i;
-    document.getElementById("console").innerHTML = outHistory[i].html;
-    updateRunPager();
-  }
-  function copyOutput() {
-    var text = document.getElementById("console").innerText;
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () {
-        window.Skillzify.toast("Output copied 📋", "success");
-      });
-    } else { fallbackCopy(text); window.Skillzify.toast("Output copied 📋", "success"); }
-  }
-
   function stopRun() {
-    if (runToken === 0) return;
-    runToken++; // abandon current execution
-    printLine("———\n⏹ Stopped by user.", "err");
-    setStatus("ready", "Python ready ✓");
-    setRunningUI(false);
-  }
-
-  /* ---------- Share via link + download ---------- */
-  function currentCode() {
-    return editor ? editor.getValue() : document.getElementById("code-fallback").value;
-  }
-  function b64urlEncode(s) {
-    return btoa(unescape(encodeURIComponent(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  }
-  function b64urlDecode(s) {
-    s = s.replace(/-/g, "+").replace(/_/g, "/");
-    while (s.length % 4) s += "=";
-    return decodeURIComponent(escape(atob(s)));
-  }
-  function shareCode() {
-    var hash = "#code=" + b64urlEncode(currentCode());
-    try { history.replaceState(null, "", hash); } catch (e) {}
-    var url = location.href.split("#")[0] + hash;
-    function done() { window.Skillzify.toast("Share link copied! 🔗", "success"); }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).then(done, function () { fallbackCopy(url); done(); });
-    } else { fallbackCopy(url); done(); }
-  }
-  function fallbackCopy(text) {
-    var ta = document.createElement("textarea");
-    ta.value = text;
-    document.body.appendChild(ta); ta.select();
-    try { document.execCommand("copy"); } catch (e) {}
-    ta.remove();
-  }
-  function loadSharedCode() {
-    var m = (location.hash || "").match(/^#code=(.+)$/);
-    if (!m) return false;
-    try {
-      var code = b64urlDecode(m[1]);
-      if (editor) editor.setValue(code);
-      else document.getElementById("code-fallback").value = code;
-      return true;
-    } catch (e) { return false; }
-  }
-  function downloadCode() {
-    var blob = new Blob([currentCode()], { type: "text/x-python" });
-    var a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "skillzify.py";
-    document.body.appendChild(a); a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-    window.Skillzify.toast("Downloaded skillzify.py ⬇️", "success");
+    if (!runToken) return;
+    runToken++;
+    printLine("⏹ Stopped by user.", "err");
+    setRunUI(false);
   }
 
   function simplifyTraceback(msg) {
     var lines = msg.split("\n").filter(function (l) { return l.trim() !== ""; });
-    // Keep File lines + the final error line(s)
-    var kept = [];
-    lines.forEach(function (l) {
-      if (/File "<exec>"/.test(l) || /Error|Exception|error/i.test(l) || /^\s*\^/.test(l) || /line \d+/.test(l)) kept.push(l);
+    var kept = lines.filter(function (l) {
+      return /File "<exec>"/.test(l) || /Error|Exception/i.test(l) || /^\s*\^/.test(l) || /line \d+/.test(l);
     });
     var tail = kept.slice(-6);
     return tail.length ? tail.join("\n") : lines.slice(-3).join("\n");
   }
 
   function recordRun(ok, ms) {
-    var runs = window.Skillzify.storeGet(RUNS_KEY, []);
-    runs.unshift({
-      t: Date.now(),
-      ok: ok,
-      ms: ms,
-      preview: lastCode.split("\n")[0].slice(0, 60) || "(empty)"
-    });
-    runs = runs.slice(0, 30);
-    window.Skillzify.storeSet(RUNS_KEY, runs);
+    try {
+      var runs = window.Skillzify.storeGet(RUNS_KEY, []);
+      runs.unshift({ t: Date.now(), ok: ok, ms: ms, preview: (ws.active || "") + " · " + String(ws.files[ws.active] || "").split("\n")[0].slice(0, 50) });
+      window.Skillzify.storeSet(RUNS_KEY, runs.slice(0, 30));
+      if (window.SkillzifyActivity) window.SkillzifyActivity.log("run", "Ran " + (ws.active || "code"));
+    } catch (e) {}
     bumpStreak();
-    if (window.SkillzifyActivity) window.SkillzifyActivity.log("run", "Ran code (" + (ok ? "success" : "error") + ", " + ms + "ms)");
   }
-
   function bumpStreak() {
-    var s = window.Skillzify.storeGet("skillzify_streak", { last: null, count: 0 });
-    // Accept both legacy toDateString() and synced yyyy-MM-dd formats.
-    function isoDay(d) { var m = d.getMonth() + 1, dy = d.getDate(); return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (dy < 10 ? "0" + dy : dy); }
-    function normDay(v) {
-      if (!v) return null;
-      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-      var t = new Date(v);
-      return isNaN(t.getTime()) ? null : isoDay(t);
-    }
-    var todayIso = isoDay(new Date());
-    var yestIso = isoDay(new Date(Date.now() - 864e5));
-    var lastIso = normDay(s.last);
-    if (lastIso === todayIso) return;
-    s.count = (lastIso === yestIso) ? s.count + 1 : 1;
-    s.last = todayIso;
-    window.Skillzify.storeSet("skillzify_streak", s);
-    if (window.SkillzifySync) window.SkillzifySync.markDirty();
+    try {
+      var s = window.Skillzify.storeGet("skillzify_streak", { last: null, count: 0 });
+      function iso(d) { var m = d.getMonth() + 1, dy = d.getDate(); return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (dy < 10 ? "0" + dy : dy); }
+      var t = iso(new Date()), y = iso(new Date(Date.now() - 864e5));
+      if (s.last === t) return;
+      s.count = (s.last === y) ? s.count + 1 : 1;
+      s.last = t;
+      window.Skillzify.storeSet("skillzify_streak", s);
+      if (window.SkillzifySync) window.SkillzifySync.markDirty();
+    } catch (e) {}
   }
 
-  /* ---------- AI Explain (offline heuristics) ---------- */
-  var HEURISTICS = [
-    { re: /SyntaxError/, title: "🔧 SyntaxError — Python can't parse your code",
-      tips: ["Check for missing colons (:) at the end of if/for/while/def lines.", "Match every opening bracket ( [ { with its closing partner.", "Look at the line number in the error — the real mistake is often on the line just above it."] },
-    { re: /IndentationError|unexpected indent/, title: "📐 IndentationError — spacing problem",
-      tips: ["Use 4 spaces per indent level — never mix tabs and spaces.", "Every block after if/for/def/while must be indented one level deeper.", "An 'unexpected indent' means a line is indented with no block above it."] },
-    { re: /NameError: name '(\w+)'/, title: "🏷️ NameError — unknown name",
-      tips: ["You used a variable or function that was never defined.", "Check for typos — 'print' vs 'Print' matters (Python is case-sensitive).", "Make sure the variable is assigned BEFORE the line that uses it."] },
-    { re: /TypeError/, title: "🧩 TypeError — wrong type of value",
-      tips: ["You're mixing incompatible types, e.g. \"5\" + 3 (string + number).", "Convert explicitly: int(\"5\") + 3.", "If calling a function, check you passed the right number of arguments."] },
-    { re: /ZeroDivisionError/, title: "➗ ZeroDivisionError — divided by zero",
-      tips: ["Guard the division: if b != 0: ...", "Or handle it: try: x = a/b except ZeroDivisionError: ..."] },
-    { re: /IndexError/, title: "📋 IndexError — list index out of range",
-      tips: ["Valid indexes are 0 to len(list)-1.", "Check loop bounds — range(len(items)) is the safe pattern.", "An empty list has no index 0!"] },
-    { re: /KeyError: (.+)/, title: "🔑 KeyError — missing dictionary key",
-      tips: ["The key doesn't exist in the dict.", "Use dict.get(key, default) to avoid crashes.", "Check spelling/case of the key."] },
-    { re: /ValueError/, title: "⚠️ ValueError — right type, wrong value",
-      tips: ["Common cause: int(input()) when the user typed text.", "Validate input first, or wrap in try/except ValueError."] },
-    { re: /AttributeError: '(\w+)' object has no attribute '(\w+)'/, title: "🧲 AttributeError — no such method/attribute",
-      tips: ["The object doesn't have that method — check the type.", "E.g. append() exists on lists, not strings.", "Typos in method names are the #1 cause."] },
-    { re: /ImportError|ModuleNotFoundError/, title: "📦 ImportError — module not found",
-      tips: ["The module isn't installed in this Pyodide environment.", "Only the Python standard library + Pyodide packages work here.", "Check the module name spelling."] },
-    { re: /EOFError/, title: "⌨️ EOFError — input() ran out of data",
-      tips: ["Your program called input() more times than you provided input lines.", "Add more lines in the 'Program input' box below the editor."] },
-    { re: /RecursionError/, title: "🔁 RecursionError — infinite recursion",
-      tips: ["Your function calls itself forever.", "Every recursive function needs a base case that stops."] }
-  ];
+  /* ================= output history tab ================= */
+  function pushOutHist(ok, ms) {
+    outHistory.unshift({
+      t: Date.now(), ok: ok, ms: ms, file: ws.active,
+      html: esc(document.getElementById("console").innerText).slice(0, 4000)
+    });
+    outHistory = outHistory.slice(0, 20);
+    renderOutHist();
+  }
+  function renderOutHist() {
+    var host = document.getElementById("outhist-list");
+    if (!outHistory.length) { host.innerHTML = '<div class="empty-note">No runs yet — output history appears here.</div>'; return; }
+    host.innerHTML = outHistory.map(function (r) {
+      return '<div class="oh-item"><div class="meta"><span class="' + (r.ok ? "badge-ok" : "badge-err") + '">' +
+        (r.ok ? "✅" : "❌") + '</span><span>' + esc(r.file || "") + '</span><span>' +
+        new Date(r.t).toLocaleTimeString() + '</span><span>' + r.ms + ' ms</span></div><pre>' + r.html + '</pre></div>';
+    }).join("");
+  }
 
-  function heuristicExplain(errText, code) {
-    for (var i = 0; i < HEURISTICS.length; i++) {
-      var h = HEURISTICS[i];
-      var m = errText.match(h.re);
-      if (m) {
-        var html = "<h4>" + h.title + "</h4><ul>";
-        h.tips.forEach(function (t) { html += "<li>" + t + "</li>"; });
-        html += "</ul>";
-        if (m[1]) html += '<p class="hint">Offending name: <span class="kbd">' + window.Skillzify.esc(m[1]) + "</span></p>";
-        return html;
+  /* ================= problems tab ================= */
+  function checkProblems(silent) {
+    problems = [];
+    if (pyodide && ws.active) {
+      var code = ws.files[ws.active];
+      try {
+        pyodide.runPython("compile(" + JSON.stringify(code) + ", '<editor>', 'exec')");
+      } catch (e) {
+        var msg = String((e && e.message) || e);
+        var m = msg.match(/line (\d+)/);
+        problems.push({ file: ws.active, line: m ? +m[1] : null, msg: simplifyTraceback(msg).split("\n").slice(-2).join(" ") });
       }
     }
-    return "<h4>🤔 Unrecognized error</h4><p>The offline explainer doesn't have a rule for this one yet. " +
-      "Read the last line of the traceback — it names the error type — or paste an API key below for a real AI explanation.</p>";
+    renderProblems();
+    if (!silent) switchPtab("problems");
+    return problems;
   }
-
-  function renderAiBox(html) {
-    document.getElementById("ai-output").innerHTML = html;
-  }
-
-  function explainLastError() {
-    if (!lastError) { renderAiBox('<p class="hint">Run some code first — when it errors, I\'ll explain it here.</p>'); return; }
-    aiExplainRemote(lastCode, lastError); // backend AI → own key → offline heuristic
-  }
-
-  function offlineCodeSummary(code) {
-    var lines = code.split("\n").filter(function (l) { return l.trim() && !l.trim().startsWith("#"); }).length;
-    var feats = [];
-    if (/def /.test(code)) feats.push("defines function(s)");
-    if (/class /.test(code)) feats.push("uses classes");
-    if (/for |while /.test(code)) feats.push("uses loops");
-    if (/import /.test(code)) feats.push("imports modules");
-    if (/input\(/.test(code)) feats.push("reads user input");
-    if (/try:/.test(code)) feats.push("handles errors");
-    return "<h4>📝 What your code does</h4><p>Your program has <strong>" + lines +
-      "</strong> line(s) of code" + (feats.length ? " and " + feats.join(", ") + "." : ".") +
-      '</p><p class="hint">Start the backend (or add your own key in Settings) for a full AI walkthrough.</p>';
-  }
-
-  function offlineExplain(code, errText) {
-    return errText ? heuristicExplain(errText, code) : offlineCodeSummary(code);
-  }
-
-  function explainCode() {
-    var code = editor ? editor.getValue() : "";
-    if (!code.trim()) { renderAiBox('<p class="hint">Write some code first, then ask for an explanation.</p>'); return; }
-    aiExplainRemote(code, null); // backend AI → own key → offline summary
-  }
-
-  /* ---------- Remote AI: backend first, own key as fallback ---------- */
-  function normBase(b) {
-    b = (b || "").replace(/\/+$/, "");
-    // Forgive the common mistake of pasting the bare Google endpoint:
-    if (/^https:\/\/generativelanguage\.googleapis\.com$/i.test(b)) b += "/v1beta/openai";
-    return b;
-  }
-  function aiExplainRemote(code, errText) {
-    renderAiBox('<p class="hint">🤖 Waking up the AI…</p>');
-    var ctrl = null, timer = null, stageTimer = null;
-    try {
-      ctrl = new AbortController();
-      // Never hang for minutes: give the backend 60s, then fall back fast.
-      timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 60000);
-      stageTimer = setTimeout(function () {
-        renderAiBox('<p class="hint">🤖 Still working — the AI backend is slow to wake on the free tier. Hang on…</p>');
-      }, 9000);
-    } catch (e) {}
-    function clearTimers() {
-      if (timer) clearTimeout(timer);
-      if (stageTimer) clearTimeout(stageTimer);
-    }
-    var opts = {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: code, error: errText || "" })
-    };
-    if (ctrl) opts.signal = ctrl.signal;
-    fetch("api/explain", opts).then(function (r) {
-      clearTimers();
-      if (!r.ok) throw 0;
-      return r.json();
-    }).then(function (data) {
-      if (!data.explanation) throw 0;
-      renderAiBox("<h4>🤖 AI explanation</h4><p>" +
-        window.Skillzify.esc(data.explanation).replace(/\n/g, "<br>") + "</p>");
-    }).catch(function () {
-      clearTimers();
-      aiExplainViaKey(code, errText); // no backend / not configured → own key → offline
-    });
-  }
-  function aiExplainViaKey(code, errText) {
-    var key = window.Skillzify.storeGet(AI_KEY, "");
-    if (!key) { renderAiBox(offlineExplain(code, errText)); return; }
-    var base = normBase(window.Skillzify.storeGet(AI_BASE_KEY, "") || "https://generativelanguage.googleapis.com/v1beta/openai");
-    var model = window.Skillzify.storeGet(AI_MODEL_KEY, "") || "gemini-3.8-flash";
-    var prompt = errText
-      ? "A student ran this Python code and got this error. Explain the error in simple terms and how to fix it:\n\nCODE:\n" + code + "\n\nERROR:\n" + errText
-      : "Explain this Python code to a beginner student, briefly, concept by concept:\n\n" + code;
-    renderAiBox('<p class="hint">🤖 Asking AI…</p>');
-    fetch(base + "/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
-      body: JSON.stringify({
-        model: model,
-        messages: [
-          { role: "system", content: "You are a friendly Python tutor for a beginner student. Format every answer like this: 1. One line starting with 'In short:' stating what the program does. 2. A Walkthrough section explaining the important parts step by step (group repetitive lines; explain WHY each part exists). 3. A Key concepts section listing each Python idea used with one short line each. Keep it concise, use short bullet points." },
-          { role: "user", content: prompt }
-        ],
-        max_tokens: 600,
-        temperature: 0.4
-      })
-    }).then(function (r) {
-      if (!r.ok) throw new Error("API returned HTTP " + r.status);
-      return r.json();
-    }).then(function (data) {
-      var text = (data.choices && data.choices[0] && data.choices[0].message)
-        ? data.choices[0].message.content : "(empty response)";
-      renderAiBox("<h4>🤖 AI explanation</h4><p>" +
-        window.Skillzify.esc(text).replace(/\n/g, "<br>") + "</p>");
-    }).catch(function (err) {
-      renderAiBox('<h4>⚠️ AI request failed</h4><p class="hint">' +
-        window.Skillzify.esc(err.message) +
-        ". Falling back to the offline explainer:</p>" +
-        (errText ? heuristicExplain(errText, code) : ""));
-      console.error(err);
-    });
-  }
-
-  /* ---------- Settings ---------- */
-  function initSettings() {
-    var keyEl = document.getElementById("ai-key");
-    var baseEl = document.getElementById("ai-base");
-    var modelEl = document.getElementById("ai-model");
-    var statusEl = document.getElementById("ai-status");
-    keyEl.value = window.Skillzify.storeGet(AI_KEY, "");
-    baseEl.value = window.Skillzify.storeGet(AI_BASE_KEY, "");
-    modelEl.value = window.Skillzify.storeGet(AI_MODEL_KEY, "");
-    function setStatus(msg) { if (statusEl) statusEl.textContent = msg; }
-    var presetGemini = document.getElementById("ai-preset-gemini");
-    if (presetGemini) presetGemini.addEventListener("click", function () {
-      baseEl.value = "https://generativelanguage.googleapis.com/v1beta/openai";
-      modelEl.value = "gemini-3.8-flash";
-      setStatus("✨ Gemini preset loaded — now paste your free API key below.");
-    });
-    var presetOpenai = document.getElementById("ai-preset-openai");
-    if (presetOpenai) presetOpenai.addEventListener("click", function () {
-      baseEl.value = "https://api.openai.com/v1";
-      modelEl.value = "gpt-4o-mini";
-      setStatus("OpenAI preset loaded — paste your API key below.");
-    });
-    document.getElementById("ai-save").addEventListener("click", function () {
-      window.Skillzify.storeSet(AI_KEY, keyEl.value.trim());
-      window.Skillzify.storeSet(AI_BASE_KEY, baseEl.value.trim());
-      window.Skillzify.storeSet(AI_MODEL_KEY, modelEl.value.trim());
-      setStatus("🔑 Saved. Hit “Test key” to verify it works.");
-      window.Skillzify.toast("AI settings saved in this browser 🔑", "success");
-    });
-    var testBtn = document.getElementById("ai-test");
-    if (testBtn) testBtn.addEventListener("click", function () {
-      var key = keyEl.value.trim();
-      var base = normBase(baseEl.value.trim() || "https://generativelanguage.googleapis.com/v1beta/openai");
-      var model = modelEl.value.trim() || "gemini-3.8-flash";
-      if (!key) { setStatus("⚠️ Paste your API key first."); return; }
-      setStatus("🔄 Testing your key…");
-      fetch(base + "/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
-        body: JSON.stringify({
-          model: model,
-          messages: [{ role: "user", content: "Reply with exactly: OK" }],
-          max_tokens: 10
-        })
-      }).then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status + " — check the key, base URL and model, then try again.");
-        return r.json();
-      }).then(function () {
-        setStatus("✅ Key works! “Explain last error” and “Explain my code” are now fully smart.");
-        window.Skillzify.toast("API key verified ✅", "success");
-      }).catch(function (err) {
-        setStatus("❌ " + err.message);
+  function renderProblems() {
+    var badge = document.getElementById("prob-badge");
+    var btn = document.getElementById("st-check");
+    badge.style.display = problems.length ? "" : "none";
+    badge.textContent = problems.length;
+    if (btn) btn.textContent = "✓ " + problems.length + " problem" + (problems.length === 1 ? "" : "s");
+    var host = document.getElementById("problems-list");
+    if (!problems.length) { host.innerHTML = '<div class="empty-note">✅ No problems detected in ' + esc(ws.active || "—") + '.</div>'; return; }
+    host.innerHTML = problems.map(function (p, i) {
+      return '<div class="prob-item" data-prob="' + i + '"><span>🔴</span>' +
+        '<span class="pl">' + esc(p.file) + (p.line ? ":" + p.line : "") + '</span>' +
+        '<span class="pm">' + esc(p.msg) + '</span></div>';
+    }).join("");
+    host.querySelectorAll("[data-prob]").forEach(function (el) {
+      el.addEventListener("click", function () {
+        var p = problems[+el.getAttribute("data-prob")];
+        if (p && p.line && editor) {
+          editor.setCursor({ line: p.line - 1, ch: 0 });
+          editor.focus();
+        }
       });
     });
-    document.getElementById("ai-clear").addEventListener("click", function () {
-      ["ai-key", "ai-base", "ai-model"].forEach(function (id) { document.getElementById(id).value = ""; });
-      window.Skillzify.storeSet(AI_KEY, "");
-      window.Skillzify.storeSet(AI_BASE_KEY, "");
-      window.Skillzify.storeSet(AI_MODEL_KEY, "");
-      setStatus("");
-      window.Skillzify.toast("API key removed.", "success");
+  }
+
+  /* ================= panel tabs ================= */
+  function switchPtab(name) {
+    document.querySelectorAll(".ptab").forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-ptab") === name);
+    });
+    document.querySelectorAll(".pview").forEach(function (v) {
+      v.classList.toggle("active", v.id === "pview-" + name);
     });
   }
 
-  /* ---------- local code history (auto-saved versions) ---------- */
-  function saveCodeHistory() {
-    var code = currentCode().trim();
-    if (!code) return;
-    var h = window.Skillzify.storeGet(HIST_KEY, []);
-    if (h.length && h[0].code === code) return; // unchanged since last save
-    h.unshift({ t: Date.now(), code: code, lines: code.split("\n").length });
-    h = h.slice(0, 30);
-    window.Skillzify.storeSet(HIST_KEY, h);
-  }
-  function openHistory() {
-    var h = window.Skillzify.storeGet(HIST_KEY, []);
-    var host = document.getElementById("hist-list");
-    if (!h.length) { host.innerHTML = '<p class="hint" style="padding:20px">No saved versions yet — run some code and versions will appear here automatically.</p>'; }
-    else {
-      host.innerHTML = h.map(function (v, i) {
-        return '<div class="hist-item"><div class="meta">' +
-          new Date(v.t).toLocaleString() + ' · ' + v.lines + ' lines</div>' +
-          '<pre>' + esc(v.code.slice(0, 300)) + (v.code.length > 300 ? "…" : "") + '</pre>' +
-          '<div class="row"><button class="btn btn-sm" data-restore="' + i + '">Restore this version</button>' +
-          '<button class="btn btn-sm btn-ghost" data-delhist="' + i + '">Delete</button></div></div>';
-      }).join("");
-      host.querySelectorAll("[data-restore]").forEach(function (b) {
-        b.addEventListener("click", function () {
-          var v = window.Skillzify.storeGet(HIST_KEY, [])[+b.getAttribute("data-restore")];
-          if (v) {
-            if (editor) editor.setValue(v.code); else document.getElementById("code-fallback").value = v.code;
-            document.getElementById("hist-modal").classList.remove("on");
-            window.Skillzify.toast("Version restored 🕘", "success");
-          }
-        });
-      });
-      host.querySelectorAll("[data-delhist]").forEach(function (b) {
-        b.addEventListener("click", function () {
-          var hh = window.Skillzify.storeGet(HIST_KEY, []);
-          hh.splice(+b.getAttribute("data-delhist"), 1);
-          window.Skillzify.storeSet(HIST_KEY, hh);
-          openHistory();
-        });
-      });
-    }
-    document.getElementById("hist-modal").classList.add("on");
-  }
-
-  /* ---------- find & replace ---------- */
+  /* ================= find & replace ================= */
   var findState = { cursor: null, query: "" };
   function openFind(replaceMode) {
     var bar = document.getElementById("findbar");
@@ -583,7 +390,7 @@
     var fi = document.getElementById("find-input");
     if (editor && editor.getSelection()) fi.value = editor.getSelection();
     fi.focus(); fi.select();
-    if (fi.value) doFind(1);
+    if (fi.value) { findState.query = ""; doFind(1); }
   }
   function closeFind() {
     document.getElementById("findbar").classList.remove("on");
@@ -600,17 +407,15 @@
       findState.cursor = editor.getSearchCursor(q, editor.getCursor(), { caseFold: true });
     }
     var found = dir > 0 ? findState.cursor.findNext() : findState.cursor.findPrevious();
-    if (!found) { // wrap around
-      findState.cursor = editor.getSearchCursor(q, dir > 0 ? { line: 0, ch: 0 } : editor.getCursor(), { caseFold: true });
+    if (!found) {
+      findState.cursor = editor.getSearchCursor(q, dir > 0 ? { line: 0, ch: 0 } : editor.lastLine(), { caseFold: true });
       found = dir > 0 ? findState.cursor.findNext() : findState.cursor.findPrevious();
     }
     if (found) {
       editor.setSelection(findState.cursor.from(), findState.cursor.to());
       editor.scrollIntoView({ from: findState.cursor.from(), to: findState.cursor.to() }, 60);
-      document.getElementById("find-count").textContent = "match ✓";
-    } else {
-      document.getElementById("find-count").textContent = "no matches";
-    }
+      document.getElementById("find-count").textContent = "✓ match";
+    } else document.getElementById("find-count").textContent = "no matches";
   }
   function doReplace(all) {
     if (!editor || !findState.cursor) return;
@@ -620,159 +425,264 @@
     if (all) {
       var cur = editor.getSearchCursor(q, { line: 0, ch: 0 }, { caseFold: true });
       var n = 0;
-      editor.operation(function () {
-        while (cur.findNext()) { cur.replace(rep); n++; }
-      });
+      editor.operation(function () { while (cur.findNext()) { cur.replace(rep); n++; } });
       document.getElementById("find-count").textContent = n + " replaced";
       findState.cursor = null;
     } else {
-      if (findState.cursor.from && editor.getSelection()) {
-        findState.cursor.replace(rep);
-        document.getElementById("find-count").textContent = "replaced ✓";
-      }
+      if (editor.getSelection()) { findState.cursor.replace(rep); }
       doFind(1);
     }
   }
 
-  /* ---------- editor theme + font size ---------- */
-  function applyCmTheme(t) {
-    if (editor) editor.setOption("theme", t);
-    try { localStorage.setItem(THEME_KEY2, t); } catch (e) {}
-    var sel = document.getElementById("theme-select");
-    if (sel) sel.value = t;
+  /* ================= search across files ================= */
+  function searchFiles(q) {
+    var host = document.getElementById("search-results");
+    q = (q || "").trim();
+    if (!q) { host.innerHTML = ""; return; }
+    var ql = q.toLowerCase(), hits = [];
+    Object.keys(ws.files).forEach(function (name) {
+      ws.files[name].split("\n").forEach(function (line, i) {
+        if (line.toLowerCase().indexOf(ql) >= 0) hits.push({ f: name, l: i + 1, t: line.trim().slice(0, 80) });
+      });
+    });
+    host.innerHTML = hits.length
+      ? hits.slice(0, 100).map(function (h) {
+          return '<div class="search-hit" data-f="' + esc(h.f) + '" data-l="' + h.l + '">' +
+            '<div class="sf">' + esc(h.f) + '</div><div class="sl">line ' + h.l + ': ' + esc(h.t) + '</div></div>';
+        }).join("")
+      : '<div class="empty-note">No matches for "' + esc(q) + '"</div>';
+    host.querySelectorAll(".search-hit").forEach(function (el) {
+      el.addEventListener("click", function () {
+        openFile(el.getAttribute("data-f"));
+        var ln = +el.getAttribute("data-l") - 1;
+        if (editor) { editor.setCursor({ line: ln, ch: 0 }); editor.focus(); }
+      });
+    });
   }
-  function applyCmFont(px) {
-    px = Math.max(10, Math.min(24, px));
-    var host = document.getElementById("editor-host");
-    if (host) host.querySelector(".CodeMirror").style.fontSize = px + "px";
-    if (editor) editor.refresh();
-    try { localStorage.setItem(FONT_KEY, String(px)); } catch (e) {}
+
+  /* ================= code history ================= */
+  function saveCodeHistory() {
+    if (!ws.active) return;
+    var code = ws.files[ws.active].trim();
+    if (!code) return;
+    try {
+      var h = window.Skillzify.storeGet(HIST_KEY, []);
+      if (h.length && h[0].code === code && h[0].file === ws.active) return;
+      h.unshift({ t: Date.now(), file: ws.active, code: code });
+      window.Skillzify.storeSet(HIST_KEY, h.slice(0, 30));
+      renderHistory();
+    } catch (e) {}
   }
-  function cmFont() {
-    try { return parseInt(localStorage.getItem(FONT_KEY) || "14", 10) || 14; } catch (e) { return 14; }
+  function renderHistory() {
+    var host = document.getElementById("hist-list");
+    var h = [];
+    try { h = window.Skillzify.storeGet(HIST_KEY, []); } catch (e) {}
+    if (!host) return;
+    host.innerHTML = h.length ? h.map(function (v, i) {
+      return '<div class="hist-item-ide"><div class="meta">' + esc(v.file || "") + " · " +
+        new Date(v.t).toLocaleString() + '</div><pre>' + esc(v.code.slice(0, 200)) +
+        (v.code.length > 200 ? "…" : "") + '</pre><div class="row">' +
+        '<button class="mini-btn primary" data-rh="' + i + '">Restore</button>' +
+        '<button class="mini-btn" data-dh="' + i + '">Delete</button></div></div>';
+    }).join("") : '<div class="empty-note">No saved versions yet.</div>';
+    host.querySelectorAll("[data-rh]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var v = window.Skillzify.storeGet(HIST_KEY, [])[+b.getAttribute("data-rh")];
+        if (v && ws.files.hasOwnProperty(v.file)) { openFile(v.file); editor.setValue(v.code); persistActiveFile(); saveWS(); renderTabs(); toast("Version restored 🕘", "success"); }
+      });
+    });
+    host.querySelectorAll("[data-dh]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var hh = window.Skillzify.storeGet(HIST_KEY, []);
+        hh.splice(+b.getAttribute("data-dh"), 1);
+        window.Skillzify.storeSet(HIST_KEY, hh);
+        renderHistory();
+      });
+    });
   }
+
+  /* ================= status bar / editor prefs ================= */
   function updateStatusBar() {
     if (!editor) return;
     var c = editor.getCursor();
-    document.getElementById("cursor-pos").textContent = "Ln " + (c.line + 1) + ", Col " + (c.ch + 1);
-    var lines = editor.lineCount();
-    document.getElementById("code-stats").textContent = lines + " line" + (lines === 1 ? "" : "s");
+    document.getElementById("st-pos").textContent = "Ln " + (c.line + 1) + ", Col " + (c.ch + 1);
+    // refresh dirty dot without full re-render
+    if (ws.active) {
+      var tab = document.querySelector('.tab[data-tab="' + ws.active.replace(/"/g, "") + '"]');
+      if (tab) tab.classList.toggle("dirty", editor.getValue() !== ws.files[ws.active]);
+    }
+  }
+  function applyTheme(t) {
+    if (editor) editor.setOption("theme", t);
+    try { localStorage.setItem(CM_THEME_KEY, t); } catch (e) {}
+    var sel = document.getElementById("theme-select");
+    if (sel) sel.value = t;
+    var st = document.getElementById("st-theme");
+    if (st) st.textContent = t.charAt(0).toUpperCase() + t.slice(1).replace("-darker", "");
+  }
+  function applyFont(px) {
+    px = Math.max(10, Math.min(24, px));
+    var cm = document.querySelector("#editor-host .CodeMirror");
+    if (cm) cm.style.fontSize = px + "px";
+    if (editor) editor.refresh();
+    try { localStorage.setItem(CM_FONT_KEY, String(px)); } catch (e) {}
+    var fv = document.getElementById("fs-val");
+    if (fv) fv.textContent = px + "px";
+  }
+  function curFont() {
+    try { return parseInt(localStorage.getItem(CM_FONT_KEY) || "14", 10) || 14; } catch (e) { return 14; }
   }
 
-  /* ---------- AI Generate + Fix ---------- */
-  function aiGenerate() {
-    var desc = prompt("Describe what you want the code to do:", "a function that checks if a number is prime");
-    if (desc == null || !desc.trim()) return;
-    renderAiBox('<p class="hint">✨ Generating code…</p>');
-    aiRemote({ mode: "generate", code: desc.trim() }, function (html) {
-      renderAiBox(html);
-    }, function (code) {
-      // on success, load the generated code into the editor
-      if (editor) editor.setValue(code);
-      else document.getElementById("code-fallback").value = code;
-      window.Skillzify.toast("Code generated ✨ — review it, then press Run", "success");
-    });
+  /* ================= share / download / upload ================= */
+  function b64urlEncode(s) {
+    return btoa(unescape(encodeURIComponent(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   }
-  function aiFix() {
-    if (!lastError) { renderAiBox('<p class="hint">Run some code first — when it errors, I\'ll fix it here.</p>'); return; }
-    renderAiBox('<p class="hint">🔧 Analyzing the error and fixing your code…</p>');
-    aiRemote({ mode: "fix", code: lastCode, error: lastError }, function (html) {
-      renderAiBox(html);
-    }, function (code) {
-      if (editor) editor.setValue(code);
-      else document.getElementById("code-fallback").value = code;
-      window.Skillzify.toast("Fixed code loaded 🔧 — press Run to verify", "success");
-    });
+  function b64urlDecode(s) {
+    s = s.replace(/-/g, "+").replace(/_/g, "/");
+    while (s.length % 4) s += "=";
+    return decodeURIComponent(escape(atob(s)));
   }
-  // Generic backend call: opts {mode, code, error}; onHtml(html) always; onCode(code) on success with extractable code
-  function aiRemote(opts, onHtml, onCode) {
-    var ctrl = null, timer = null;
+  function b64e(s) { return b64urlEncode(s); }
+  function b64d(s) { return b64urlDecode(s); }
+  function shareCode() {
+    if (!ws.active) return;
+    persistActiveFile(); saveWS();
+    var payload = b64e(JSON.stringify({ files: ws.files, active: ws.active }));
+    var url = location.href.split("#")[0] + "#ws=" + payload;
+    try { history.replaceState(null, "", "#ws=" + payload); } catch (e) {}
+    if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { toast("Share link copied! 🔗", "success"); });
+  }
+  function loadSharedWS() {
+    var m = (location.hash || "").match(/^#ws=(.+)$/);
+    if (!m) return false;
     try {
-      ctrl = new AbortController();
-      timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 60000);
+      var d = JSON.parse(b64d(m[1]));
+      if (d && d.files && Object.keys(d.files).length) {
+        ws = { files: d.files, tabs: Object.keys(d.files), active: d.active || Object.keys(d.files)[0] };
+        saveWS();
+        return true;
+      }
     } catch (e) {}
-    var fopts = {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(opts)
-    };
-    if (ctrl) fopts.signal = ctrl.signal;
-    fetch("api/explain", fopts).then(function (r) {
+    // legacy single-file link
+    var m2 = (location.hash || "").match(/^#code=(.+)$/);
+    if (m2) {
+      try {
+        ws = { files: { "main.py": b64d(m2[1]) }, tabs: ["main.py"], active: "main.py" };
+        saveWS();
+        return true;
+      } catch (e) {}
+    }
+    return false;
+  }
+  function downloadCode() {
+    if (!ws.active) return;
+    persistActiveFile();
+    var blob = new Blob([ws.files[ws.active]], { type: "text/x-python" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = ws.active;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+    toast("Downloaded " + ws.active + " ⬇️", "success");
+  }
+
+  /* ================= AI ================= */
+  var HEURISTICS = [
+    { re: /SyntaxError/, title: "🔧 SyntaxError — Python can't parse your code",
+      tips: ["Check for missing colons (:) at the end of if/for/while/def lines.", "Match every opening bracket ( [ { with its closing partner.", "The real mistake is often on the line just above the reported one."] },
+    { re: /IndentationError|unexpected indent/, title: "📐 IndentationError — spacing problem",
+      tips: ["Use 4 spaces per indent level — never mix tabs and spaces.", "Every block after if/for/def/while must be indented one level deeper."] },
+    { re: /NameError: name '(\w+)'/, title: "🏷️ NameError — unknown name",
+      tips: ["You used a variable or function that was never defined.", "Check for typos — Python is case-sensitive.", "Make sure it's assigned BEFORE the line that uses it."] },
+    { re: /TypeError/, title: "🧩 TypeError — wrong type of value",
+      tips: ["You're mixing incompatible types, e.g. \"5\" + 3.", "Convert explicitly: int(\"5\") + 3."] },
+    { re: /ZeroDivisionError/, title: "➗ ZeroDivisionError — divided by zero",
+      tips: ["Guard it: if b != 0: ...", "Or: try: x = a/b except ZeroDivisionError: ..."] },
+    { re: /IndexError/, title: "📋 IndexError — list index out of range",
+      tips: ["Valid indexes are 0 to len(list)-1.", "An empty list has no index 0!"] },
+    { re: /KeyError: (.+)/, title: "🔑 KeyError — missing dictionary key",
+      tips: ["The key doesn't exist in the dict.", "Use dict.get(key, default) to avoid crashes."] },
+    { re: /ValueError/, title: "⚠️ ValueError — right type, wrong value",
+      tips: ["Common cause: int(input()) when the user typed text.", "Wrap in try/except ValueError."] },
+    { re: /AttributeError/, title: "🧲 AttributeError — no such method",
+      tips: ["The object doesn't have that method — check the type.", "Typos in method names are the #1 cause."] },
+    { re: /ImportError|ModuleNotFoundError/, title: "📦 ImportError — module not found",
+      tips: ["Only the Python standard library works in this browser runtime.", "Check the module name spelling."] },
+    { re: /EOFError/, title: "⌨️ EOFError — input() ran out of data",
+      tips: ["Your program called input() more times than you gave it lines.", "Add more lines in the stdin box under the terminal."] },
+    { re: /RecursionError/, title: "🔁 RecursionError — infinite recursion",
+      tips: ["Your function calls itself forever.", "Every recursive function needs a base case."] }
+  ];
+  function heuristicExplain(err) {
+    for (var i = 0; i < HEURISTICS.length; i++) {
+      var h = HEURISTICS[i], m = err.match(h.re);
+      if (m) {
+        var html = "<h4>" + h.title + "</h4><ul>";
+        h.tips.forEach(function (t) { html += "<li>" + t + "</li>"; });
+        return html + "</ul>" + (m[1] ? '<p style="color:var(--ide-muted)">Offending name: <b>' + String(m[1]).replace(/[<>&]/g, function (c) { return { "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]; }) + "</b></p>" : "");
+      }
+    }
+    return "<h4>🤔 Unrecognized error</h4><p>The offline explainer has no rule for this one — read the last traceback line.</p>";
+  }
+  function renderAi(html) { document.getElementById("ai-output").innerHTML = html; switchView("ai"); }
+  function aiCall(opts, label, onCode) {
+    renderAi('<p style="color:var(--ide-muted)">🤖 Working…</p>');
+    var ctrl = null, timer = null;
+    try { ctrl = new AbortController(); timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 60000); } catch (e) {}
+    var fo = { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(opts) };
+    if (ctrl) fo.signal = ctrl.signal;
+    fetch("api/explain", fo).then(function (r) {
       if (timer) clearTimeout(timer);
       if (!r.ok) throw 0;
       return r.json();
-    }).then(function (data) {
-      var text = data.explanation || "";
+    }).then(function (d) {
+      var text = d.explanation || "";
       if (!text) throw 0;
-      // Try to extract a code block for Generate/Fix modes
       var m = text.match(/```(?:python)?\n?([\s\S]*?)```/i);
-      var code = m ? m[1].trim() : (opts.mode === "generate" || opts.mode === "fix" ? text.trim() : null);
+      var code = m ? m[1].trim() : ((opts.mode === "generate" || opts.mode === "fix") ? text.trim() : null);
       if (code && onCode) onCode(code);
-      onHtml("<h4>🤖 AI " + (opts.mode === "generate" ? "generated" : opts.mode === "fix" ? "fix" : "explanation") + "</h4><p>" +
-        window.Skillzify.esc(text).replace(/\n/g, "<br>") + "</p>");
+      renderAi("<h4>🤖 " + label + "</h4><p>" + esc(text).replace(/\n/g, "<br>") + "</p>");
     }).catch(function () {
       if (timer) clearTimeout(timer);
-      // fall back to the user's own key, then offline
-      aiExplainViaKey(opts.code || "", opts.error || "");
+      var key = "";
+      try { key = window.Skillzify.storeGet(AI_KEY, ""); } catch (e) {}
+      if (!key || !(opts.mode === "generate" || opts.mode === "fix")) {
+        renderAi(opts.error ? heuristicExplain(opts.error) : "<h4>⚠️ AI unavailable</h4><p>The backend didn't answer and no API key is set.</p>");
+        return;
+      }
+      renderAi('<p style="color:var(--ide-muted)">🤖 Backend unreachable — trying your key…</p>');
+      fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+        body: JSON.stringify({
+          model: "gemini-3.8-flash",
+          messages: [{ role: "user", content: (opts.mode === "generate" ? "Write Python code for: " : "Fix this Python code. Error: ") + (opts.error || "") + "\n\n" + opts.code }],
+          max_tokens: 800
+        })
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        var t = (d.choices && d.choices[0] && d.choices[0].message) ? d.choices[0].message.content : "";
+        var m2 = t.match(/```(?:python)?\n?([\s\S]*?)```/i);
+        if (m2 && onCode) onCode(m2[1].trim());
+        renderAi("<h4>🤖 " + label + " (your key)</h4><p>" + esc(t).replace(/\n/g, "<br>") + "</p>");
+      }).catch(function () { renderAi(heuristicExplain(opts.error || "")); });
     });
   }
 
-  /* ---------- Init ---------- */
-  document.addEventListener("DOMContentLoaded", function () {
-    if (!document.getElementById("editor-host")) return;
+  /* ================= sidebar views ================= */
+  function switchView(name) {
+    document.querySelectorAll(".activity-bar button[data-view]").forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-view") === name);
+    });
+    document.querySelectorAll(".side-view").forEach(function (v) {
+      v.classList.toggle("active", v.id === "view-" + name);
+    });
+    if (window.innerWidth <= 860) document.getElementById("sidebar").classList.add("open");
+  }
 
-    if (window.CodeMirror) {
-      var savedTheme = "dracula", savedFont = 14;
-      try {
-        savedTheme = localStorage.getItem(THEME_KEY2) || "dracula";
-        savedFont = parseInt(localStorage.getItem(FONT_KEY) || "14", 10) || 14;
-      } catch (e) {}
-      editor = window.CodeMirror(document.getElementById("editor-host"), {
-        mode: "python",
-        theme: savedTheme,
-        lineNumbers: true,
-        indentUnit: 4,
-        tabSize: 4,
-        matchBrackets: true,
-        value: 'print("Hello, Skillzify! 👋")\n# Press Ctrl+Enter to run'
-      });
-      editor.addKeyMap({ "Ctrl-Enter": runCode, "Cmd-Enter": runCode });
-      document.getElementById("theme-select").value = savedTheme;
-      applyCmFont(savedFont);
-      editor.on("cursorActivity", updateStatusBar);
-      editor.on("change", function () { updateStatusBar(); });
-      updateStatusBar();
-    } else {
-      document.getElementById("code-fallback").style.display = "block";
-    }
-
-    // Handoff from learn.html ("Try in compiler"), or shared #code= link (link wins)
-    try {
-      var shared = loadSharedCode();
-      if (!shared) {
-        var handed = localStorage.getItem("skillzify_compiler_code");
-        if (handed) {
-          if (editor) editor.setValue(handed);
-          else document.getElementById("code-fallback").value = handed;
-          localStorage.removeItem("skillzify_compiler_code");
-        }
-      } else {
-        try { localStorage.removeItem("skillzify_compiler_code"); } catch (e) {}
-      }
-    } catch (e) {}
-
-    var stopBtn = document.getElementById("stop-btn");
-    if (stopBtn) stopBtn.addEventListener("click", stopRun);
-    var shareBtn = document.getElementById("share-btn");
-    if (shareBtn) shareBtn.addEventListener("click", shareCode);
-    var dlBtn = document.getElementById("download-btn");
-    if (dlBtn) dlBtn.addEventListener("click", downloadCode);
-
-    // Warm the AI backend now, so "Explain" is fast when the user clicks it.
-    // (On static hosts like GitHub Pages this 404s harmlessly.)
-    try { fetch("api/health", { method: "GET", cache: "no-store" }).catch(function () {}); } catch (e) {}
-
+  /* ================= snippets ================= */
+  function initSnippets() {
     var sel = document.getElementById("snippet-select");
+    sel.innerHTML = '<option value="">— Load sample —</option>';
     Object.keys(SNIPPETS).forEach(function (k) {
       var o = document.createElement("option");
       o.value = k; o.textContent = SNIPPETS[k].name;
@@ -780,35 +690,114 @@
     });
     sel.addEventListener("change", function () {
       var s = SNIPPETS[sel.value];
-      if (s) {
-        if (editor) editor.setValue(s.code);
-        else document.getElementById("code-fallback").value = s.code;
+      if (s && ws.active && editor) {
+        editor.setValue(s.code);
+        persistActiveFile(); saveWS(); renderTabs(); updateStatusBar();
+        toast("Sample loaded 📥", "success");
       }
+      sel.value = "";
     });
+    document.getElementById("save-snippet-btn").addEventListener("click", function () {
+      var A = window.SkillzifyActivity; if (!A || !ws.active) return;
+      var code = ws.files[ws.active].trim();
+      if (!code) { toast("Nothing to save", "error"); return; }
+      var title = prompt("Name this snippet:", ws.active);
+      if (title == null) return;
+      A.saveSnippet(title.trim() || ws.active, "", code);
+      toast("Snippet saved 📝", "success");
+    });
+  }
 
+  /* ================= init ================= */
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!document.getElementById("ide")) return;
+    ws = loadWS();
+    var shared = loadSharedWS();
+    try {
+      var handed = localStorage.getItem("skillzify_compiler_code");
+      if (handed && !shared) {
+        ws.files["main.py"] = handed;
+        if (ws.tabs.indexOf("main.py") < 0) ws.tabs.unshift("main.py");
+        ws.active = "main.py";
+        localStorage.removeItem("skillzify_compiler_code");
+      }
+    } catch (e) {}
+
+    if (window.CodeMirror) {
+      var theme = "dracula", font = 14;
+      try {
+        theme = localStorage.getItem(CM_THEME_KEY) || "dracula";
+        font = parseInt(localStorage.getItem(CM_FONT_KEY) || "14", 10) || 14;
+      } catch (e) {}
+      editor = window.CodeMirror(document.getElementById("editor-host"), {
+        mode: "python", theme: theme, lineNumbers: true,
+        indentUnit: 4, tabSize: 4, matchBrackets: true,
+        value: ws.active ? ws.files[ws.active] : ""
+      });
+      // move welcome overlay above editor content but below nothing else
+      var wel = document.getElementById("welcome");
+      document.getElementById("editor-host").appendChild(wel);
+      editor.addKeyMap({ "Ctrl-Enter": runCode, "Cmd-Enter": runCode });
+      applyFont(font);
+      document.getElementById("theme-select").value = theme;
+      var st = document.getElementById("st-theme");
+      if (st) st.textContent = theme.charAt(0).toUpperCase() + theme.slice(1).replace("-darker", "");
+      editor.on("cursorActivity", updateStatusBar);
+      editor.on("change", function () { updateStatusBar(); });
+      // auto-save workspace as they type (debounced)
+      var saveT = null;
+      editor.on("change", function () {
+        clearTimeout(saveT);
+        saveT = setTimeout(function () { persistActiveFile(); saveWS(); }, 800);
+      });
+    }
+
+    renderExplorer(); renderTabs(); renderHistory(); updateStatusBar();
+    initSnippets();
+
+    /* activity bar */
+    document.querySelectorAll(".activity-bar button[data-view]").forEach(function (b) {
+      b.addEventListener("click", function () { switchView(b.getAttribute("data-view")); });
+    });
+    /* panel tabs */
+    document.querySelectorAll(".ptab").forEach(function (b) {
+      b.addEventListener("click", function () { switchPtab(b.getAttribute("data-ptab")); });
+    });
+    /* run / stop */
     document.getElementById("run-btn").addEventListener("click", runCode);
-    document.getElementById("clear-btn").addEventListener("click", function () {
-      if (editor) editor.setValue("");
-      else document.getElementById("code-fallback").value = "";
-      window.Skillzify.toast("Editor cleared", "success");
+    document.getElementById("st-run").addEventListener("click", runCode);
+    document.getElementById("stop-btn").addEventListener("click", stopRun);
+    /* files */
+    document.getElementById("new-file-btn").addEventListener("click", newFile);
+    document.getElementById("welcome-new").addEventListener("click", newFile);
+    document.getElementById("share-btn").addEventListener("click", shareCode);
+    document.getElementById("download-btn").addEventListener("click", downloadCode);
+    document.getElementById("upload-btn").addEventListener("click", function () { document.getElementById("upload-input").click(); });
+    document.getElementById("upload-input").addEventListener("change", function () {
+      var f = this.files[0]; if (!f) return;
+      var r = new FileReader();
+      r.onload = function () {
+        var name = validName(f.name.replace(/\.[^.]+$/, "")) || "uploaded.py";
+        var base = name, i = 2;
+        while (ws.files.hasOwnProperty(base)) base = name.replace(/\.py$/, i++ + ".py");
+        persistActiveFile();
+        ws.files[base] = String(r.result || "");
+        ws.tabs.push(base); ws.active = base;
+        if (editor) editor.setValue(ws.files[base]);
+        saveWS(); renderExplorer(); renderTabs(); updateStatusBar();
+        toast("Imported " + base + " 📂", "success");
+      };
+      r.readAsText(f);
+      this.value = "";
     });
-    document.getElementById("clear-out-btn").addEventListener("click", function () {
-      clearConsole();
-      outHistory = []; outIdx = -1; updateRunPager();
-      printLine("Console cleared.", "dim");
+    document.getElementById("reset-ws-btn").addEventListener("click", function () {
+      if (!confirm("Reset workspace? All files will be replaced with a fresh main.py.")) return;
+      ws = { files: { "main.py": DEFAULT_CODE }, tabs: ["main.py"], active: "main.py" };
+      saveWS();
+      if (editor) editor.setValue(ws.files["main.py"]);
+      renderExplorer(); renderTabs(); updateStatusBar();
     });
-    document.getElementById("copy-out-btn").addEventListener("click", copyOutput);
-    document.getElementById("run-prev").addEventListener("click", function () { showOutputAt(outIdx - 1); });
-    document.getElementById("run-next").addEventListener("click", function () { showOutputAt(outIdx + 1); });
-    document.getElementById("explain-error-btn").addEventListener("click", explainLastError);
-    document.getElementById("explain-code-btn").addEventListener("click", explainCode);
-    document.getElementById("save-snippet-btn").addEventListener("click", saveSnippetUI);
-    var genBtn = document.getElementById("ai-generate-btn");
-    if (genBtn) genBtn.addEventListener("click", aiGenerate);
-    var fixBtn = document.getElementById("fix-code-btn");
-    if (fixBtn) fixBtn.addEventListener("click", aiFix);
-
-    /* toolbar: find/replace */
+    /* find */
     document.getElementById("find-btn").addEventListener("click", function () { openFind(false); });
     document.getElementById("find-close").addEventListener("click", closeFind);
     document.getElementById("find-next").addEventListener("click", function () { doFind(1); });
@@ -820,137 +809,93 @@
     });
     document.getElementById("replace-one").addEventListener("click", function () { doReplace(false); });
     document.getElementById("replace-all").addEventListener("click", function () { doReplace(true); });
-
-    /* toolbar: edit actions */
-    document.getElementById("undo-btn").addEventListener("click", function () { if (editor) editor.undo(); });
-    document.getElementById("redo-btn").addEventListener("click", function () { if (editor) editor.redo(); });
+    /* terminal panel */
+    document.getElementById("copy-out-btn").addEventListener("click", copyOutput);
+    document.getElementById("clear-out-btn").addEventListener("click", function () { clearTerminal(); printLine("Terminal cleared.", "dim"); });
+    document.getElementById("panel-toggle").addEventListener("click", function () {
+      var p = document.getElementById("panel");
+      p.style.height = p.style.height === "60%" ? "" : "60%";
+    });
+    /* problems check */
+    document.getElementById("st-check").addEventListener("click", function () { checkProblems(false); });
+    /* search */
+    var sIn = document.getElementById("search-input");
+    var sT = null;
+    sIn.addEventListener("input", function () { clearTimeout(sT); sT = setTimeout(function () { searchFiles(sIn.value); }, 250); });
+    /* AI */
+    document.getElementById("ai-generate-btn").addEventListener("click", function () {
+      var d = prompt("Describe what you want the code to do:", "a function that checks if a number is prime");
+      if (d == null || !d.trim()) return;
+      aiCall({ mode: "generate", code: d.trim() }, "generated", function (code) {
+        if (!ws.active) return;
+        editor.setValue(code); persistActiveFile(); saveWS(); renderTabs(); updateStatusBar();
+        toast("Code generated ✨ — review it, then Run", "success");
+      });
+    });
+    document.getElementById("explain-code-btn").addEventListener("click", function () {
+      if (!ws.active) return;
+      persistActiveFile();
+      aiCall({ mode: "", code: ws.files[ws.active], error: "" }, "explanation", null);
+    });
+    document.getElementById("explain-error-btn").addEventListener("click", function () {
+      if (!lastError) { renderAi('<p style="color:var(--ide-muted)">Run some code first — when it errors, I\'ll explain it here.</p>'); switchView("ai"); return; }
+      persistActiveFile();
+      aiCall({ mode: "", code: ws.files[ws.active] || "", error: lastError }, "explanation", null);
+    });
+    document.getElementById("fix-code-btn").addEventListener("click", function () {
+      if (!lastError || !ws.active) { renderAi('<p style="color:var(--ide-muted)">Run some code first — when it errors, I\'ll fix it here.</p>'); switchView("ai"); return; }
+      persistActiveFile();
+      aiCall({ mode: "fix", code: ws.files[ws.active], error: lastError }, "fix", function (code) {
+        editor.setValue(code); persistActiveFile(); saveWS(); renderTabs(); updateStatusBar();
+        toast("Fixed code loaded 🔧 — press Run to verify", "success");
+      });
+    });
+    document.getElementById("ai-save").addEventListener("click", function () {
+      try {
+        var v = document.getElementById("ai-key").value.trim();
+        window.Skillzify.storeSet(AI_KEY, v);
+        toast(v ? "API key saved 🔑" : "API key removed", "success");
+      } catch (e) {}
+    });
+    try { document.getElementById("ai-key").value = window.Skillzify.storeGet(AI_KEY, ""); } catch (e) {}
+    /* settings */
+    document.getElementById("theme-select").addEventListener("change", function () { applyTheme(this.value); });
+    document.getElementById("st-theme").addEventListener("click", function () { switchView("settings"); });
+    document.getElementById("fs-up").addEventListener("click", function () { applyFont(curFont() + 1); });
+    document.getElementById("fs-down").addEventListener("click", function () { applyFont(curFont() - 1); });
     document.getElementById("wrap-btn").addEventListener("click", function () {
       if (!editor) return;
       var on = !editor.getOption("lineWrapping");
       editor.setOption("lineWrapping", on);
-      this.classList.toggle("on", on);
+      this.textContent = "Wrap: " + (on ? "on" : "off");
     });
-    document.getElementById("copy-code-btn").addEventListener("click", function () {
-      var c = currentCode();
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(c).then(function () { window.Skillzify.toast("Code copied 📋", "success"); });
-      } else { fallbackCopy(c); window.Skillzify.toast("Code copied 📋", "success"); }
-    });
-    document.getElementById("upload-btn").addEventListener("click", function () {
-      document.getElementById("upload-input").click();
-    });
-    document.getElementById("upload-input").addEventListener("change", function () {
-      var f = this.files[0]; if (!f) return;
-      var r = new FileReader();
-      r.onload = function () {
-        var text = String(r.result || "");
-        if (editor) editor.setValue(text); else document.getElementById("code-fallback").value = text;
-        window.Skillzify.toast("Loaded " + f.name + " 📂", "success");
-      };
-      r.readAsText(f);
-      this.value = "";
-    });
-    document.getElementById("fullscreen-btn").addEventListener("click", function () {
-      document.getElementById("editor-shell").classList.toggle("fullscreen");
-      if (editor) setTimeout(function () { editor.refresh(); }, 50);
-    });
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") {
-        document.getElementById("editor-shell").classList.remove("fullscreen");
-        document.getElementById("hist-modal").classList.remove("on");
-      }
-    });
-
-    /* toolbar: history */
-    document.getElementById("history-btn").addEventListener("click", openHistory);
-    document.getElementById("hist-close").addEventListener("click", function () {
-      document.getElementById("hist-modal").classList.remove("on");
-    });
-    document.getElementById("hist-modal").addEventListener("click", function (e) {
-      if (e.target === this) this.classList.remove("on");
-    });
-
-    /* status bar: theme + font */
-    document.getElementById("theme-select").addEventListener("change", function () { applyCmTheme(this.value); });
-    document.getElementById("fs-up").addEventListener("click", function () { applyCmFont(cmFont() + 1); });
-    document.getElementById("fs-down").addEventListener("click", function () { applyCmFont(cmFont() - 1); });
-
-    /* global shortcuts */
+    /* panel resize */
+    (function () {
+      var handle = document.getElementById("panel-resize");
+      var panel = document.getElementById("panel");
+      var dragging = false;
+      handle.addEventListener("mousedown", function (e) { dragging = true; e.preventDefault(); });
+      document.addEventListener("mousemove", function (e) {
+        if (!dragging) return;
+        var rect = panel.parentElement.getBoundingClientRect();
+        var h = rect.bottom - e.clientY;
+        h = Math.max(120, Math.min(rect.height * 0.7, h));
+        panel.style.height = h + "px";
+      });
+      document.addEventListener("mouseup", function () { dragging = false; });
+    })();
+    /* keyboard */
     document.addEventListener("keydown", function (e) {
       var mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === "f" && !e.shiftKey) { e.preventDefault(); openFind(false); }
-      if (mod && e.key.toLowerCase() === "h") { e.preventDefault(); openFind(true); }
-      if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); downloadCode(); }
-      if (e.altKey && e.key.toLowerCase() === "z") {
-        e.preventDefault(); document.getElementById("wrap-btn").click();
-      }
+      else if (mod && e.key.toLowerCase() === "h") { e.preventDefault(); openFind(true); }
+      else if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); persistActiveFile(); saveWS(); toast("Workspace saved 💾", "success"); }
+      else if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); document.getElementById("sidebar").classList.toggle("open"); }
+      else if (e.key === "Escape") { closeFind(); }
     });
 
-    initSettings();
+    /* warm the AI backend + load runtime */
+    try { fetch("api/health", { method: "GET", cache: "no-store" }).catch(function () {}); } catch (e) {}
     loadPyodideRuntime();
-    renderSnippetLibrary();
-    // deep-link: compiler.html#snippet-<id>
-    if (location.hash.indexOf("#snippet-") === 0) {
-      var sid = location.hash.slice(9);
-      var sn = (window.SkillzifyActivity ? window.SkillzifyActivity.snippets() : []).filter(function (s) { return s.id === sid; })[0];
-      if (sn) { if (editor) editor.setValue(sn.code); else document.getElementById("code-fallback").value = sn.code; }
-    }
   });
-
-  /* ---------- Gists-like snippets ---------- */
-  function currentCode() { return editor ? editor.getValue() : document.getElementById("code-fallback").value; }
-  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
-
-  function saveSnippetUI() {
-    var A = window.SkillzifyActivity; if (!A) return;
-    var code = currentCode().trim();
-    if (!code) { window.Skillzify.toast("Write some code first ✍️", "error"); return; }
-    var title = prompt("Name this snippet:", code.split("\n")[0].slice(0, 40) || "Untitled snippet");
-    if (title == null) return;
-    A.saveSnippet(title.trim() || "Untitled snippet", "", code);
-    renderSnippetLibrary();
-    window.Skillzify.toast("Snippet saved 📝", "success");
-  }
-
-  function renderSnippetLibrary() {
-    var A = window.SkillzifyActivity; if (!A) return;
-    var host = document.getElementById("snippet-library"); if (!host) return;
-    var snips = A.snippets();
-    if (!snips.length) { host.innerHTML = '<p class="muted small">No snippets yet — write code above and hit 💾 Save.</p>'; return; }
-    host.innerHTML = snips.map(function (s) {
-      var starred = A.isStarred("snippet", s.id);
-      return '<div class="snippet-card"><h4>' + esc(s.title) + '</h4>' +
-        '<div class="muted small">' + new Date(s.created).toLocaleDateString() + '</div>' +
-        '<pre>' + esc(s.code.slice(0, 220)) + (s.code.length > 220 ? "…" : "") + '</pre>' +
-        '<div class="snippet-actions">' +
-        '<button class="btn btn-sm" data-load="' + s.id + '">Open</button>' +
-        '<button class="btn btn-sm btn-ghost" data-star-snip="' + s.id + '">' + (starred ? "🌟" : "⭐") + '</button>' +
-        '<button class="btn btn-sm btn-ghost" data-pin-snip="' + s.id + '">📌</button>' +
-        '<button class="btn btn-sm btn-ghost" data-del-snip="' + s.id + '">🗑️</button>' +
-        '</div></div>';
-    }).join("");
-    host.querySelectorAll("[data-load]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        var s = snips.filter(function (x) { return x.id === b.getAttribute("data-load"); })[0];
-        if (s) { if (editor) editor.setValue(s.code); else document.getElementById("code-fallback").value = s.code; window.scrollTo({ top: 0, behavior: "smooth" }); }
-      });
-    });
-    host.querySelectorAll("[data-star-snip]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        var s = snips.filter(function (x) { return x.id === b.getAttribute("data-star-snip"); })[0];
-        if (s) { A.toggleStar("snippet", s.id, s.title); renderSnippetLibrary(); }
-      });
-    });
-    host.querySelectorAll("[data-pin-snip]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        var s = snips.filter(function (x) { return x.id === b.getAttribute("data-pin-snip"); })[0];
-        if (s) { A.togglePin("snippet", s.id, s.title); window.Skillzify.toast("Pinned 📌 — see your profile", "success"); }
-      });
-    });
-    host.querySelectorAll("[data-del-snip]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        if (confirm("Delete this snippet?")) { A.deleteSnippet(b.getAttribute("data-del-snip")); renderSnippetLibrary(); }
-      });
-    });
-  }
 })();
