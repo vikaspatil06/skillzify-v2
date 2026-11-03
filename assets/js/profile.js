@@ -19,7 +19,7 @@
     var xp = 0, done = 0, exSolved = 0, exTotal = 0;
     try { xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0; } catch (e) {}
     try { done = Object.keys(JSON.parse(localStorage.getItem("skillzify_progress") || "{}")).length; } catch (e) {}
-    var totalLessons = (window.SkillzifyLearn && window.SkillzifyLearn.totalLessons) || 32;
+    var totalLessons = (window.SkillzifyLearn && window.SkillzifyLearn.totalLessons) || 95;
     try {
       var EXD = window.SkillzifyPracticeData || [];
       exTotal = EXD.length;
