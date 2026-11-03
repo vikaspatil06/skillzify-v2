@@ -7,7 +7,7 @@ An advanced, browser-first Python learning platform for students — a modern mu
 ## ✨ Features
 
 - **Landing page** (`index.html`) — hero, feature cards, animated stats, testimonials, dark/light theme toggle
-- **Python learning path** (`learn.html`) — **32 lessons** across Beginner (10) / Intermediate (12) / Advanced (10) rendered as a Duolingo-style visual journey: lesson nodes on a winding animated SVG path (locked 🔒 / current ✨ / completed ✓), sequential unlocking. Each lesson opens in a slide-over panel with rich explanation, key takeaways, syntax-highlighted code (Copy + "Try in compiler" handoff), a 2-question quiz with instant feedback, and a mini coding challenge (predict-the-output or fill-the-blank). Completing both triggers confetti, XP gain popup, and streak update. **XP & levels** (Novice → Python Master) persist to `localStorage`. Keyboard: `Esc` closes, `←/→` navigate lessons. Respects `prefers-reduced-motion`.
+- **Python learning path** (`learn.html`) — **95 lessons** across Beginner (30) / Intermediate (35) / Advanced (30) rendered as a Duolingo-style visual journey: lesson nodes on a winding animated SVG path (locked 🔒 / current ✨ / completed ✓), sequential unlocking. Each lesson opens in a slide-over panel with rich explanation, key takeaways, syntax-highlighted code (Copy + "Try in compiler" handoff), a 2-question quiz with instant feedback, and a mini coding challenge (predict-the-output or fill-the-blank). Completing both triggers confetti, XP gain popup, and streak update. **XP & levels** (Novice → Python Master) persist to `localStorage`. Keyboard: `Esc` closes, `←/→` navigate lessons. Respects `prefers-reduced-motion`.
 - **Practice Mode** (`practice.html` + `assets/js/practice.js` + `assets/js/practice-data.js`) — **24 exercises** across 8 topics (variables, strings, collections, loops, functions, OOP, exceptions, algorithms) in 3 formats: ✍️ write-code (hidden tests executed in Pyodide), 🔮 predict-output, 🐞 fix-the-bug. Features: per-test pass/fail results, **3-level progressive hints**, ⏱ timed mode with personal bests, 📅 daily challenge (deterministic by date), 🔁 spaced-repetition review queue, solution walkthroughs, 🐍 pythonic-coach notes, your-code-vs-model **solution comparison**, and a **Socratic AI Tutor** (guides without revealing the answer). Solved exercises award XP into the shared system.
 - **Learning Paths** (`paths.html`) — 5 guided sequences (Python Fundamentals, DSA with Python, Automation & Scripting, Data Analysis Basics, Interview Prep) mixing lessons and exercises with per-path progress bars.
 - **Projects** (`projects.html`) — 4 guided real-world builds: File Organizer, Weather API Client, Web Scraper, CSV Data Analyzer — each with milestones and starter code.
@@ -77,7 +77,7 @@ never commit a real key (the repo is public).
 ```
 skillzify-v2/
 ├── index.html          # Landing page
-├── learn.html          # Learning tracks + 32 lessons
+├── learn.html          # Learning tracks + 95 lessons
 ├── practice.html       # Practice Mode (exercises + tests)
 ├── paths.html          # Guided learning paths
 ├── projects.html       # Real-world guided projects
@@ -95,7 +95,7 @@ skillzify-v2/
 │   ├── css/style.css   # Theme variables, layout, responsive
 │   ├── js/app.js       # Theme toggle, nav, toast, storage utils
 │   ├── js/auth.js      # Firebase Authentication (Email/Password)
-│   ├── js/learn.js     # 32-lesson catalog + progress
+│   ├── js/learn.js     # 95-lesson catalog + progress
 │   ├── js/practice.js  # Practice engine: test runner, hints, timed mode
 │   ├── js/practice-data.js # 24 validated exercises
 │   ├── js/paths-data.js    # Learning path definitions
