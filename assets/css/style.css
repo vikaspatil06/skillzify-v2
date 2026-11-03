@@ -116,6 +116,33 @@ img { max-width: 100%; }
 }
 .nav-links a:hover { color: var(--text); background: var(--card); text-decoration: none; }
 .nav-links a.active { color: var(--text); background: var(--card); }
+
+/* ---------- Navbar dropdowns (single-source nav.js) ---------- */
+.nav-drop { position: relative; }
+.nav-drop-btn {
+  color: var(--muted); font-weight: 600; font-size: 0.95rem; font-family: inherit;
+  padding: 8px 14px; border-radius: 10px; border: 0; background: transparent;
+  cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px;
+}
+.nav-drop-btn:hover, .nav-drop.open .nav-drop-btn { color: var(--text); background: var(--card); }
+.nav-drop-btn.active-parent { color: var(--text); background: var(--card); }
+.nav-drop-btn .caret { font-size: 0.7rem; transition: transform 0.2s; }
+.nav-drop.open .nav-drop-btn .caret { transform: rotate(180deg); }
+.nav-menu {
+  position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(-6px);
+  min-width: 220px; background: var(--bg-soft); border: 1px solid var(--card-border);
+  border-radius: 14px; box-shadow: var(--shadow); padding: 8px;
+  opacity: 0; visibility: hidden; transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+  z-index: 200;
+}
+.nav-drop:hover .nav-menu, .nav-drop.open .nav-menu {
+  opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0);
+}
+.nav-menu a {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 10px; white-space: nowrap;
+}
+.nav-menu a .mi { font-size: 1.05rem; }
 .nav-actions { display: flex; align-items: center; gap: 10px; }
 .icon-btn {
   border: 1px solid var(--card-border); background: var(--card); color: var(--text);
@@ -356,6 +383,17 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
   }
   .nav-links.open { display: flex; }
   .nav-links a { padding: 12px 14px; }
+  /* Mobile dropdowns become expandable sections inside the open menu */
+  .nav-drop { width: 100%; }
+  .nav-drop-btn { width: 100%; justify-content: space-between; padding: 12px 14px; font-size: 1rem; }
+  .nav-menu {
+    position: static; transform: none; opacity: 1; visibility: visible;
+    box-shadow: none; border: 0; border-radius: 0; background: transparent;
+    padding: 0 0 0 12px; display: none; min-width: 0;
+  }
+  .nav-drop:hover .nav-menu { opacity: 1; visibility: visible; transform: none; }
+  .nav-drop.open .nav-menu { display: block; }
+  .nav-menu a { padding: 10px 14px; font-size: 0.95rem; }
   .hamburger { display: inline-flex; }
   .grid-4, .grid-3, .testimonials, .dash-grid { grid-template-columns: 1fr; }
   .section { padding: 52px 0; }
