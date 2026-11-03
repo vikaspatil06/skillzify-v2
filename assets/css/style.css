@@ -427,6 +427,50 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 .track-head h2 { font-size: 1.45rem; }
 .track-head .t-desc { color: var(--muted); font-size: 0.92rem; }
 .track-head .t-pct { margin-left: auto; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ---------- Learn page: accordion tracks + search + continue ---------- */
+button.track-head {
+  width: 100%; background: none; border: 0; font: inherit; color: inherit;
+  text-align: left; cursor: pointer; border-radius: 14px; padding: 10px 12px; margin: 0 -12px 4px;
+  transition: background 0.2s;
+}
+button.track-head:hover { background: var(--card); }
+.track-head .t-text { display: flex; flex-direction: column; gap: 2px; }
+.track-head .t-name { font-size: 1.45rem; font-weight: 800; }
+.track-head .t-count {
+  font-size: 0.78rem; font-weight: 700; color: var(--muted);
+  border: 1px solid var(--card-border); border-radius: 999px; padding: 4px 12px;
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.track-head .t-chev { color: var(--muted); font-size: 1.15rem; transition: transform 0.25s ease; }
+.track-section.collapsed .t-chev { transform: rotate(-90deg); }
+.track-section.collapsed .path { display: none; }
+.track-section .path { animation: trackIn 0.3s ease; }
+@keyframes trackIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+.continue-card {
+  margin: 0 0 18px; padding: 20px 24px; border-radius: var(--radius);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 16%, var(--card)), var(--card));
+  border: 1px solid var(--card-border); box-shadow: var(--shadow);
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+}
+.continue-card .cc-label { font-size: 0.78rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); width: 100%; }
+.continue-card .cc-title { font-size: 1.25rem; font-weight: 800; flex: 1; min-width: 200px; }
+.continue-card .cc-num {
+  display: inline-block; font-size: 0.85rem; color: #fff;
+  background: var(--gradient); border-radius: 999px; padding: 3px 12px; margin-right: 8px; vertical-align: 2px;
+}
+.continue-card .cc-done { font-size: 1.05rem; font-weight: 700; }
+.search-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+  background: var(--card); border: 1px solid var(--card-border); border-radius: 14px; padding: 4px 6px 4px 16px;
+}
+.search-row .search-ico { font-size: 1.1rem; }
+#lesson-search {
+  flex: 1; background: transparent; border: 0; outline: 0; color: var(--text);
+  font: inherit; font-size: 1rem; padding: 12px 8px;
+}
+#lesson-search::placeholder { color: var(--muted); }
 .path { position: relative; padding: 40px 0 16px; }
 .path-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
 .path-svg .p-base { fill: none; stroke: var(--card-border); stroke-width: 10; stroke-linecap: round; }
