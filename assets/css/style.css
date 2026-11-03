@@ -745,7 +745,7 @@ button, a, .quiz-opt, .quiz-opt *, .node, .track-tab, .auth-tabs button {
 .ex-kind { color: var(--muted); font-size: .85rem; margin: 4px 0 10px; }
 .ex-diff { color: #f5b301; letter-spacing: 2px; font-size: .85rem; }
 .badge-done { background: rgba(46, 204, 113, .15); color: #2ecc71; border: 1px solid rgba(46,204,113,.4); }
-.badge-try { background: rgba(241, 196, 15, .12); color: #f1c40f; border: 1px solid rgba(241,196,15,.4); }
+.badge-try { background: rgba(241, 196, 15, .12); color: #f1c40f; border: 1px solid rgba(241,196,15,.4); white-space: nowrap; }
 .code-editor { width: 100%; min-height: 220px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9rem; line-height: 1.55; background: #0d1117; color: #e6edf3; border: 1px solid var(--card-border); border-radius: 10px; padding: 14px; resize: vertical; tab-size: 4; }
 .code-editor:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 pre.code { background: #0d1117; color: #e6edf3; border: 1px solid var(--card-border); border-radius: 10px; padding: 14px; overflow-x: auto; font-size: .88rem; line-height: 1.6; }
