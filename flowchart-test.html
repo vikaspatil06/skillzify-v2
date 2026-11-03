@@ -99,6 +99,22 @@
   .icon-btn { width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--card-border);
               background: transparent; color: var(--muted); cursor: pointer; font-size: 15px; }
   .icon-btn:hover { color: var(--text); border-color: var(--muted); }
+  .seg { display: flex; border: 1px solid var(--card-border); border-radius: 9px; overflow: hidden; }
+  .seg button { background: transparent; border: 0; color: var(--muted); font-size: .72rem;
+                font-weight: 700; padding: 7px 10px; cursor: pointer; }
+  .seg button.on { background: var(--primary); color: #fff; }
+  .drop-wrap { position: relative; display: inline-flex; }
+  .drop-menu { display: none; position: absolute; top: calc(100% + 6px); right: 0; z-index: 50;
+               background: var(--card); border: 1px solid var(--card-border); border-radius: 10px;
+               min-width: 200px; box-shadow: var(--shadow); overflow: hidden; }
+  .drop-menu.on { display: block; }
+  .drop-menu button { display: block; width: 100%; text-align: left; background: none; border: 0;
+                      color: var(--text); padding: 10px 14px; font-size: .85rem; cursor: pointer; }
+  .drop-menu button:hover { background: rgba(108,123,255,.12); }
+  .drop-menu button small { display: block; color: var(--muted); font-size: .72rem; }
+  .card.fullscreen { position: fixed; inset: 12px; z-index: 300; margin: 0; overflow: auto;
+                     background: var(--bg); }
+  .card.fullscreen #canvas-wrap { min-height: 60vh; }
 
   /* trace controls */
   #trace-bar { display: none; gap: 8px; align-items: center; margin-top: 12px; padding: 12px 14px;
@@ -165,7 +181,15 @@ for i in range(1, n + 1):
 print("Result:", total)</textarea>
       <div class="toolbar">
         <button class="btn" id="btn-code" onclick="genFromCode()">⚡ Generate</button>
-        <button class="btn btn-ghost btn-sm" onclick="loadExample('code')">Example</button>
+        <div class="drop-wrap">
+          <button class="btn btn-ghost btn-sm" onclick="toggleMenu('ex-code-menu')">Examples ▾</button>
+          <div class="drop-menu" id="ex-code-menu">
+            <button onclick="loadExample('code','prime')">Prime check<small>if/else + for loop + function</small></button>
+            <button onclick="loadExample('code','factorial')">Factorial<small>while loop</small></button>
+            <button onclick="loadExample('code','grade')">Grade calculator<small>nested if/elif/else</small></button>
+            <button onclick="loadExample('code','fib')">Fibonacci<small>for loop + list</small></button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -184,7 +208,15 @@ PRINT total
 END</textarea>
       <div class="toolbar">
         <button class="btn" id="btn-algo" onclick="genFromAlgo()">⚡ Generate</button>
-        <button class="btn btn-ghost btn-sm" onclick="loadExample('algo')">Example</button>
+        <div class="drop-wrap">
+          <button class="btn btn-ghost btn-sm" onclick="toggleMenu('ex-algo-menu')">Examples ▾</button>
+          <div class="drop-menu" id="ex-algo-menu">
+            <button onclick="loadExample('algo','prime')">Prime check<small>IF/ELSE + FOR</small></button>
+            <button onclick="loadExample('algo','max')">Find maximum<small>WHILE loop</small></button>
+            <button onclick="loadExample('algo','search')">Linear search<small>FOR + early exit</small></button>
+            <button onclick="loadExample('algo','sum')">Sum of digits<small>REPEAT/UNTIL</small></button>
+          </div>
+        </div>
       </div>
       <p class="hint"><code>START</code> <code>END</code> <code>INPUT</code> <code>PRINT</code> <code>SET</code> <code>IF/THEN/ELSE/END IF</code> <code>WHILE/END WHILE</code> <code>FOR/FROM/TO/END FOR</code> <code>REPEAT/UNTIL</code></p>
     </div>
@@ -208,10 +240,23 @@ END</textarea>
       <h2>🔀 Flowchart</h2>
       <div class="spacer canvas-bar">
         <span class="stats" id="graph-stats"></span>
+        <div class="seg" title="Layout direction">
+          <button id="dir-td" class="on" onclick="setDir('TD')">⬇</button>
+          <button id="dir-lr" onclick="setDir('LR')">➡</button>
+        </div>
         <button class="icon-btn" onclick="zoomIn()" title="Zoom in">+</button>
         <button class="icon-btn" onclick="zoomOut()" title="Zoom out">−</button>
         <button class="icon-btn" onclick="zoomReset()" title="Reset zoom">⟲</button>
-        <button class="btn btn-ghost btn-sm" onclick="downloadSVG()">⬇ SVG</button>
+        <button class="icon-btn" onclick="toggleFullscreen()" title="Fullscreen">⛶</button>
+        <div class="drop-wrap">
+          <button class="btn btn-ghost btn-sm" onclick="toggleMenu('export-menu')">⬇ Export ▾</button>
+          <div class="drop-menu" id="export-menu">
+            <button onclick="downloadSVG()">SVG<small>Vector — best for print</small></button>
+            <button onclick="downloadPNG()">PNG<small>2× raster image</small></button>
+            <button onclick="copyMermaid()">Copy Mermaid<small>Paste into docs / Notion</small></button>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="shareLink()">🔗 Share</button>
       </div>
     </div>
 
@@ -245,7 +290,7 @@ END</textarea>
 </main>
 
 <script>
-let pyodide = null, currentGraph = null, currentSVG = null, currentZoom = 1;
+let pyodide = null, currentGraph = null, currentSVG = null, currentMermaid = null, currentZoom = 1;
 const API_BASE = 'https://skillzify-v2.onrender.com';
 mermaid.initialize({ startOnLoad: false, theme: 'default', flowchart: { useMaxWidth: true } });
 
@@ -267,6 +312,7 @@ function setStatus(msg, type='') {
 function setBtn(id, loading) { const b = document.getElementById(id); if (b) b.disabled = loading; }
 
 async function init() {
+  const fromLink = loadFromHash();
   setStatus('Loading Python engine…', 'working');
   try {
     pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.23.4/full/' });
@@ -275,17 +321,35 @@ async function init() {
       fetch('assets/js/flowchart-algo.py').then(r => r.text())
     ]);
     pyodide.runPython(gen); pyodide.runPython(algo);
-    setStatus('✓ Ready — pick a mode and hit Generate', 'ok');
+    if (fromLink) {
+      setStatus('✓ Shared flowchart loaded — hit Generate','ok');
+    } else {
+      setStatus('✓ Ready — pick a mode and hit Generate', 'ok');
+    }
   } catch(e) { setStatus('✗ ' + e.message, 'err'); }
 }
 
 /* ---------- mermaid ---------- */
+let flowDir = 'TD';
+function setDir(d) {
+  flowDir = d;
+  document.getElementById('dir-td').classList.toggle('on', d === 'TD');
+  document.getElementById('dir-lr').classList.toggle('on', d === 'LR');
+  if (currentGraph) renderGraph(JSON.stringify(currentGraph), true);
+}
 function mermaidEsc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'#lt;').replace(/>/g,'#gt;')
     .replace(/"/g,'#quot;').replace(/#/g,'#35;').replace(/\n/g,' ').trim();
 }
+const NODE_CLASS = { start:'clsStart', end:'clsEnd', decision:'clsDec', process:'clsProc', io:'clsIO', subroutine:'clsSub' };
 function graphToMermaid(g) {
-  let out = 'flowchart TD\n';
+  let out = `flowchart ${flowDir}\n`;
+  out += '    classDef clsStart fill:#34d399,stroke:#0b3d2c,color:#0b3d2c,stroke-width:2px\n';
+  out += '    classDef clsEnd fill:#f87171,stroke:#5b1a1a,color:#5b1a1a,stroke-width:2px\n';
+  out += '    classDef clsDec fill:#fbbf24,stroke:#5b3a06,color:#5b3a06,stroke-width:2px\n';
+  out += '    classDef clsProc fill:#dbe2ff,stroke:#6c7bff,color:#2a2f6e,stroke-width:2px\n';
+  out += '    classDef clsIO fill:#c9f6ff,stroke:#0e7490,color:#0e4a5e,stroke-width:2px\n';
+  out += '    classDef clsSub fill:#e9defc,stroke:#9d6bff,color:#4a2a86,stroke-width:2px\n';
   for (const n of g.nodes) {
     const l = mermaidEsc(n.label), id = n.id;
     if (n.type==='start'||n.type==='end') out += `    ${id}(["${l}"])\n`;
@@ -293,6 +357,7 @@ function graphToMermaid(g) {
     else if (n.type==='io') out += `    ${id}[/"${l}"/]\n`;
     else if (n.type==='subroutine') out += `    ${id}[["${l}"]]\n`;
     else out += `    ${id}["${l}"]\n`;
+    if (NODE_CLASS[n.type]) out += `    class ${id} ${NODE_CLASS[n.type]}\n`;
   }
   for (const e of g.edges) {
     const lbl = e.label ? `|"${mermaidEsc(e.label)}"|` : '';
@@ -433,23 +498,100 @@ function downloadSVG() {
   a.download = 'flowchart.svg'; a.click();
 }
 
-async function renderGraph(json) {
+async function renderGraph(json, keepState) {
   const out = document.getElementById('flowchart-output');
   const stats = document.getElementById('graph-stats');
-  stopTrace();
+  if (!keepState) stopTrace();
   let g;
   try { g = JSON.parse(json); } catch(e) { setStatus('✗ Bad generator output','err'); return; }
   if (g.error) { setStatus('✗ '+g.error,'err'); return; }
   if (!g.nodes.length) { setStatus('✗ Empty flowchart','err'); return; }
   currentGraph = g;
+  currentMermaid = graphToMermaid(g);
   try {
-    const { svg } = await mermaid.render('fc'+Date.now(), graphToMermaid(g));
-    currentSVG = svg; currentZoom = 1;
+    const { svg } = await mermaid.render('fc'+Date.now(), currentMermaid);
+    currentSVG = svg; if (!keepState) currentZoom = 1;
     out.innerHTML = svg; applyZoom(); wireNodes();
     stats.textContent = `${g.nodes.length} nodes · ${g.edges.length} edges` + (g.truncated?' · truncated':'');
     document.getElementById('btn-trace').disabled = false;
-    setStatus('✓ Flowchart ready — click any node, or hit Trace execution','ok');
+    if (!keepState) setStatus('✓ Flowchart ready — click any node, or hit Trace execution','ok');
   } catch(e) { setStatus('✗ Render failed: '+e.message,'err'); }
+}
+
+/* ---------- export / share / fullscreen ---------- */
+function toggleMenu(id) {
+  const m = document.getElementById(id);
+  const was = m.classList.contains('on');
+  document.querySelectorAll('.drop-menu').forEach(x => x.classList.remove('on'));
+  if (!was) m.classList.add('on');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.drop-wrap')) document.querySelectorAll('.drop-menu').forEach(x => x.classList.remove('on'));
+});
+
+function downloadPNG() {
+  if (!currentSVG) return;
+  const svgEl = new DOMParser().parseFromString(currentSVG, 'image/svg+xml').querySelector('svg');
+  const w = parseFloat(svgEl.getAttribute('width')) || 800;
+  const h = parseFloat(svgEl.getAttribute('height')) || 600;
+  const scale = 2;
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = w * scale; canvas.height = h * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(scale, scale); ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(img.src);
+    canvas.toBlob(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'flowchart.png'; a.click();
+      setStatus('✓ PNG exported','ok');
+    });
+  };
+  img.onerror = () => setStatus('✗ PNG export failed','err');
+  img.src = URL.createObjectURL(new Blob([currentSVG], {type:'image/svg+xml;charset=utf-8'}));
+}
+
+function copyMermaid() {
+  if (!currentMermaid) return;
+  navigator.clipboard.writeText(currentMermaid)
+    .then(() => setStatus('✓ Mermaid source copied — paste into Notion, docs, or mermaid.live','ok'))
+    .catch(() => setStatus('✗ Copy failed','err'));
+}
+
+function activeMode() { return document.querySelector('.mode-card.active').dataset.tab; }
+function activeInput() {
+  const m = activeMode();
+  return m === 'code' ? document.getElementById('code-input').value
+       : m === 'algo' ? document.getElementById('algo-input').value
+       : document.getElementById('question-input').value;
+}
+function shareLink() {
+  try {
+    const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ mode: activeMode(), input: activeInput() }))));
+    const url = location.origin + location.pathname + '#fc=' + payload;
+    navigator.clipboard.writeText(url).then(() => setStatus('✓ Share link copied — anyone opening it sees your input','ok'));
+  } catch(e) { setStatus('✗ Share failed','err'); }
+}
+function loadFromHash() {
+  if (!location.hash.startsWith('#fc=')) return false;
+  try {
+    const d = JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(4)))));
+    if (!d || !d.input) return false;
+    const tab = ['code','algo','question'].includes(d.mode) ? d.mode : 'code';
+    document.querySelectorAll('.mode-card').forEach(x => x.classList.toggle('active', x.dataset.tab === tab));
+    document.querySelectorAll('.panel').forEach(x => x.classList.toggle('active', x.id === 'panel-' + tab));
+    if (tab === 'code') document.getElementById('code-input').value = d.input;
+    else if (tab === 'algo') document.getElementById('algo-input').value = d.input;
+    else document.getElementById('question-input').value = d.input;
+    return true;
+  } catch(e) { return false; }
+}
+
+function toggleFullscreen() {
+  document.querySelectorAll('main .card')[1].classList.toggle('fullscreen');
 }
 
 async function genFromCode() {
@@ -493,9 +635,9 @@ async function genFromQuestion() {
   setBtn('btn-question', false);
 }
 
-function loadExample(kind) {
-  if (kind==='code') document.getElementById('code-input').value =
-`def is_prime(n):
+const EXAMPLES = {
+  code: {
+    prime: `def is_prime(n):
     if n < 2:
         return False
     for i in range(2, int(n ** 0.5) + 1):
@@ -507,9 +649,31 @@ num = int(input("Enter number: "))
 if is_prime(num):
     print(num, "is prime")
 else:
-    print(num, "is not prime")`;
-  else document.getElementById('algo-input').value =
-`START
+    print(num, "is not prime")`,
+    factorial: `n = int(input("Enter n: "))
+fact = 1
+i = 1
+while i <= n:
+    fact = fact * i
+    i = i + 1
+print("Factorial:", fact)`,
+    grade: `marks = int(input("Enter marks: "))
+if marks >= 90:
+    print("Grade A")
+elif marks >= 75:
+    print("Grade B")
+elif marks >= 50:
+    print("Grade C")
+else:
+    print("Fail")`,
+    fib: `n = int(input("How many terms? "))
+a, b = 0, 1
+for i in range(n):
+    print(a)
+    a, b = b, a + b`
+  },
+  algo: {
+    prime: `START
 INPUT n
 SET is_prime = True
 IF n < 2 THEN
@@ -526,7 +690,52 @@ IF is_prime THEN
 ELSE
     PRINT "Not prime"
 END IF
-END`;
+END`,
+    max: `START
+INPUT n
+SET max = 0
+SET count = 1
+WHILE count <= n
+    INPUT x
+    IF x > max THEN
+        SET max = x
+    END IF
+    SET count = count + 1
+END WHILE
+PRINT max
+END`,
+    search: `START
+INPUT n, target
+SET found = False
+FOR i FROM 1 TO n
+    INPUT a
+    IF a == target THEN
+        SET found = True
+    END IF
+END FOR
+IF found THEN
+    PRINT "Found"
+ELSE
+    PRINT "Not found"
+END IF
+END`,
+    sum: `START
+INPUT n
+SET sum = 0
+REPEAT
+    SET sum = sum + (n % 10)
+    SET n = n / 10
+UNTIL n == 0
+PRINT sum
+END`
+  }
+};
+
+function loadExample(kind, which) {
+  const ex = EXAMPLES[kind] && EXAMPLES[kind][which];
+  if (!ex) return;
+  document.getElementById(kind === 'code' ? 'code-input' : 'algo-input').value = ex;
+  setStatus('✓ Example loaded — hit Generate','ok');
 }
 
 init();
