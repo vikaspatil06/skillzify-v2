@@ -65,9 +65,15 @@ app.post("/api/explain", async (req, res) => {
     "4. Keep the whole answer under 120 words. Be encouraging.";
   const useSocratic = mode === "tutor";
   const useFlowchart = mode === "flowchart";
+  const useGenerate = mode === "generate";
+  const useFix = mode === "fix";
   const style = useSocratic ? socraticStyle : tutorStyle;
   const prompt = useFlowchart
     ? "Write ONLY clean, simple Python code that solves this problem. Output raw code only — no markdown fences, no explanation, no comments beyond one line:\n\n" + code
+    : useGenerate
+    ? "Write clean, beginner-friendly Python code for this request. Output the code inside a single ```python fenced block, then 2-3 short bullet points explaining the key parts. Keep it simple — no advanced tricks.\n\nREQUEST:\n" + code
+    : useFix
+    ? "A student's Python code has this error. Output the FULL corrected code inside a single ```python fenced block, then 2-3 short bullet points explaining what was wrong and what you changed. Fix only what's broken — keep their style.\n\nCODE:\n" + code + "\n\nERROR:\n" + errText
     : useSocratic
     ? "A student is stuck on this Python exercise. Their code is failing. Follow your Socratic rules strictly.\n\n" + code + "\n\n" + errText
     : errText
