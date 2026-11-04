@@ -37,10 +37,37 @@
   function stepKind(s) { return s.t === "lesson" ? "📖 Lesson" : "🏋️ Exercise"; }
   function stepMins(s) { return s.t === "lesson" ? LESSON_MIN : EX_MIN; }
 
-  /* ---------- enrollment: paths as keys ---------- */
-  function isEnrolled(p) { try { return window.SkillzifyPaths.isEnrolled(p.id); } catch (e) { return false; } }
-  function doEnroll(id) { try { window.SkillzifyPaths.enroll(id); } catch (e) {} }
-  function doLeave(id) { try { window.SkillzifyPaths.leave(id); } catch (e) {} }
+  /* ---------- enrollment: paths as keys ----------
+     Local-storage backed with fallback, so enrollment works even if the
+     browser cached a stale paths-data.js without the helper functions. */
+  var ENROLL_KEY = "skillzify_enrolled_paths";
+  function readEnrolled() {
+    try {
+      var P = window.SkillzifyPaths;
+      if (P && typeof P.enrolled === "function") return P.enrolled();
+    } catch (e) {}
+    try {
+      var v = JSON.parse(localStorage.getItem(ENROLL_KEY) || "[]");
+      return Array.isArray(v) ? v : [];
+    } catch (e) { return []; }
+  }
+  function writeEnrolled(ids) { try { localStorage.setItem(ENROLL_KEY, JSON.stringify(ids)); } catch (e) {} }
+  function isEnrolled(p) { return readEnrolled().indexOf(p.id) !== -1; }
+  function doEnroll(id) {
+    try {
+      var P = window.SkillzifyPaths;
+      if (P && typeof P.enroll === "function") { P.enroll(id); return; }
+    } catch (e) {}
+    var cur = readEnrolled();
+    if (cur.indexOf(id) === -1) { cur.push(id); writeEnrolled(cur); }
+  }
+  function doLeave(id) {
+    try {
+      var P = window.SkillzifyPaths;
+      if (P && typeof P.leave === "function") { P.leave(id); return; }
+    } catch (e) {}
+    writeEnrolled(readEnrolled().filter(function (x) { return x !== id; }));
+  }
   // lessons in this path still locked in the sequential chain (the "key" value)
   function lockedLessonCount(p) {
     var n = 0;
