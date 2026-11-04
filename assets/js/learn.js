@@ -822,9 +822,19 @@
   function pathUnlockMap() {
     try {
       var P = window.SkillzifyPaths;
-      if (P && typeof P.pathUnlockedLessons === "function") return P.pathUnlockedLessons();
-    } catch (e) {}
-    return {};
+      if (!P) return {};
+      if (typeof P.pathUnlockedLessons === "function") return P.pathUnlockedLessons();
+      // Fallback: stale cached paths-data.js without the enrollment helpers —
+      // compute the map directly from localStorage + the path array.
+      var enrolled = [];
+      try { enrolled = JSON.parse(localStorage.getItem("skillzify_enrolled_paths") || "[]") || []; } catch (e) {}
+      var map = {};
+      P.forEach(function (p) {
+        if (enrolled.indexOf(p.id) === -1) return;
+        (p.steps || []).forEach(function (s) { if (s.t === "lesson" && s.id) map[s.id] = p.id; });
+      });
+      return map;
+    } catch (e) { return {}; }
   }
   // true when this lesson is unlocked solely because of a path enrollment
   function isPathOnlyUnlocked(gi) {
