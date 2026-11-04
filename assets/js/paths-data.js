@@ -72,35 +72,41 @@ window.SkillzifyPaths = [
 /* ---------- Path enrollment: paths as keys ----------
    Enrolling in a path unlocks all of its lessons, even ones still
    locked in the sequential lesson chain. learn.js reads
-   pathUnlockedLessons() to honor this. Stored locally per device. */
+   pathUnlockedLessons() to honor this.
+   Shape: { <pathId>: { enrolled: bool, at: timestamp } } — per-path
+   timestamps let sync.js merge enrollments across devices
+   (last-write-wins per path; leaving writes a tombstone). */
 (function () {
   "use strict";
   var KEY = "skillzify_enrolled_paths";
-  function read() {
+  function readMap() {
+    var map = {};
     try {
-      var v = JSON.parse(localStorage.getItem(KEY) || "[]");
-      return Array.isArray(v) ? v : [];
-    } catch (e) { return []; }
+      var v = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (Array.isArray(v)) v.forEach(function (id) { map[id] = { enrolled: true, at: 0 }; });
+      else if (v && typeof v === "object") Object.keys(v).forEach(function (k) {
+        var e = v[k] || {};
+        map[k] = { enrolled: !!e.enrolled, at: e.at || 0 };
+      });
+    } catch (e) {}
+    return map;
   }
-  function write(ids) {
-    try { localStorage.setItem(KEY, JSON.stringify(ids)); } catch (e) {}
-  }
+  function writeMap(map) { try { localStorage.setItem(KEY, JSON.stringify(map)); } catch (e) {} }
   var P = window.SkillzifyPaths;
   if (!P) return;
-  P.enrolled = function () { return read(); };
-  P.isEnrolled = function (id) { return read().indexOf(id) !== -1; };
-  P.enroll = function (id) {
-    var e = read();
-    if (e.indexOf(id) === -1) { e.push(id); write(e); }
+  P.enrollMap = readMap;
+  P.enrolled = function () {
+    var m = readMap();
+    return Object.keys(m).filter(function (k) { return m[k].enrolled; });
   };
-  P.leave = function (id) {
-    write(read().filter(function (x) { return x !== id; }));
-  };
+  P.isEnrolled = function (id) { var m = readMap(); return !!(m[id] && m[id].enrolled); };
+  P.enroll = function (id) { var m = readMap(); m[id] = { enrolled: true, at: Date.now() }; writeMap(m); };
+  P.leave = function (id) { var m = readMap(); m[id] = { enrolled: false, at: Date.now() }; writeMap(m); };
   // lessonId -> pathId for every lesson step of every enrolled path
   P.pathUnlockedLessons = function () {
-    var map = {}, e = read();
+    var map = {}, m = readMap();
     P.forEach(function (p) {
-      if (e.indexOf(p.id) === -1) return;
+      if (!(m[p.id] && m[p.id].enrolled)) return;
       (p.steps || []).forEach(function (s) {
         if (s.t === "lesson" && s.id) map[s.id] = p.id;
       });
