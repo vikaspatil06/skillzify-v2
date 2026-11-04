@@ -826,11 +826,18 @@
       if (typeof P.pathUnlockedLessons === "function") return P.pathUnlockedLessons();
       // Fallback: stale cached paths-data.js without the enrollment helpers —
       // compute the map directly from localStorage + the path array.
-      var enrolled = [];
-      try { enrolled = JSON.parse(localStorage.getItem("skillzify_enrolled_paths") || "[]") || []; } catch (e) {}
+      var m = {};
+      try {
+        var v = JSON.parse(localStorage.getItem("skillzify_enrolled_paths") || "null");
+        if (Array.isArray(v)) v.forEach(function (id) { m[id] = { enrolled: true, at: 0 }; });
+        else if (v && typeof v === "object") Object.keys(v).forEach(function (k) {
+          var e = v[k] || {};
+          m[k] = { enrolled: !!e.enrolled, at: e.at || 0 };
+        });
+      } catch (e) {}
       var map = {};
       P.forEach(function (p) {
-        if (enrolled.indexOf(p.id) === -1) return;
+        if (!(m[p.id] && m[p.id].enrolled)) return;
         (p.steps || []).forEach(function (s) { if (s.t === "lesson" && s.id) map[s.id] = p.id; });
       });
       return map;
@@ -1404,10 +1411,27 @@
   document.addEventListener("DOMContentLoaded", function () {
     if (!document.getElementById("tracks")) return;
     renderAll();
+    lastUnlockJson = unlockJson();
     document.getElementById("lm-close").addEventListener("click", closeLesson);
     document.getElementById("lm-backdrop").addEventListener("click", function (e) {
       if (e.target.id === "lm-backdrop") closeLesson();
     });
+  });
+
+  /* ---------- live refresh on cross-device sync ----------
+     When another device's enrollment changes the unlock set, re-render
+     the path overview — never while a lesson modal is open. */
+  var lastUnlockJson = "";
+  function unlockJson() {
+    try { return JSON.stringify(Object.keys(pathUnlockMap()).sort()); } catch (e) { return ""; }
+  }
+  window.addEventListener("skillzify-sync", function () {
+    try {
+      if (modalOpen) return;
+      if (!document.getElementById("tracks")) return;
+      var cur = unlockJson();
+      if (cur !== lastUnlockJson) { lastUnlockJson = cur; renderAll(); }
+    } catch (e) {}
   });
 
   window.SkillzifyLearn = {
