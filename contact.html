@@ -14,7 +14,7 @@
   <meta name="description" content="Contact the Skillzify team.">
   <title>Contact — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=6">
+  <link rel="stylesheet" href="assets/css/style.css?v=7">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -28,7 +28,7 @@
   <section class="page-hero">
     <div class="container">
       <h1 class="section-title">✉️ Contact us</h1>
-      <p class="section-sub">Questions, feedback, or lesson requests — fill this in and your email app will open with the message ready to send to us.</p>
+      <p class="section-sub">Questions, feedback, or content requests — pick a topic, write your message, and your email app will open with everything ready to send.</p>
     </div>
   </section>
 
@@ -37,6 +37,15 @@
       <div class="two-col">
         <div class="form-card" style="margin:0;max-width:none">
           <form id="contact-form">
+            <div class="form-group">
+              <label class="field-lbl">Topic</label>
+              <div class="pill-row" id="c-topics">
+                <button type="button" class="pill active" data-topic="General">💬 General</button>
+                <button type="button" class="pill" data-topic="Bug">🐞 Bug report</button>
+                <button type="button" class="pill" data-topic="Content">📝 Content request</button>
+                <button type="button" class="pill" data-topic="Feedback">💡 Feedback</button>
+              </div>
+            </div>
             <div class="form-group">
               <label class="field-lbl" for="c-name">Name</label>
               <input type="text" id="c-name" placeholder="Your name" required>
@@ -58,10 +67,43 @@
         </div>
         <div>
           <h2 class="section-title" style="font-size:1.5rem">Other ways to reach us</h2>
-          <div class="card" style="margin-top:16px"><div class="icon">📧</div><h3>Email</h3><p><a href="mailto:skillzifyind2024@gmail.com">skillzifyind2024@gmail.com</a></p></div>
-          <div class="card" style="margin-top:16px"><div class="icon">💬</div><h3>Community</h3><p>Join learners discussing lessons and sharing projects.</p></div>
-          <div class="card" style="margin-top:16px"><div class="icon">🐞</div><h3>Found a bug?</h3><p>Tell us which page and what happened — screenshots help!</p></div>
+          <div class="card" style="margin-top:16px"><div class="icon">📧</div><h3>Email</h3><p>Prefer your own email app? Write to us directly:</p><p><a href="mailto:skillzifyind2024@gmail.com">skillzifyind2024@gmail.com</a></p></div>
+          <div class="card" style="margin-top:16px"><div class="icon">🐞</div><h3>Found a bug?</h3><p>File it on GitHub Issues with the page name and what happened — screenshots help!</p><p><a class="btn btn-sm btn-ghost" href="https://github.com/vikaspatil06/skillzify-v2/issues" target="_blank" rel="noopener">Open an issue →</a></p></div>
+          <div class="card" style="margin-top:16px"><div class="icon">⏱️</div><h3>Response time</h3><p>We read everything. Expect a reply within a couple of days — often sooner.</p></div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0">
+    <div class="container" style="max-width:760px">
+      <h2 class="section-title" style="font-size:1.6rem">Frequently asked questions</h2>
+      <p class="hint" style="margin-bottom:8px">Quick answers — no email needed.</p>
+      <div class="faq">
+        <details>
+          <summary>Is Skillzify really free?</summary>
+          <p>Yes — every lesson, exercise, project and reference entry is free, with no paywalls or premium tier.</p>
+        </details>
+        <details>
+          <summary>Do I need an account?</summary>
+          <p>No. You can learn entirely without one. Signing in (free) syncs your progress across devices.</p>
+        </details>
+        <details>
+          <summary>Where is my progress stored?</summary>
+          <p>In your browser's local storage. If you sign in, it also syncs to your Firebase-backed account so your phone and laptop stay in step.</p>
+        </details>
+        <details>
+          <summary>The compiler won't load. What do I do?</summary>
+          <p>It downloads the Python runtime (~10 MB) on first use, so the very first load needs a stable connection. If it still fails, reload the page — and if that doesn't help, send us a bug report with your browser name.</p>
+        </details>
+        <details>
+          <summary>Found a mistake in a lesson or exercise?</summary>
+          <p>Thank you! Use the form above with the <strong>Bug report</strong> topic (or open a GitHub Issue) and tell us the page name and what's wrong.</p>
+        </details>
+        <details>
+          <summary>Can I request a lesson, exercise or project?</summary>
+          <p>Absolutely — that's what the <strong>Content request</strong> topic is for. Tell us what you want to learn and we'll consider it for the roadmap.</p>
+        </details>
       </div>
     </div>
   </section>
@@ -81,6 +123,15 @@
 <script src="assets/js/sync.js"></script>
 <script>
 // Contact form → opens the visitor's email app addressed to us (mailto fallback)
+var contactTopic = "General";
+document.querySelectorAll("#c-topics .pill").forEach(function (b) {
+  b.addEventListener("click", function () {
+    contactTopic = b.getAttribute("data-topic");
+    document.querySelectorAll("#c-topics .pill").forEach(function (x) {
+      x.classList.toggle("active", x === b);
+    });
+  });
+});
 document.getElementById("contact-form").addEventListener("submit", function (e) {
   e.preventDefault();
   var name = document.getElementById("c-name").value.trim();
@@ -93,7 +144,7 @@ document.getElementById("contact-form").addEventListener("submit", function (e) 
   window.Skillzify.storeSet("skillzify_messages", msgs);
   var body = "Name: " + name + "\nEmail: " + email + "\n\n" + message;
   window.location.href = "mailto:skillzifyind2024@gmail.com"
-    + "?subject=" + encodeURIComponent("[Skillzify] " + subject)
+    + "?subject=" + encodeURIComponent("[Skillzify:" + contactTopic + "] " + subject)
     + "&body=" + encodeURIComponent(body);
   e.target.reset();
   window.Skillzify.toast("Opening your email app — just hit send ✉️", "success");
