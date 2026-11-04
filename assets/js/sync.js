@@ -223,50 +223,12 @@
   /* ---------- status ---------- */
   var statusCbs = [];
   var lastStatus = { text: "Sync offline", at: 0 };
-  function ensurePill() {
-    try {
-      var el = document.getElementById("skillzify-sync-pill");
-      if (!el && document.body) {
-        el = document.createElement("div");
-        el.id = "skillzify-sync-pill";
-        el.style.cssText = "position:fixed;bottom:12px;right:12px;z-index:9999;" +
-          "font-size:11px;padding:5px 12px;border-radius:20px;background:rgba(20,20,25,.82);" +
-          "color:#fff;font-family:system-ui,sans-serif;cursor:pointer;user-select:none;" +
-          "border:1px solid rgba(255,255,255,.15);";
-        el.title = "Cloud sync status — click to sync now";
-        el.onclick = function () { try { syncCycle(); } catch (e) {} };
-        document.body.appendChild(el);
-      }
-      return el;
-    } catch (e) { return null; }
-  }
   function setStatus(text) {
     lastStatus = { text: text, at: Date.now() };
     statusCbs.forEach(function (cb) { try { cb(lastStatus.text, lastStatus.at); } catch (e) {} });
     try {
       var els = document.querySelectorAll("[data-sync-status]");
       for (var i = 0; i < els.length; i++) els[i].textContent = text;
-      var pill = ensurePill();
-      if (pill) pill.textContent = "☁️ " + text;
-    } catch (e) {}
-  }
-  function showToast(msg) {
-    try {
-      var t = document.getElementById("skillzify-sync-toast");
-      if (!t && document.body) {
-        t = document.createElement("div");
-        t.id = "skillzify-sync-toast";
-        t.style.cssText = "position:fixed;top:14px;left:50%;transform:translateX(-50%);" +
-          "z-index:10000;background:#1a73e8;color:#fff;font-size:13px;padding:8px 18px;" +
-          "border-radius:8px;font-family:system-ui,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.35);" +
-          "transition:opacity .4s;opacity:0;pointer-events:none;";
-        document.body.appendChild(t);
-      }
-      if (!t) return;
-      t.textContent = msg;
-      t.style.opacity = "1";
-      if (t._timer) clearTimeout(t._timer);
-      t._timer = setTimeout(function () { t.style.opacity = "0"; }, 2600);
     } catch (e) {}
   }
   function fmtTime(ts) {
@@ -334,7 +296,6 @@
     writeLocalProgress(mergeProgress(readLocalProgress(), cloud[1]));
     writeLocalExercises(mergeExercises(readLocalExercises(), cloud[2]));
     setStatus("Synced ✓ " + fmtTime(Date.now()));
-    showToast("☁️ Synced from your other device — refresh the page to see it");
     try {
       if (typeof CustomEvent === "function")
         window.dispatchEvent(new CustomEvent("skillzify-sync", { detail: { at: Date.now() } }));
@@ -386,7 +347,6 @@
   function init() {
     if (inited) return;
     inited = true;
-    try { ensurePill(); } catch (e) {}
     try {
       if (!root.firebase || !root.firebase.auth) { setStatus("Sync offline"); return; }
       root.firebase.auth().onAuthStateChanged(function (u) {
