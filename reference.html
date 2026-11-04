@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify Python reference — built-ins, string, list and dict methods, keywords.">
   <title>Python Reference — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=6">
+  <link rel="stylesheet" href="assets/css/style.css?v=7">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -29,6 +29,7 @@
     <div class="container">
       <h1 class="section-title">📖 Python Reference</h1>
       <p class="section-sub">Every example runs — hit <strong>Try it yourself</strong> on any of them.</p>
+      <p class="hint" id="ref-stats" style="margin-top:8px"></p>
     </div>
   </section>
 
@@ -70,59 +71,6 @@
 <script src="assets/js/auth.js"></script>
 <script src="assets/js/sync.js"></script>
 <script src="assets/js/reference-data.js"></script>
-<script>
-(function () {
-  "use strict";
-  var R = window.SkillzifyReference || [];
-  var nav = document.getElementById("ref-nav"), content = document.getElementById("ref-content");
-  var search = document.getElementById("ref-search");
-  function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
-
-  function groups(list){
-    var g={}, order=[];
-    list.forEach(function(r){ if(!g[r.group]){g[r.group]=[];order.push(r.group);} g[r.group].push(r); });
-    return order.map(function(k){return{group:k,items:g[k]};});
-  }
-  function show(r){
-    Array.prototype.forEach.call(nav.querySelectorAll(".ref-link"),function(a){a.classList.toggle("active",a.getAttribute("data-name")===r.name);});
-    content.innerHTML = '<h2>'+esc(r.name)+'</h2><p><code class="sig">'+esc(r.sig)+'</code></p><p>'+esc(r.desc)+'</p>'+
-      '<div class="ref-example"><pre>'+esc(r.ex)+'</pre><div class="try-row">'+
-      '<button class="btn btn-primary btn-sm" id="ref-try">▶ Try it yourself</button>'+
-      '<button class="btn btn-ghost btn-sm" id="ref-copy">📋 Copy</button></div></div>';
-    document.getElementById("ref-try").addEventListener("click",function(){
-      try{localStorage.setItem("skillzify_compiler_code",r.ex);}catch(e){}
-      location.href="compiler.html";
-    });
-    document.getElementById("ref-copy").addEventListener("click",function(){
-      copyText(r.ex); window.Skillzify.toast("Copied 📋","success");
-    });
-    if(location.hash) history.replaceState(null,"","#"+encodeURIComponent(r.name));
-  }
-  function copyText(t){
-    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).catch(function(){});return;}
-    var ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();
-    try{document.execCommand("copy");}catch(e){} ta.remove();
-  }
-  function renderNav(filter){
-    filter=(filter||"").toLowerCase();
-    var list=R.filter(function(r){return !filter||r.name.toLowerCase().indexOf(filter)>=0||r.desc.toLowerCase().indexOf(filter)>=0;});
-    nav.innerHTML=groups(list).map(function(g){
-      return '<div class="ref-group">'+esc(g.group)+'</div>'+g.items.map(function(r){
-        return '<a class="ref-link" data-name="'+esc(r.name)+'">'+esc(r.name)+'</a>';}).join("");
-    }).join("")||'<p class="muted" style="padding:8px">No matches.</p>';
-    Array.prototype.forEach.call(nav.querySelectorAll(".ref-link"),function(a){
-      a.addEventListener("click",function(){
-        var r=R.filter(function(x){return x.name===a.getAttribute("data-name");})[0];
-        if(r)show(r);
-      });
-    });
-  }
-  search.addEventListener("input",function(){renderNav(search.value);});
-  renderNav("");
-  var initial=null;
-  if(location.hash){var h=decodeURIComponent(location.hash.slice(1));initial=R.filter(function(r){return r.name===h;})[0];}
-  show(initial||R[0]);
-})();
-</script>
+<script src="assets/js/reference.js?v=1"></script>
 </body>
 </html>
