@@ -50,15 +50,46 @@
   /* ---------------- Attempts + XP ---------------- */
   function getAttempts() { return S.storeGet(ATT_KEY, {}); }
   function saveAttempts(a) { S.storeSet(ATT_KEY, a); }
-  function attFor(id) { return getAttempts()[id] || { attempts: 0, solved: false, hintsUsed: 0, revealed: false, bestMs: 0, lastTry: 0 }; }
+  function attFor(id) { return getAttempts()[id] || { attempts: 0, solved: false, hintsUsed: 0, revealed: false, bestMs: 0, lastTry: 0, xpEarned: 0 }; }
   function setAtt(id, patch) {
     var all = getAttempts();
-    var cur = all[id] || { attempts: 0, solved: false, hintsUsed: 0, revealed: false, bestMs: 0, lastTry: 0 };
+    var cur = all[id] || { attempts: 0, solved: false, hintsUsed: 0, revealed: false, bestMs: 0, lastTry: 0, xpEarned: 0 };
     Object.keys(patch).forEach(function (k) { cur[k] = patch[k]; });
     cur.lastTry = Date.now();
     all[id] = cur; saveAttempts(all);
     if (window.SkillzifySync) window.SkillzifySync.markDirty();
     return cur;
+  }
+
+  /* ---------------- Draft code persistence ---------------- */
+  var DRAFT_KEY = "skillzify_exercise_drafts";
+  function getDrafts() { try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "{}"); } catch (e) { return {}; } }
+  function getDraft(id) { var d = getDrafts(); return d[id] != null ? d[id] : null; }
+  function saveDraft(id, code) {
+    try { var d = getDrafts(); d[id] = code; localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch (e) {}
+  }
+  function clearDraft(id) {
+    try { var d = getDrafts(); delete d[id]; localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch (e) {}
+  }
+
+  /* XP award: no-hint bonus (1.25x), revealed solution halves it */
+  function xpForSolve(ex, a) {
+    var gain = ex.xp;
+    if (a.hintsUsed === 0 && !a.revealed) gain = Math.round(gain * 1.25);
+    if (a.revealed) gain = Math.round(gain * 0.5);
+    return gain;
+  }
+  function nextUnsolvedId() {
+    var atts = getAttempts();
+    for (var i = 0; i < EX.length; i++) {
+      var a = atts[EX[i].id];
+      if (!a || !a.solved) return EX[i].id;
+    }
+    return null;
+  }
+  function nextButtonHtml() {
+    var nid = nextUnsolvedId();
+    return nid ? '<p style="margin-top:12px"><a class="btn btn-sm" href="#ex=' + nid + '">Next exercise →</a></p>' : "";
   }
   function addXP(n, label) {
     try {
@@ -83,8 +114,11 @@
           pyodide.runPython(prog);
           var got = String(pyodide.globals.get("__sz_out"));
           var isErr = got.indexOf("ERROR:") === 0;
-          var pass = !isErr && got.trim() === String(t.expect).trim();
-          results.push({ pass: pass, got: got, expect: String(t.expect), run: t.run, error: isErr ? got.slice(6) : null });
+          // expectError: passes only when the code raises the expected error
+          var pass = t.expectError != null
+            ? (isErr && got.trim() === String(t.expectError).trim())
+            : (!isErr && got.trim() === String(t.expect).trim());
+          results.push({ pass: pass, got: got, expect: String(t.expectError != null ? t.expectError : t.expect), run: t.run, error: isErr ? got.slice(6) : null });
         }
       } catch (e) {
         done({ error: "Your code crashed before the tests could run: " + String(e).split("\n").pop() });
@@ -189,8 +223,9 @@
     }
     host.innerHTML = list.map(function (ex) {
       var a = attFor(ex.id);
-      return '<a class="card ex-card" href="#ex=' + ex.id + '">' +
-        '<div class="ex-top"><span class="badge">' + esc(TOPIC_LABEL[ex.topic] || ex.topic) + '</span>' +
+      var c = topicColor(ex.topic);
+      return '<a class="card ex-card" href="#ex=' + ex.id + '" style="border-top:3px solid ' + c + '">' +
+        '<div class="ex-top"><span class="badge" style="color:' + c + ';border-color:' + c + '66">' + esc(TOPIC_LABEL[ex.topic] || ex.topic) + '</span>' +
         '<span class="ex-diff" title="Difficulty">' + diffStars(ex.difficulty) + '</span></div>' +
         '<h3>' + esc(ex.title) + '</h3>' +
         '<p class="ex-kind">' + (KIND_LABEL[ex.kind] || ex.kind) + ' · ' + ex.xp + ' XP' +
@@ -233,14 +268,73 @@
     var host = $("practice-stats");
     if (!host) return;
     var atts = getAttempts(), totalXP = 0;
-    EX.forEach(function (ex) { var a = atts[ex.id]; if (a && a.solved) totalXP += Math.round(ex.xp * (a.revealed ? 0.5 : 1)); });
+    EX.forEach(function (ex) {
+      var a = atts[ex.id];
+      if (a && a.solved) totalXP += a.xpEarned || Math.round(ex.xp * (a.revealed ? 0.5 : 1));
+    });
     host.innerHTML =
       '<div class="stat"><span class="stat-n">' + solvedCount() + '/' + EX.length + '</span><span class="stat-l">Solved</span></div>' +
       '<div class="stat"><span class="stat-n">' + totalXP + '</span><span class="stat-l">Exercise XP</span></div>' +
       '<div class="stat"><span class="stat-n">' + revisionQueue().length + '</span><span class="stat-l">To review</span></div>';
   }
 
-  function renderAll() { renderDaily(); renderRevision(); renderStats(); renderList(); }
+  /* ---------------- Topic colors, pills, progress ---------------- */
+  var TOPIC_COLORS = {
+    variables: "#6c7bff", strings: "#22d3ee", collections: "#9d6bff", loops: "#fbbf24",
+    functions: "#34d399", oop: "#f472b6", exceptions: "#f87171", dsa: "#fb923c"
+  };
+  function topicColor(t) { return TOPIC_COLORS[t] || "#6c7bff"; }
+
+  function topicProgress() {
+    var atts = getAttempts(), out = {};
+    TOPICS.forEach(function (t) { out[t] = { solved: 0, total: 0 }; });
+    EX.forEach(function (ex) {
+      out[ex.topic].total++;
+      var a = atts[ex.id];
+      if (a && a.solved) out[ex.topic].solved++;
+    });
+    return out;
+  }
+
+  function renderTopicProgress() {
+    var host = $("topic-progress");
+    if (!host) return;
+    var tp = topicProgress();
+    host.innerHTML = TOPICS.map(function (t) {
+      var s = tp[t], pct = s.total ? Math.round(s.solved / s.total * 100) : 0;
+      var done = s.total > 0 && s.solved === s.total;
+      return '<div class="tp-row">' +
+        '<span class="tp-label"><span class="tp-dot" style="background:' + topicColor(t) + '"></span>' + esc(TOPIC_LABEL[t]) +
+        (done ? ' <span class="badge badge-done">✓</span>' : '') + '</span>' +
+        '<div class="bar"><span style="width:' + pct + '%;background:' + topicColor(t) + '"></span></div>' +
+        '<span class="pct">' + s.solved + '/' + s.total + '</span></div>';
+    }).join("");
+  }
+
+  function setTopic(t) {
+    filters.topic = t;
+    renderPills();
+    renderList();
+  }
+
+  function renderPills() {
+    var host = $("topic-pills");
+    if (!host) return;
+    var tp = topicProgress();
+    function pill(t, label) {
+      var active = filters.topic === t ? " active" : "";
+      var sub = t === "all" ? EX.length + "" : tp[t].solved + "/" + tp[t].total;
+      var dot = t === "all" ? "" : '<span class="tp-dot" style="background:' + topicColor(t) + '"></span>';
+      return '<button class="pill' + active + '" data-topic="' + t + '">' + dot + esc(label) +
+        ' <span class="pill-n">' + sub + '</span></button>';
+    }
+    host.innerHTML = pill("all", "All") + TOPICS.map(function (t) { return pill(t, TOPIC_LABEL[t]); }).join("");
+    host.querySelectorAll(".pill").forEach(function (b) {
+      b.addEventListener("click", function () { setTopic(b.getAttribute("data-topic")); });
+    });
+  }
+
+  function renderAll() { renderDaily(); renderRevision(); renderStats(); renderTopicProgress(); renderPills(); renderList(); }
 
   /* ============================================================
      DETAIL VIEW
@@ -276,7 +370,10 @@
     html += '<div class="ex-head"><div><div class="ex-top"><span class="badge">' + esc(TOPIC_LABEL[ex.topic] || ex.topic) + '</span>' +
       '<span class="ex-diff">' + diffStars(ex.difficulty) + '</span>' + statusBadge(ex) + '</div>' +
       '<h1 class="section-title" style="margin:8px 0">' + esc(ex.title) + '</h1>' +
-      '<p>' + esc(ex.prompt) + '</p></div></div>';
+      '<p>' + esc(ex.prompt) + '</p>' +
+      '<p class="hint">Attempt ' + (a.attempts + 1) +
+      (a.hintsUsed ? ' · ' + a.hintsUsed + ' hint' + (a.hintsUsed > 1 ? 's' : '') + ' used' : '') +
+      (a.bestMs ? ' · ⏱ best ' + Math.round(a.bestMs / 1000) + 's' : '') + '</p></div></div>';
 
     if (ex.kind === "predict") {
       html += '<div class="card"><h3>🔮 What does this print?</h3><pre class="code">' + esc(ex.code) + '</pre><div id="predict-opts" class="opt-list">';
@@ -285,8 +382,11 @@
       });
       html += '</div><div id="predict-msg" style="margin-top:12px"></div></div>';
     } else {
+      var draft = getDraft(ex.id);
+      var initial = (draft != null && draft !== "") ? draft : (ex.starter || "");
       html += '<div class="card"><h3>' + (ex.kind === "fix" ? "🐞 Fix the bug" : "✍️ Your solution") + '</h3>' +
-        '<textarea id="ex-editor" class="code-editor" spellcheck="false">' + esc(ex.starter || "") + '</textarea>' +
+        '<textarea id="ex-editor" class="code-editor" spellcheck="false">' + esc(initial) + '</textarea>' +
+        '<p class="hint">Ctrl+Enter runs the tests · your draft auto-saves</p>' +
         '<div class="btn-row">' +
         '<button class="btn" id="ex-run">▶ Run tests</button>' +
         '<button class="btn btn-ghost" id="ex-reset">Reset</button>' +
@@ -362,13 +462,13 @@
         var msg = $("predict-msg");
         var a = setAtt(ex.id, { attempts: attFor(ex.id).attempts + 1 });
         if (i === ex.answer) {
-          msg.innerHTML = '<p class="pass">✓ Correct! ' + esc(ex.walkthrough || "") + '</p>';
           if (!a.solved) {
-            setAtt(ex.id, { solved: true });
-            var gain = ex.xp;
+            var gain = xpForSolve(ex, a);
+            setAtt(ex.id, { solved: true, xpEarned: gain });
             addXP(gain, "Solved: " + ex.title);
-            S.toast("+" + gain + " XP! 🎉", "success");
+            S.toast("+" + gain + " XP! 🎉" + (a.hintsUsed === 0 && !a.revealed ? " (no-hint bonus)" : ""), "success");
           }
+          msg.innerHTML = '<p class="pass">✓ Correct! ' + esc(ex.walkthrough || "") + '</p>' + nextButtonHtml();
           showCompare();
           renderAll();
         } else {
@@ -389,10 +489,20 @@
     $("ex-reset").addEventListener("click", function () {
       $("ex-editor").value = ex.starter || "";
       $("ex-results").innerHTML = "";
+      clearDraft(ex.id);
     });
     $("ex-timed").addEventListener("change", function () {
       if (this.checked) startTimer(parseInt($("ex-timelen").value, 10) * 1000);
       else stopTimer();
+    });
+    // Draft auto-save + Ctrl+Enter to run
+    var ed = $("ex-editor"), draftTimer = null;
+    ed.addEventListener("input", function () {
+      if (draftTimer) clearTimeout(draftTimer);
+      draftTimer = setTimeout(function () { saveDraft(ex.id, ed.value); }, 600);
+    });
+    ed.addEventListener("keydown", function (ev) {
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") { ev.preventDefault(); submitCode(false); }
     });
   }
 
@@ -425,14 +535,14 @@
         stopTimer();
         var a = attFor(ex.id);
         lastFailInfo = "";
-        html = '<p class="pass">🎉 All ' + total + ' tests passed!</p>' + html;
+        html = '<p class="pass">🎉 All ' + total + ' tests passed!</p>' + html + nextButtonHtml();
         if (!a.solved) {
-          var patch = { solved: true, attempts: a.attempts + 1 };
+          var gain = xpForSolve(ex, a);
+          var patch = { solved: true, attempts: a.attempts + 1, xpEarned: gain };
           if (!a.bestMs || (timerOn && ms < a.bestMs)) patch.bestMs = timerOn ? ms : a.bestMs;
           setAtt(ex.id, patch);
-          var gain = Math.round(ex.xp * (a.revealed ? 0.5 : 1));
           addXP(gain, "Solved: " + ex.title);
-          S.toast("+" + gain + " XP! 🎉", "success");
+          S.toast("+" + gain + " XP! 🎉" + (a.hintsUsed === 0 && !a.revealed ? " (no-hint bonus)" : ""), "success");
           if (A && A.log) A.log("practice", "Solved exercise: " + ex.title);
         } else {
           setAtt(ex.id, { attempts: a.attempts + 1 });
@@ -509,22 +619,11 @@
     if (m) { openExercise(m[1]); return; }
     // Deep link from dashboard weak spots: practice.html#topic=loops
     var tm = (location.hash || "").match(/^#topic=([\w-]+)/);
-    if (tm && TOPICS.indexOf(tm[1]) >= 0) {
-      filters.topic = tm[1];
-      var th = $("filter-topic");
-      if (th) th.value = tm[1];
-    }
+    if (tm && TOPICS.indexOf(tm[1]) >= 0) filters.topic = tm[1];
     showList();
   }
 
   function initFilters() {
-    var th = $("filter-topic");
-    if (th) {
-      th.innerHTML = '<option value="all">All topics</option>' + TOPICS.map(function (t) {
-        return '<option value="' + t + '">' + TOPIC_LABEL[t] + '</option>';
-      }).join("");
-      th.addEventListener("change", function () { filters.topic = th.value; renderList(); });
-    }
     var dh = $("filter-diff");
     if (dh) dh.addEventListener("change", function () { filters.difficulty = dh.value; renderList(); });
     var q = $("filter-q");
@@ -550,6 +649,7 @@
     solvedCount: solvedCount,
     totalCount: function () { return EX.length; },
     attFor: attFor,
+    topicProgress: topicProgress,
     topicAccuracy: function () {
       var atts = getAttempts(), out = {};
       TOPICS.forEach(function (t) { out[t] = { solved: 0, total: 0 }; });
