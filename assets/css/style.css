@@ -400,6 +400,8 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 .link-card { display: block; text-decoration: none; color: inherit; transition: transform .15s ease, box-shadow .15s ease; }
 .link-card:hover { transform: translateY(-3px); color: inherit; }
 .link-card .card-link { font-weight: 700; color: var(--primary); }
+/* Card-style anchors must not inherit the global a:hover underline */
+.link-card:hover, .proj-card2:hover, .path-card2:hover, .pin-card:hover { text-decoration: none; }
 @media (max-width: 720px) { .about-stats { grid-template-columns: repeat(2, 1fr); } }
 
 /* ---------- Contact ---------- */
