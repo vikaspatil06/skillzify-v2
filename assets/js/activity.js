@@ -84,7 +84,10 @@
     { id: "night_owl",    icon: "🦉", name: "Night Owl",     desc: "Code between midnight and 5 AM" },
     { id: "early_bird",   icon: "🌅", name: "Early Bird",    desc: "Code between 5 and 8 AM" },
     { id: "ex_first",     icon: "🏋️", name: "Problem Solver", desc: "Solve your first exercise" },
-    { id: "ex_10",        icon: "💪", name: "Decathlete",    desc: "Solve 10 exercises" }
+    { id: "ex_10",        icon: "💪", name: "Decathlete",    desc: "Solve 10 exercises" },
+    { id: "ex_25",        icon: "🔥", name: "On Fire",       desc: "Solve 25 exercises" },
+    { id: "ex_all",       icon: "🏆", name: "Completionist", desc: "Solve every exercise" },
+    { id: "topic_master", icon: "🎯", name: "Topic Master",  desc: "Solve every exercise in one topic" }
   ];
   function unlocked() { return get(ACH_KEY, {}); }
   function unlock(id) {
@@ -103,14 +106,26 @@
     if (done >= 1) unlock("first_steps");
     var totalLessons = (window.SkillzifyLearn && window.SkillzifyLearn.totalLessons) || 95;
     if (done >= totalLessons) unlock("scholar");
-    var exSolved = 0;
+    var exSolved = 0, exTotal = 0, topicDone = false;
     try {
       var atts = JSON.parse(localStorage.getItem("skillzify_exercise_attempts") || "{}");
       var EXD = window.SkillzifyPracticeData || [];
-      EXD.forEach(function (ex) { if (atts[ex.id] && atts[ex.id].solved) exSolved++; });
+      exTotal = EXD.length;
+      var byTopic = {};
+      EXD.forEach(function (ex) {
+        var t = byTopic[ex.topic] || (byTopic[ex.topic] = { total: 0, solved: 0 });
+        t.total++;
+        if (atts[ex.id] && atts[ex.id].solved) { exSolved++; t.solved++; }
+      });
+      topicDone = Object.keys(byTopic).some(function (t) {
+        return byTopic[t].total > 0 && byTopic[t].solved === byTopic[t].total;
+      });
     } catch (e) {}
     if (exSolved >= 1) unlock("ex_first");
     if (exSolved >= 10) unlock("ex_10");
+    if (exSolved >= 25) unlock("ex_25");
+    if (exTotal > 0 && exSolved >= exTotal) unlock("ex_all");
+    if (topicDone) unlock("topic_master");
     if (xp >= 100) unlock("xp_100");
     if (xp >= 500) unlock("xp_500");
     if (xp >= 1000) unlock("xp_1000");
