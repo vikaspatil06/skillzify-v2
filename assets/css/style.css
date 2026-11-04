@@ -402,6 +402,18 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 .link-card .card-link { font-weight: 700; color: var(--primary); }
 /* Card-style anchors must not inherit the global a:hover underline */
 .link-card:hover, .proj-card2:hover, .path-card2:hover, .pin-card:hover { text-decoration: none; }
+
+/* ---------- Path enrollment ---------- */
+.badge-enrolled { background: rgba(52,211,153,.15); color: #34d399; border: 1px solid rgba(52,211,153,.35); }
+.badge-unlock { background: rgba(34,211,238,.12); color: var(--accent); border: 1px solid rgba(34,211,238,.35); }
+.badge-locked { background: rgba(148,163,184,.1); color: var(--muted); border: 1px solid var(--card-border); }
+.path-actions { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.linklike { background: none; border: none; padding: 0; color: var(--muted); font-size: .8rem; font-family: inherit; cursor: pointer; text-decoration: underline; }
+.linklike:hover { color: var(--text); }
+.enroll-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 18px 0; padding: 14px 18px; background: var(--bg-soft); border: 1px solid var(--card-border); border-radius: 14px; }
+.enroll-bar.is-on { border-color: rgba(52,211,153,.35); }
+.enroll-bar .hint { margin: 0; flex: 1; min-width: 200px; }
+.node.is-path { border-style: dashed; border-color: var(--accent); }
 @media (max-width: 720px) { .about-stats { grid-template-columns: repeat(2, 1fr); } }
 
 /* ---------- Contact ---------- */
