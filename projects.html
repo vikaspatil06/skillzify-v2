@@ -11,10 +11,10 @@
 </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Skillzify Projects — guided real-world Python projects: file organizer, API client, web scraper, data analyzer.">
+  <meta name="description" content="Skillzify Projects — 14 guided real-world Python builds, from beginner scripts to advanced tools.">
   <title>Projects — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=6">
+  <link rel="stylesheet" href="assets/css/style.css?v=7">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -28,120 +28,13 @@
   <section class="page-hero">
     <div class="container">
       <h1 class="section-title">🛠️ Real-World Projects</h1>
-      <p class="section-sub">Tutorials end; projects begin. Build these four, in order — each one uses everything before it.</p>
+      <p class="section-sub">Tutorials end; projects begin. Pick a card, follow the steps, make it yours.</p>
     </div>
   </section>
   <section class="section" style="padding-top:24px">
-    <div class="container" style="max-width:860px">
+    <div class="container">
 
-      <div class="card proj-card" style="margin-bottom:18px">
-        <div style="font-size:2rem">📁</div>
-        <h3>1. File Organizer <span class="badge">Beginner</span></h3>
-        <p class="hint">Skills: os, pathlib, loops, conditionals</p>
-        <p>Write a script that scans your Downloads folder and sorts files into subfolders by extension — images, documents, videos, everything else.</p>
-        <ol>
-          <li>List every file in a folder with <code>pathlib.Path.iterdir()</code>.</li>
-          <li>Map extensions to folder names with a dictionary (<code>{".jpg": "images", ".pdf": "docs"}</code>).</li>
-          <li>Create missing folders with <code>mkdir(exist_ok=True)</code> and move files with <code>shutil.move()</code>.</li>
-          <li><strong>Stretch:</strong> add a <code>--dry-run</code> flag that prints moves without doing them.</li>
-        </ol>
-        <pre class="code">from pathlib import Path
-import shutil
-
-downloads = Path.home() / "Downloads"
-kinds = {".jpg": "images", ".png": "images",
-         ".pdf": "docs", ".mp4": "videos"}
-
-for f in downloads.iterdir():
-    if f.is_file() and f.suffix in kinds:
-        dest = downloads / kinds[f.suffix]
-        dest.mkdir(exist_ok=True)
-        shutil.move(str(f), dest / f.name)
-print("Done! ✨")</pre>
-        <a class="btn btn-sm" href="compiler.html">Try it in the compiler →</a>
-      </div>
-
-      <div class="card proj-card" style="margin-bottom:18px">
-        <div style="font-size:2rem">🌤️</div>
-        <h3>2. Weather API Client <span class="badge">Intermediate</span></h3>
-        <p class="hint">Skills: requests, JSON, error handling, f-strings</p>
-        <p>Fetch live weather data from a free API and print a friendly report. Your first program that talks to the internet.</p>
-        <ol>
-          <li>Get a free key from <code>openweathermap.org</code> (or use the no-key <code>wttr.in</code> service).</li>
-          <li><code>requests.get(url, params={...})</code> — always pass a <code>timeout</code>.</li>
-          <li>Check <code>response.status_code</code>; parse with <code>response.json()</code>.</li>
-          <li>Handle failures gracefully: <code>try/except requests.RequestException</code>.</li>
-          <li><strong>Stretch:</strong> accept the city as a command-line argument via <code>sys.argv</code>.</li>
-        </ol>
-        <pre class="code">import requests
-
-city = "Pune"
-r = requests.get("https://wttr.in/" + city,
-                 params={"format": "j1"}, timeout=10)
-data = r.json()
-now = data["current_condition"][0]
-print(f"{city}: {now['weatherDesc'][0]['value']}, "
-      f"{now['temp_C']}°C (feels {now['FeelsLikeC']}°C)")</pre>
-        <p class="hint">⚠️ Needs <code>pip install requests</code> on your machine — the in-browser compiler can't reach the network.</p>
-      </div>
-
-      <div class="card proj-card" style="margin-bottom:18px">
-        <div style="font-size:2rem">🕷️</div>
-        <h3>3. Web Scraper <span class="badge">Intermediate</span></h3>
-        <p class="hint">Skills: requests, BeautifulSoup, lists, CSV output</p>
-        <p>Scrape headlines from a news site and save them to a CSV file. Respect <code>robots.txt</code> — scrape gently.</p>
-        <ol>
-          <li>Fetch the page HTML with <code>requests</code>.</li>
-          <li>Parse with <code>BeautifulSoup(html, "html.parser")</code>.</li>
-          <li>Select headlines with <code>soup.select("h2 a")</code> (inspect the page first!).</li>
-          <li>Write title + link rows with the <code>csv</code> module.</li>
-          <li><strong>Stretch:</strong> scrape 3 pages and de-duplicate with a <code>set</code>.</li>
-        </ol>
-        <pre class="code">import csv, requests
-from bs4 import BeautifulSoup
-
-html = requests.get("https://example.com/news", timeout=10).text
-soup = BeautifulSoup(html, "html.parser")
-
-rows = [(a.get_text(strip=True), a["href"])
-        for a in soup.select("h2 a") if a.get("href")]
-
-with open("headlines.csv", "w", newline="") as f:
-    csv.writer(f).writerows([("title", "link"), *rows])
-print(f"Saved {len(rows)} headlines.")</pre>
-        <p class="hint">⚠️ Needs <code>pip install beautifulsoup4</code> — and always check a site's terms before scraping.</p>
-      </div>
-
-      <div class="card proj-card" style="margin-bottom:18px">
-        <div style="font-size:2rem">📊</div>
-        <h3>4. CSV Data Analyzer <span class="badge">Advanced</span></h3>
-        <p class="hint">Skills: csv, collections.Counter, statistics, comprehensions</p>
-        <p>Analyze a real dataset (e.g. your exercise attempts exported as CSV): top categories, averages, trends.</p>
-        <ol>
-          <li>Read rows with <code>csv.DictReader</code> — dictionaries beat index juggling.</li>
-          <li>Count categories with <code>collections.Counter</code>.</li>
-          <li>Compute averages with <code>statistics.mean</code>; group with dict comprehensions.</li>
-          <li>Print a clean text report with f-strings and <code>max(..., key=...)</code> highlights.</li>
-          <li><strong>Stretch:</strong> draw a bar chart with <code>matplotlib</code>.</li>
-        </ol>
-        <pre class="code">import csv
-from collections import Counter
-from statistics import mean
-
-with open("scores.csv") as f:
-    rows = list(csv.DictReader(f))
-
-by_topic = {}
-for r in rows:
-    by_topic.setdefault(r["topic"], []).append(float(r["score"]))
-
-for topic, scores in sorted(by_topic.items()):
-    print(f"{topic:12} avg {mean(scores):5.1f}  "
-          f"n={len(scores)}")
-top = Counter(r["topic"] for r in rows).most_common(1)[0]
-print(f"\nMost practiced: {top[0]} ({top[1]} attempts)")</pre>
-        <a class="btn btn-sm" href="compiler.html">Try it in the compiler →</a>
-      </div>
+      <div id="projects-list"></div>
 
     </div>
   </section>
@@ -159,5 +52,7 @@ print(f"\nMost practiced: {top[0]} ({top[1]} attempts)")</pre>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js"></script>
 <script src="assets/js/sync.js"></script>
+<script src="assets/js/projects-data.js?v=1"></script>
+<script src="assets/js/projects.js?v=1"></script>
 </body>
 </html>
