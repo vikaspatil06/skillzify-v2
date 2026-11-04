@@ -33,7 +33,7 @@
     if (s.t === "lesson") { var l = lessonById(s.id); return l ? l.title : s.id; }
     var e = exById(s.id); return e ? e.title : s.id;
   }
-  function stepHref(s) { return s.t === "lesson" ? "learn.html" : "practice.html#ex=" + s.id; }
+  function stepHref(s) { return s.t === "lesson" ? "lesson.html?id=" + encodeURIComponent(s.id) : "practice.html#ex=" + s.id; }
   function stepKind(s) { return s.t === "lesson" ? "📖 Lesson" : "🏋️ Exercise"; }
   function stepMins(s) { return s.t === "lesson" ? LESSON_MIN : EX_MIN; }
 
