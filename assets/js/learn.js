@@ -814,7 +814,22 @@
   function isDone(id) { return !!getProgress()[id]; }
   function isUnlocked(gi) {
     if (gi <= 0) return true;
-    return isDone(LESSONS[gi - 1].id);
+    if (isDone(LESSONS[gi - 1].id)) return true;
+    // Enrolled learning paths act as keys: their lessons open even mid-chain
+    return !!pathUnlockMap()[LESSONS[gi].id];
+  }
+  // lessonId -> pathId for lessons unlocked ONLY via an enrolled path
+  function pathUnlockMap() {
+    try {
+      var P = window.SkillzifyPaths;
+      if (P && typeof P.pathUnlockedLessons === "function") return P.pathUnlockedLessons();
+    } catch (e) {}
+    return {};
+  }
+  // true when this lesson is unlocked solely because of a path enrollment
+  function isPathOnlyUnlocked(gi) {
+    if (gi <= 0 || isDone(LESSONS[gi - 1].id)) return false;
+    return !!pathUnlockMap()[LESSONS[gi].id];
   }
   function trackLessons(trackId) { return LESSONS.filter(function (l) { return l.track === trackId; }); }
   function trackUnlocked(trackId) {
@@ -922,15 +937,20 @@
   }
 
   function nodeRow(lesson, gi, num) {
-    var done = isDone(lesson.id), unlocked = isUnlocked(gi), cur = currentIdx() === gi;
+    var done = isDone(lesson.id), unlocked = isUnlocked(gi),
+        pathOnly = !done && unlocked && isPathOnlyUnlocked(gi),
+        cur = currentIdx() === gi;
     var row = el("div", "node-row" + (cur ? " is-current" : ""));
-    var btn = el("button", "node" + (done ? " is-done" : cur ? " is-current" : !unlocked ? " is-locked" : ""));
-    var core = done ? "✓" : !unlocked ? "🔒" : String(num);
+    var btn = el("button", "node" + (done ? " is-done" : cur ? " is-current" : !unlocked ? " is-locked" : pathOnly ? " is-path" : ""));
+    var core = done ? "✓" : !unlocked ? "🔒" : pathOnly ? "🔓" : String(num);
     btn.innerHTML = '<span>' + core + "</span>";
     btn.setAttribute("aria-label", "Lesson " + num + ": " + lesson.title +
-      (done ? " (completed)" : !unlocked ? " (locked)" : cur ? " (current)" : ""));
+      (done ? " (completed)" : !unlocked ? " (locked)" : pathOnly ? " (unlocked by your learning path)" : cur ? " (current)" : ""));
     if (!unlocked) { btn.disabled = true; btn.title = "Complete the previous lesson to unlock"; }
-    else btn.addEventListener("click", function () { openLesson(gi); });
+    else {
+      btn.addEventListener("click", function () { openLesson(gi); });
+      if (pathOnly) btn.title = "Unlocked by your enrolled learning path";
+    }
     var amp = window.innerWidth < 720 ? 34 : 72;
     row.style.setProperty("--ox", Math.round(Math.sin(gi * 1.15) * amp) + "px");
     row.appendChild(btn);
@@ -1385,6 +1405,10 @@
     getProgress: getProgress, trackPct: trackPct,
     totalLessons: LESSONS.length,
     nextLesson: nextLesson, highlight: highlightPython,
-    getXP: getXP, levelFor: levelFor, nextLevel: nextLevel
+    getXP: getXP, levelFor: levelFor, nextLevel: nextLevel,
+    isLessonDone: function (id) { return isDone(id); },
+    lessonIndex: function (id) { return idxOf(id); },
+    isLessonUnlocked: function (id) { var gi = idxOf(id); return gi >= 0 && isUnlocked(gi); },
+    isLessonPathUnlocked: function (id) { var gi = idxOf(id); return gi >= 0 && isPathOnlyUnlocked(gi); }
   };
 })();
