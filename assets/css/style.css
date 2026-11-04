@@ -356,7 +356,9 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 .path-level { border: 1px solid var(--pc); color: var(--pc); background: transparent; }
 .path-meta { font-size: 0.88rem; color: var(--muted); margin: 0; }
 .path-bar { margin: 2px 0; }
+.path-card2 .bar { flex: none; }
 .path-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 6px; flex-wrap: wrap; }
+.path-foot .pct { width: auto; white-space: nowrap; }
 .continue-hero { --pc: #6c7bff; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-left: 4px solid var(--pc); margin-bottom: 18px; }
 .continue-hero h3 { font-size: 1.25rem; }
 .ch-actions { display: flex; gap: 10px; flex: none; flex-wrap: wrap; }
