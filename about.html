@@ -14,7 +14,7 @@
   <meta name="description" content="About Skillzify — Learn. Build. Shine.">
   <title>About — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=6">
+  <link rel="stylesheet" href="assets/css/style.css?v=7">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -29,35 +29,70 @@
     <div class="container center">
       <img data-logo src="assets/logo-light.png" alt="Skillzify" style="height:84px;margin-bottom:16px">
       <h1 class="section-title">About Skillzify</h1>
-      <p class="section-sub" style="margin-left:auto;margin-right:auto">Learn. Build. Shine. — we believe the best way to learn programming is to write code from day one, with friendly guidance when things break.</p>
+      <p class="section-sub">Learn. Build. Shine.</p>
+      <p style="color:var(--muted);max-width:640px">We believe the best way to learn programming is to write code from day one — with friendly guidance when things break.</p>
+      <div class="about-stats" id="about-stats">
+        <div class="stat"><div class="num" id="st-lessons">–</div><div class="lbl">Lessons</div></div>
+        <div class="stat"><div class="num" id="st-exercises">–</div><div class="lbl">Exercises</div></div>
+        <div class="stat"><div class="num" id="st-projects">–</div><div class="lbl">Projects</div></div>
+        <div class="stat"><div class="num" id="st-reference">–</div><div class="lbl">Reference entries</div></div>
+        <div class="stat"><div class="num" id="st-paths">–</div><div class="lbl">Learning paths</div></div>
+      </div>
     </div>
   </section>
 
-  <section class="section" style="padding-top:24px">
-    <div class="container">
-      <div class="two-col">
-        <div>
-          <h2 class="section-title" style="font-size:1.6rem">Our story</h2>
-          <p style="color:var(--muted);margin-top:12px">Skillzify started as a simple Python learning site and has grown into a browser-first learning platform: 32 structured lessons, a Practice Mode with automated tests and an AI tutor, guided learning paths and real-world projects, a real Python runtime in the browser, and analytics that show exactly where you're improving.</p>
-          <p style="color:var(--muted);margin-top:12px">No installs. No accounts required to start. Just open the site and write your first line of Python.</p>
-          <ul class="list-check">
-            <li>100% free and open learning content</li>
-            <li>Runs fully in the browser — works offline after first load*</li>
-            <li>Your data stays yours — progress lives in your browser</li>
-          </ul>
-          <p class="hint">*The compiler downloads the Python runtime (~10 MB) on first use; lessons and UI work offline once cached by the browser.</p>
-        </div>
-        <div>
-          <h2 class="section-title" style="font-size:1.6rem">How it works</h2>
-          <div class="grid-3" style="grid-template-columns:1fr;margin-top:16px">
-            <div class="card"><div class="icon">📖</div><h3>1. Learn</h3><p>Follow 32 structured lessons from print() to decorators, with copy-paste examples and quizzes.</p></div>
-            <div class="card"><div class="icon">🏋️</div><h3>2. Practice</h3><p>Solve coding exercises with automated tests, progressive hints, and a Socratic AI tutor.</p></div>
-            <div class="card"><div class="icon">⚡</div><h3>3. Build</h3><p>Run everything instantly in the in-browser compiler — including input() programs — then ship real projects.</p></div>
-            <div class="card"><div class="icon">🌟</div><h3>4. Shine</h3><p>Track streaks, topic accuracy and weak spots on your dashboard, and earn track certificates.</p></div>
-          </div>
-        </div>
-      </div>
+  <section class="section">
+    <div class="container" style="max-width:760px">
+      <h2 class="section-title" style="font-size:1.6rem">Our story</h2>
+      <p style="color:var(--muted);margin-top:12px">Skillzify started as a simple Python learning site and grew into a browser-first learning platform: structured lessons, hands-on practice with an AI tutor, guided learning paths, real-world projects, a searchable Python reference, a real Python runtime in the browser, and analytics that show exactly where you're improving.</p>
+      <p style="color:var(--muted);margin-top:12px">No installs. No account required to start. Just open the site and write your first line of Python.</p>
+    </div>
+  </section>
 
+  <section class="section" style="padding-top:0">
+    <div class="container">
+      <h2 class="section-title" style="font-size:1.6rem">How it works</h2>
+      <p class="hint" style="margin-bottom:16px">Four steps, one loop — every part feeds the next.</p>
+      <div class="grid-2">
+        <a class="card link-card" href="learn.html">
+          <div class="icon">📖</div><h3>1. Learn</h3>
+          <p><strong id="c-lessons">95</strong> structured lessons from <code>print()</code> to decorators, with examples you can run and quizzes that check understanding.</p>
+          <span class="card-link">Start learning →</span>
+        </a>
+        <a class="card link-card" href="practice.html">
+          <div class="icon">🏋️</div><h3>2. Practice</h3>
+          <p><strong id="c-exercises">48</strong> coding exercises with automated tests, progressive hints, timed mode, and a Socratic AI tutor that guides without spoiling.</p>
+          <span class="card-link">Start practicing →</span>
+        </a>
+        <a class="card link-card" href="projects.html">
+          <div class="icon">🛠️</div><h3>3. Build</h3>
+          <p><strong id="c-projects">14</strong> real-world projects — plus an in-browser compiler that runs real Python, including <code>input()</code> programs.</p>
+          <span class="card-link">Browse projects →</span>
+        </a>
+        <a class="card link-card" href="dashboard.html">
+          <div class="icon">🌟</div><h3>4. Shine</h3>
+          <p>Track streaks, topic accuracy and weak spots on your dashboard, follow <strong id="c-paths">5</strong> guided learning paths, and earn certificates.</p>
+          <span class="card-link">View dashboard →</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0">
+    <div class="container">
+      <h2 class="section-title" style="font-size:1.6rem">What we believe</h2>
+      <p class="hint" style="margin-bottom:16px">Three principles behind every page on this site.</p>
+      <div class="grid-3">
+        <div class="card"><div class="icon">🆓</div><h3>Free forever</h3><p>Every lesson, exercise, project and reference entry is free. No paywalls, no premium tier, no catch.</p></div>
+        <div class="card"><div class="icon">🌐</div><h3>Browser-first</h3><p>No installs, no setup. The compiler, lessons and UI run entirely in your browser — and keep working offline after the first load.*</p></div>
+        <div class="card"><div class="icon">🔒</div><h3>Your data stays yours</h3><p>Progress lives in your browser — and syncs through your own account when you sign in. No tracking, no selling, no ads.</p></div>
+      </div>
+      <p class="hint" style="margin-top:12px">*The compiler downloads the Python runtime (~10 MB) on first use; lessons and UI work offline once cached by the browser.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0">
+    <div class="container">
       <div class="cta-banner">
         <h2>Have questions or ideas?</h2>
         <p>We'd love to hear from you.</p>
@@ -79,5 +114,31 @@
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js"></script>
 <script src="assets/js/sync.js"></script>
+<script src="assets/js/lessons-b.js?v=1"></script>
+<script src="assets/js/lessons-i.js?v=1"></script>
+<script src="assets/js/lessons-a.js?v=1"></script>
+<script src="assets/js/learn.js?v=4"></script>
+<script src="assets/js/practice-data.js"></script>
+<script src="assets/js/reference-data.js"></script>
+<script src="assets/js/projects-data.js"></script>
+<script src="assets/js/paths-data.js"></script>
+<script>
+(function () {
+  "use strict";
+  function set(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
+  document.addEventListener("DOMContentLoaded", function () {
+    var lessons = (window.SkillzifyLearn && window.SkillzifyLearn.LESSONS || []).length;
+    var ex = (window.SkillzifyPracticeData || []).length;
+    var ref = (window.SkillzifyReference || []).length;
+    var proj = (window.SkillzifyProjects || []).length;
+    var paths = (window.SkillzifyPaths || []).length;
+    set("st-lessons", lessons); set("c-lessons", lessons);
+    set("st-exercises", ex); set("c-exercises", ex);
+    set("st-projects", proj); set("c-projects", proj);
+    set("st-reference", ref);
+    set("st-paths", paths); set("c-paths", paths);
+  });
+})();
+</script>
 </body>
 </html>
