@@ -37,6 +37,40 @@
   function stepKind(s) { return s.t === "lesson" ? "📖 Lesson" : "🏋️ Exercise"; }
   function stepMins(s) { return s.t === "lesson" ? LESSON_MIN : EX_MIN; }
 
+  /* ---------- enrollment: paths as keys ---------- */
+  function isEnrolled(p) { try { return window.SkillzifyPaths.isEnrolled(p.id); } catch (e) { return false; } }
+  function doEnroll(id) { try { window.SkillzifyPaths.enroll(id); } catch (e) {} }
+  function doLeave(id) { try { window.SkillzifyPaths.leave(id); } catch (e) {} }
+  // lessons in this path still locked in the sequential chain (the "key" value)
+  function lockedLessonCount(p) {
+    var n = 0;
+    (p.steps || []).forEach(function (s) {
+      if (s.t !== "lesson" || stepDone(s)) return;
+      try { if (!window.SkillzifyLearn.isLessonUnlocked(s.id)) n++; } catch (e) {}
+    });
+    return n;
+  }
+  // badge for a timeline lesson step: 🔓 when opened by enrollment, 🔒 when locked
+  function lockBadge(s) {
+    if (s.t !== "lesson" || stepDone(s)) return "";
+    var unlocked = true, pathOnly = false;
+    try {
+      unlocked = window.SkillzifyLearn.isLessonUnlocked(s.id);
+      pathOnly = window.SkillzifyLearn.isLessonPathUnlocked(s.id);
+    } catch (e) {}
+    if (pathOnly) return ' <span class="badge badge-unlock">🔓 unlocked</span>';
+    if (!unlocked) return ' <span class="badge badge-locked">🔒 enroll to unlock</span>';
+    return "";
+  }
+  function bindEnrollBtns(host, rerender) {
+    host.querySelectorAll("[data-enroll]").forEach(function (b) {
+      b.addEventListener("click", function () { doEnroll(b.getAttribute("data-enroll")); rerender(); });
+    });
+    host.querySelectorAll("[data-leave]").forEach(function (b) {
+      b.addEventListener("click", function () { doLeave(b.getAttribute("data-leave")); rerender(); });
+    });
+  }
+
   function pathStats(p) {
     var lessons = 0, exs = 0, done = 0, mins = 0;
     p.steps.forEach(function (s) {
@@ -94,10 +128,15 @@
   function pathCard(p) {
     var st = pathStats(p), c = pathColor(p);
     var nx = nextStep(p);
+    var enrolled = isEnrolled(p);
     var cta = st.done >= st.total
       ? '<span class="badge badge-done">✓ Completed</span>'
       : '<a class="btn btn-sm" href="' + (nx ? stepHref(nx.step) : "#path=" + p.id) + '">' +
         (st.done > 0 ? "Continue →" : "Start →") + "</a>";
+    var enrollUi = enrolled
+      ? '<span class="badge badge-enrolled">✓ Enrolled</span>'
+      : '<button class="btn btn-sm" data-enroll="' + p.id + '">🔓 Enroll</button>';
+    var leaveUi = enrolled ? ' <button class="linklike" data-leave="' + p.id + '">Leave</button>' : "";
     return '<article class="card path-card2" style="--pc:' + c + '">' +
       '<div class="path-top"><div class="path-tile">' + p.icon + '</div>' +
       '<span class="badge path-level">' + esc(p.level || "") + "</span></div>" +
@@ -106,7 +145,8 @@
       '<p class="path-meta">📖 ' + st.lessons + " lessons · 🏋️ " + st.exs + " exercises · " + fmtMins(st.mins) + "</p>" +
       '<div class="bar path-bar"><span style="width:' + st.pct + "%;background:" + c + '"></span></div>' +
       '<div class="path-foot"><span class="pct">' + st.done + "/" + st.total + " · " + st.pct + "%</span>" +
-      '<a class="btn btn-sm btn-ghost" href="#path=' + p.id + '">Details</a> ' + cta + "</div></article>";
+      '<span class="path-actions">' + enrollUi +
+      '<a class="btn btn-sm btn-ghost" href="#path=' + p.id + '">Details</a> ' + cta + leaveUi + "</span></div></article>";
   }
 
   function renderList() {
@@ -122,6 +162,7 @@
     if (pills) pills.querySelectorAll(".pill").forEach(function (b) {
       b.addEventListener("click", function () { filter = b.getAttribute("data-level"); renderList(); });
     });
+    bindEnrollBtns(host, renderList);
   }
 
   /* ---------------- DETAIL VIEW ---------------- */
@@ -146,9 +187,20 @@
       var cls = done ? "done" : (isNext ? "current" : "todo");
       var dot = done ? "✓" : (isNext ? "▶" : (i + 1));
       return '<li class="tl-step ' + cls + '"><span class="tl-dot">' + dot + "</span>" +
-        '<div class="tl-body"><a href="' + stepHref(s) + '">' + esc(stepTitle(s)) + "</a>" +
+        '<div class="tl-body"><a href="' + stepHref(s) + '">' + esc(stepTitle(s)) + "</a>" + lockBadge(s) +
         '<span class="hint">' + esc(stepKind(s)) + " · ~" + stepMins(s) + " min</span></div></li>";
     }).join("");
+
+    var enrolled = isEnrolled(p), nLocked = lockedLessonCount(p);
+    var enrollBar = enrolled
+      ? '<div class="enroll-bar is-on"><span class="badge badge-enrolled">✓ You\'re enrolled</span>' +
+        '<p class="hint">🔓 This path unlocks its lessons — even ones still locked in the lesson sequence. Progress counts everywhere.</p>' +
+        '<button class="btn btn-sm btn-ghost" data-leave="' + p.id + '">Leave path</button></div>'
+      : '<div class="enroll-bar"><button class="btn" data-enroll="' + p.id + '">🔓 Enroll in this path</button>' +
+        '<p class="hint">' + (nLocked > 0
+          ? "Enrolling instantly unlocks <strong>" + nLocked + " locked lesson" + (nLocked > 1 ? "s" : "") +
+            "</strong> in this path — no need to finish the sequence first."
+          : "Enrolling pins this path and opens its lessons wherever you are in the sequence.") + "</p></div>";
 
     host.innerHTML =
       '<button class="btn btn-sm btn-ghost" id="path-back">← All paths</button>' +
@@ -160,11 +212,13 @@
       '<p class="hint">📖 ' + st.lessons + " lessons · 🏋️ " + st.exs + " exercises · " + fmtMins(st.mins) +
       " · " + st.done + "/" + st.total + " steps (" + st.pct + "%)</p>" +
       '<div class="bar path-bar"><span style="width:' + st.pct + "%;background:" + c + '"></span></div></div></div>' +
+      enrollBar +
       upNext +
       '<div class="card"><h2 class="section-title" style="font-size:1.3rem">🗺️ Your route</h2>' +
       '<ol class="path-timeline">' + timeline + "</ol></div>";
 
     $("path-back").addEventListener("click", function () { location.hash = ""; });
+    bindEnrollBtns(host, function () { renderDetail(id); });
   }
 
   /* ---------------- ROUTER ---------------- */
