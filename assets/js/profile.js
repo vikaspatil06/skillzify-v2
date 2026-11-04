@@ -176,16 +176,24 @@
   document.addEventListener("DOMContentLoaded", function () {
     A.checkAchievements();
     render();
-    var modal = document.getElementById("profile-modal");
-    document.getElementById("edit-profile-btn").addEventListener("click", function () {
+    var drawer = document.getElementById("profile-modal");
+    function openDrawer() {
       var p = A.profile();
-      var fbName = "";
-      try { var cu = window.SkillzifyAuth && window.SkillzifyAuth.currentUser(); fbName = (cu && cu.name) || ""; } catch (e) {}
+      var cu = null;
+      try { cu = window.SkillzifyAuth && window.SkillzifyAuth.currentUser(); } catch (e) {}
+      var fbName = (cu && cu.name) || "";
+      var email = (cu && cu.email) || "";
       document.getElementById("pf-name").value = p.name || fbName || "";
       document.getElementById("pf-bio").value = p.bio || "";
-      modal.hidden = false;
-    });
-    document.getElementById("pf-cancel").addEventListener("click", function () { modal.hidden = true; });
+      document.getElementById("pf-email").textContent = email || "Not signed in";
+      document.getElementById("pf-reset-status").textContent = "";
+      drawer.classList.add("open");
+    }
+    function closeDrawer() { drawer.classList.remove("open"); }
+    document.getElementById("edit-profile-btn").addEventListener("click", openDrawer);
+    document.getElementById("pf-close").addEventListener("click", closeDrawer);
+    drawer.addEventListener("click", function (e) { if (e.target === drawer) closeDrawer(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeDrawer(); });
     document.getElementById("pf-save").addEventListener("click", function () {
       var newName = document.getElementById("pf-name").value.trim();
       var newBio = document.getElementById("pf-bio").value.trim();
@@ -204,9 +212,24 @@
           if (SA && SA.refreshAccountUI) SA.refreshAccountUI();
         }
       } catch (e) {}
-      modal.hidden = true; render();
-      S.toast("Profile updated ✨", "success");
+      closeDrawer(); render();
+      S.toast("Profile updated \u2728", "success");
     });
-    modal.addEventListener("click", function (e) { if (e.target === modal) modal.hidden = true; });
+    document.getElementById("pf-reset").addEventListener("click", function () {
+      var status = document.getElementById("pf-reset-status");
+      var email = "";
+      try {
+        var cu = window.SkillzifyAuth && window.SkillzifyAuth.currentUser();
+        email = (cu && cu.email) || "";
+      } catch (e) {}
+      if (!email) { status.textContent = "Sign in first \u2014 we need an email to send the link to."; return; }
+      if (!window.firebase || !firebase.auth) { status.textContent = "Auth isn't ready yet \u2014 try again in a moment."; return; }
+      status.textContent = "Sending\u2026";
+      firebase.auth().sendPasswordResetEmail(email).then(function () {
+        status.textContent = "\u2713 Reset link sent to " + email + " \u2014 check your inbox.";
+      }).catch(function (err) {
+        status.textContent = "Couldn't send the email (" + ((err && err.code) || "error") + "). Please try again.";
+      });
+    });
   });
 })();
