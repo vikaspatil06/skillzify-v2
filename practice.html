@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify Practice — topic-wise Python exercises with automated tests, hints, and AI tutor.">
   <title>Practice — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=6">
+  <link rel="stylesheet" href="assets/css/style.css?v=7">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -39,6 +39,13 @@
       <div id="practice-list">
         <div class="card" id="daily-banner" style="margin-bottom:18px"></div>
 
+        <div class="card" style="margin-bottom:18px">
+          <h2 class="section-title" style="font-size:1.3rem">🗺️ Progress by topic</h2>
+          <p class="hint">Tap a topic to filter the exercises below.</p>
+          <div id="topic-pills" class="pill-row" style="margin:12px 0"></div>
+          <div id="topic-progress"></div>
+        </div>
+
         <div class="card" id="revision-sec" style="margin-bottom:18px">
           <h2 class="section-title" style="font-size:1.3rem">🔁 Review queue</h2>
           <p class="hint">Exercises you attempted but haven't cracked yet — spaced repetition in action.</p>
@@ -46,7 +53,6 @@
         </div>
 
         <div class="filter-bar">
-          <select id="filter-topic" aria-label="Filter by topic"></select>
           <select id="filter-diff" aria-label="Filter by difficulty">
             <option value="all">All levels</option>
             <option value="1">★ Easy</option>
