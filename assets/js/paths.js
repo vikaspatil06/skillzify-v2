@@ -38,35 +38,55 @@
   function stepMins(s) { return s.t === "lesson" ? LESSON_MIN : EX_MIN; }
 
   /* ---------- enrollment: paths as keys ----------
-     Local-storage backed with fallback, so enrollment works even if the
-     browser cached a stale paths-data.js without the helper functions. */
+     Map shape { <pathId>: { enrolled, at } } with local fallbacks, so
+     enrollment works even if the browser cached a stale paths-data.js
+     without the helper functions. Timestamps let sync merge per path. */
   var ENROLL_KEY = "skillzify_enrolled_paths";
-  function readEnrolled() {
+  function readEnrollMap() {
     try {
       var P = window.SkillzifyPaths;
-      if (P && typeof P.enrolled === "function") return P.enrolled();
+      if (P && typeof P.enrollMap === "function") return P.enrollMap();
     } catch (e) {}
+    var map = {};
     try {
-      var v = JSON.parse(localStorage.getItem(ENROLL_KEY) || "[]");
-      return Array.isArray(v) ? v : [];
-    } catch (e) { return []; }
+      var v = JSON.parse(localStorage.getItem(ENROLL_KEY) || "null");
+      if (Array.isArray(v)) v.forEach(function (id) { map[id] = { enrolled: true, at: 0 }; });
+      else if (v && typeof v === "object") Object.keys(v).forEach(function (k) {
+        var e = v[k] || {};
+        map[k] = { enrolled: !!e.enrolled, at: e.at || 0 };
+      });
+    } catch (e2) {}
+    return map;
   }
-  function writeEnrolled(ids) { try { localStorage.setItem(ENROLL_KEY, JSON.stringify(ids)); } catch (e) {} }
-  function isEnrolled(p) { return readEnrolled().indexOf(p.id) !== -1; }
-  function doEnroll(id) {
+  function writeEnrollMap(map) { try { localStorage.setItem(ENROLL_KEY, JSON.stringify(map || {})); } catch (e) {} }
+  function isEnrolled(p) {
     try {
       var P = window.SkillzifyPaths;
-      if (P && typeof P.enroll === "function") { P.enroll(id); return; }
+      if (P && typeof P.isEnrolled === "function") return P.isEnrolled(p.id);
     } catch (e) {}
-    var cur = readEnrolled();
-    if (cur.indexOf(id) === -1) { cur.push(id); writeEnrolled(cur); }
+    var m = readEnrollMap();
+    return !!(m[p.id] && m[p.id].enrolled);
+  }
+  function doEnroll(id) {
+    var done = false;
+    try {
+      var P = window.SkillzifyPaths;
+      if (P && typeof P.enroll === "function") { P.enroll(id); done = true; }
+    } catch (e) {}
+    if (!done) { var m = readEnrollMap(); m[id] = { enrolled: true, at: Date.now() }; writeEnrollMap(m); }
+    syncPathsDirty();
   }
   function doLeave(id) {
+    var done = false;
     try {
       var P = window.SkillzifyPaths;
-      if (P && typeof P.leave === "function") { P.leave(id); return; }
+      if (P && typeof P.leave === "function") { P.leave(id); done = true; }
     } catch (e) {}
-    writeEnrolled(readEnrolled().filter(function (x) { return x !== id; }));
+    if (!done) { var m = readEnrollMap(); m[id] = { enrolled: false, at: Date.now() }; writeEnrollMap(m); }
+    syncPathsDirty();
+  }
+  function syncPathsDirty() {
+    try { if (window.SkillzifySync) window.SkillzifySync.markDirty("paths"); } catch (e) {}
   }
   // lessons in this path still locked in the sequential chain (the "key" value)
   function lockedLessonCount(p) {
@@ -257,7 +277,21 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     route();
+    lastEnrollJson = enrollJson();
     window.addEventListener("hashchange", route);
+  });
+  // Live refresh when another device changes enrollments (keeps scroll pos)
+  var lastEnrollJson = "";
+  function enrollJson() { try { return JSON.stringify(readEnrollMap()); } catch (e) { return ""; } }
+  window.addEventListener("skillzify-sync", function () {
+    try {
+      var cur = enrollJson();
+      if (cur === lastEnrollJson) return;
+      lastEnrollJson = cur;
+      var y = window.scrollY || 0;
+      route();
+      window.scrollTo(0, y);
+    } catch (e) {}
   });
   // Re-render when returning from a lesson/exercise (progress changed)
   window.addEventListener("pageshow", route);
