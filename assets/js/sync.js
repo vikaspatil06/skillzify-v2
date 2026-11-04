@@ -121,11 +121,50 @@
     };
   }
 
+  /* ---------- enrollment store (shared shape + array migration) ---------- */
+  // canonical shape: { <pathId>: { enrolled: bool, at: timestamp } }
+  function readEnrollMap() {
+    var map = {};
+    try {
+      var v = JSON.parse(lsGet(LS.PATHS) || "null");
+      if (Array.isArray(v)) {
+        // migrate legacy array shape: presence counts, at=0 so real events win
+        v.forEach(function (id) { map[id] = { enrolled: true, at: 0 }; });
+      } else if (v && typeof v === "object") {
+        Object.keys(v).forEach(function (k) {
+          var e = v[k] || {};
+          map[k] = { enrolled: !!e.enrolled, at: e.at || 0 };
+        });
+      }
+    } catch (e) {}
+    return map;
+  }
+  function writeEnrollMap(map) {
+    lsSet(LS.PATHS, JSON.stringify(map || {}));
+  }
+
+  function mergePaths(localDoc, cloudDoc) {
+    localDoc = localDoc || {}; cloudDoc = cloudDoc || {};
+    var lp = localDoc.paths || {}, cp = cloudDoc.paths || {};
+    var out = {}, maxAt = 0, seen = {};
+    Object.keys(lp).concat(Object.keys(cp)).forEach(function (k) {
+      if (seen[k]) return; seen[k] = true;
+      var a = lp[k] || {}, b = cp[k] || {};
+      // per-path last-write-wins by `at`; tie -> local. Leaving writes a
+      // tombstone {enrolled:false}, so it propagates instead of resurrecting.
+      var w = (a.at || 0) >= (b.at || 0) ? a : b;
+      out[k] = { enrolled: !!w.enrolled, at: w.at || 0 };
+      if (out[k].at > maxAt) maxAt = out[k].at;
+    });
+    return { paths: out, updatedAt: Math.max(maxAt, localDoc.updatedAt || 0, cloudDoc.updatedAt || 0) };
+  }
+
   var Merge = {
     normalizeDate: normalizeDate,
     mergeProgress: mergeProgress,
     mergeExercises: mergeExercises,
-    mergeProfile: mergeProfile
+    mergeProfile: mergeProfile,
+    mergePaths: mergePaths
   };
   root.SkillzifySyncMerge = Merge;
 
@@ -138,7 +177,8 @@
     STREAK: "skillzify_streak",
     ATTEMPTS: "skillzify_exercise_attempts",
     PROFILE: "skillzify_profile",
-    PROFILE_TS: "skillzify_profile_ts"
+    PROFILE_TS: "skillzify_profile_ts",
+    PATHS: "skillzify_enrolled_paths"
   };
 
   function lsGet(key) {
@@ -197,6 +237,14 @@
     storeSet(LS.PROFILE, { name: (doc && doc.name) || "", bio: (doc && doc.bio) || "" });
     lsSet(LS.PROFILE_TS, String((doc && doc.updatedAt) || 0));
   }
+  function readLocalPaths() {
+    var m = readEnrollMap(), maxAt = 0;
+    Object.keys(m).forEach(function (k) { if (m[k].at > maxAt) maxAt = m[k].at; });
+    return { paths: m, updatedAt: maxAt };
+  }
+  function writeLocalPaths(doc) {
+    writeEnrollMap((doc && doc.paths) || {});
+  }
 
   /* ---------- Firebase guards ---------- */
   function db() {
@@ -248,21 +296,24 @@
     return ref.get()
       .then(function (snap) {
         var data = (snap && snap.exists) ? snap.data() : {};
-        var cloud = [data.profile || null, data.progress || null, data.exercises || null];
+        var cloud = [data.profile || null, data.progress || null, data.exercises || null, data.paths || null];
         var mergedProfile = mergeProfile(readLocalProfile(), cloud[0]);
         var mergedProgress = mergeProgress(readLocalProgress(), cloud[1]);
         var mergedExercises = mergeExercises(readLocalExercises(), cloud[2]);
+        var mergedPaths = mergePaths(readLocalPaths(), cloud[3]);
         // write merged state locally…
         writeLocalProfile(mergedProfile);
         writeLocalProgress(mergedProgress);
         writeLocalExercises(mergedExercises);
+        writeLocalPaths(mergedPaths);
         // …and push the merged doc to the cloud with updatedAt=now
         var now = Date.now();
         mergedProfile.updatedAt = now;
         mergedProgress.updatedAt = now;
         mergedExercises.updatedAt = now;
+        mergedPaths.updatedAt = now;
         lsSet(LS.PROFILE_TS, String(now));
-        return ref.set({ profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises },
+        return ref.set({ profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises, paths: mergedPaths },
           { merge: true }).catch(function () {});
       })
       .then(function () {
@@ -295,6 +346,7 @@
     writeLocalProfile(mergeProfile(readLocalProfile(), cloud[0]));
     writeLocalProgress(mergeProgress(readLocalProgress(), cloud[1]));
     writeLocalExercises(mergeExercises(readLocalExercises(), cloud[2]));
+    writeLocalPaths(mergePaths(readLocalPaths(), data.paths || null));
     setStatus("Synced ✓ " + fmtTime(Date.now()));
     try {
       if (typeof CustomEvent === "function")
@@ -323,7 +375,7 @@
      Called BEFORE signOut so nothing is lost. The auth-state listener below
      also wipes as a safety net if logout happens another way. */
   function clearLocalUserData() {
-    [LS.PROGRESS, LS.XP, LS.STREAK, LS.ATTEMPTS, LS.PROFILE, LS.PROFILE_TS].forEach(function (k) {
+    [LS.PROGRESS, LS.XP, LS.STREAK, LS.ATTEMPTS, LS.PROFILE, LS.PROFILE_TS, LS.PATHS].forEach(function (k) {
       try { localStorage.removeItem(k); } catch (e) {}
     });
   }
