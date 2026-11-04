@@ -68,3 +68,43 @@ window.SkillzifyPaths = [
     ]
   }
 ];
+
+/* ---------- Path enrollment: paths as keys ----------
+   Enrolling in a path unlocks all of its lessons, even ones still
+   locked in the sequential lesson chain. learn.js reads
+   pathUnlockedLessons() to honor this. Stored locally per device. */
+(function () {
+  "use strict";
+  var KEY = "skillzify_enrolled_paths";
+  function read() {
+    try {
+      var v = JSON.parse(localStorage.getItem(KEY) || "[]");
+      return Array.isArray(v) ? v : [];
+    } catch (e) { return []; }
+  }
+  function write(ids) {
+    try { localStorage.setItem(KEY, JSON.stringify(ids)); } catch (e) {}
+  }
+  var P = window.SkillzifyPaths;
+  if (!P) return;
+  P.enrolled = function () { return read(); };
+  P.isEnrolled = function (id) { return read().indexOf(id) !== -1; };
+  P.enroll = function (id) {
+    var e = read();
+    if (e.indexOf(id) === -1) { e.push(id); write(e); }
+  };
+  P.leave = function (id) {
+    write(read().filter(function (x) { return x !== id; }));
+  };
+  // lessonId -> pathId for every lesson step of every enrolled path
+  P.pathUnlockedLessons = function () {
+    var map = {}, e = read();
+    P.forEach(function (p) {
+      if (e.indexOf(p.id) === -1) return;
+      (p.steps || []).forEach(function (s) {
+        if (s.t === "lesson" && s.id) map[s.id] = p.id;
+      });
+    });
+    return map;
+  };
+})();
