@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify Learning Paths — guided sequences for Python fundamentals, DSA, automation, data analysis, and interview prep.">
   <title>Learning Paths — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=6">
+  <link rel="stylesheet" href="assets/css/style.css?v=7">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -33,7 +33,7 @@
   </section>
   <section class="section" style="padding-top:24px">
     <div class="container">
-      <div class="grid-2" id="paths-grid"></div>
+      <div id="paths-list"></div>
     </div>
   </section>
 </main>
@@ -56,48 +56,6 @@
 <script src="assets/js/learn.js?v=4"></script>
 <script src="assets/js/practice-data.js"></script>
 <script src="assets/js/paths-data.js"></script>
-<script>
-(function () {
-  "use strict";
-  function esc(s) { return window.Skillzify.esc(String(s == null ? "" : s)); }
-  function lessonTitle(id) {
-    var L = (window.SkillzifyLearn && window.SkillzifyLearn.LESSONS) || [];
-    for (var i = 0; i < L.length; i++) if (L[i].id === id) return L[i].title;
-    return id;
-  }
-  function exTitle(id) {
-    var E = window.SkillzifyPracticeData || [];
-    for (var i = 0; i < E.length; i++) if (E[i].id === id) return E[i].title;
-    return id;
-  }
-  function lessonDone(id) {
-    try { return !!(JSON.parse(localStorage.getItem("skillzify_progress") || "{}")[id]); } catch (e) { return false; }
-  }
-  function exDone(id) {
-    try { var a = JSON.parse(localStorage.getItem("skillzify_exercise_attempts") || "{}")[id]; return !!(a && a.solved); }
-    catch (e) { return false; }
-  }
-  document.addEventListener("DOMContentLoaded", function () {
-    var host = document.getElementById("paths-grid");
-    var paths = window.SkillzifyPaths || [];
-    host.innerHTML = paths.map(function (p) {
-      var done = 0;
-      var steps = p.steps.map(function (s, i) {
-        var isDone = s.t === "lesson" ? lessonDone(s.id) : exDone(s.id);
-        if (isDone) done++;
-        var label = s.t === "lesson" ? "📖 " + lessonTitle(s.id) : "🏋️ " + exTitle(s.id);
-        var href = s.t === "lesson" ? "learn.html" : "practice.html#ex=" + s.id;
-        return '<li class="path-step' + (isDone ? " done" : "") + '"><span class="step-n">' +
-          (isDone ? "✓" : (i + 1)) + '</span><a class="step-t" href="' + href + '">' + esc(label) + "</a></li>";
-      }).join("");
-      var pct = p.steps.length ? Math.round(done / p.steps.length * 100) : 0;
-      return '<div class="card path-card"><div style="font-size:2rem">' + p.icon + "</div>" +
-        "<h3>" + esc(p.title) + "</h3><p class='hint'>" + esc(p.desc) + "</p>" +
-        '<div class="mastery"><div class="mastery-fill" style="width:' + pct + '%"></div></div>' +
-        '<p class="hint">' + done + "/" + p.steps.length + " steps · " + pct + "%</p><ol>" + steps + "</ol></div>";
-    }).join("");
-  });
-})();
-</script>
+<script src="assets/js/paths.js?v=1"></script>
 </body>
 </html>
