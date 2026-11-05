@@ -72,17 +72,23 @@
   function onStatus(fn) { if (typeof fn === "function") listeners.push(fn); }
   function attachStatus(el) {
     if (!el) return;
+    /* The navbar dot carries no text: colour + title/aria-label only,
+       so it can never truncate or wrap at any viewport width. */
     var paint = function (s) {
       var map = {
-        idle: ["AI —", ""],
-        waking: ["🤖 Waking up the AI…", ""],
-        working: ["🤖 AI is thinking…", ""],
-        ok: ["🤖 AI ready", ""],
-        degraded: ["🤖 AI degraded — offline explainer only", ""],
-        offline: ["🤖 AI offline", ""]
+        idle: ["#6b7280", "AI idle", false],
+        waking: ["#f59e0b", "Waking up the AI…", true],
+        working: ["#f59e0b", "AI is thinking…", true],
+        ok: ["#22c55e", "AI ready", false],
+        degraded: ["#f59e0b", "AI degraded — offline explainer only", false],
+        offline: ["#6b7280", "AI offline", false]
       };
       var m = map[s] || map.idle;
-      el.textContent = m[0];
+      el.textContent = "";
+      el.style.backgroundColor = m[0];
+      el.title = "🤖 " + m[1];
+      el.setAttribute("aria-label", "AI status: " + m[1]);
+      if (el.classList) el.classList.toggle("pulse", !!m[2]);
     };
     onStatus(paint);
     paint(status);
