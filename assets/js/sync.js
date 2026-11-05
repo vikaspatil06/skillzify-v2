@@ -145,11 +145,25 @@
 
   function mergePaths(localDoc, cloudDoc) {
     localDoc = localDoc || {}; cloudDoc = cloudDoc || {};
-    var lp = localDoc.paths || {}, cp = cloudDoc.paths || {};
+    var lp = localDoc.paths || {};
+    // Cloud shape: the app (and new web writes) store the FLAT map
+    // { <pathId>: {enrolled, at}, updatedAt }, while older web writes
+    // stored the NESTED { paths: {...}, updatedAt }. Read both: unwrap
+    // the `paths` key ONLY when its values are path-entry maps — a flat
+    // doc can also carry a junk `paths` key ({enrolled, at}) left by old
+    // app merges, whose values are scalars, not maps.
+    var cp = cloudDoc;
+    if (cloudDoc.paths && typeof cloudDoc.paths === "object" && !Array.isArray(cloudDoc.paths)) {
+      var vals = Object.keys(cloudDoc.paths).map(function (k) { return cloudDoc.paths[k]; });
+      if (vals.every(function (v) { return v && typeof v === "object" && !Array.isArray(v); })) cp = cloudDoc.paths;
+    }
     var out = {}, maxAt = 0, seen = {};
     Object.keys(lp).concat(Object.keys(cp)).forEach(function (k) {
       if (seen[k]) return; seen[k] = true;
+      if (k === "updatedAt" || k === "paths") return; // timestamp / legacy junk key, not a path
       var a = lp[k] || {}, b = cp[k] || {};
+      if (typeof a !== "object" || a === null) a = {};
+      if (typeof b !== "object" || b === null) b = {};
       // per-path last-write-wins by `at`; tie -> local. Leaving writes a
       // tombstone {enrolled:false}, so it propagates instead of resurrecting.
       var w = (a.at || 0) >= (b.at || 0) ? a : b;
@@ -306,14 +320,19 @@
         writeLocalProgress(mergedProgress);
         writeLocalExercises(mergedExercises);
         writeLocalPaths(mergedPaths);
-        // …and push the merged doc to the cloud with updatedAt=now
+        // …and push the merged doc to the cloud with updatedAt=now.
         var now = Date.now();
         mergedProfile.updatedAt = now;
         mergedProgress.updatedAt = now;
         mergedExercises.updatedAt = now;
         mergedPaths.updatedAt = now;
         lsSet(LS.PROFILE_TS, String(now));
-        return ref.set({ profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises, paths: mergedPaths },
+        // NOTE: `paths` is pushed FLAT ({ <pathId>: {enrolled, at}, updatedAt })
+        // to match the Android app — the old nested { paths: {...} } shape is
+        // what broke cross-device enrollment sync (each side read the shape
+        // the other never wrote). mergePaths still reads both shapes.
+        var flatPaths = Object.assign({}, mergedPaths.paths, { updatedAt: now });
+        return ref.set({ profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises, paths: flatPaths },
           { merge: true }).catch(function () {});
       })
       .then(function () {

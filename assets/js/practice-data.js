@@ -40,7 +40,7 @@ window.SkillzifyPracticeData = [
     solution: "def swap_values(a, b):\n    return (b, a)",
     walkthrough: "Step 1: The bug — `a = b` destroys a's original value. Step 2: `b = a` then copies the already-overwritten a, so both end up equal to b. Step 3: Returning (b, a) reads the original values before anything is overwritten. Step 4: No temporary variable needed.",
     pythonic: "Python can swap in one line with tuple unpacking: `a, b = b, a` — no temp variable, no bug.",
-    xp: 20,
+    xp: 10,
   },
   {
     id: "ex-variables-03",
@@ -152,7 +152,7 @@ window.SkillzifyPracticeData = [
     solution: "def first_last(nums):\n    return [nums[0], nums[-1]]",
     walkthrough: "Step 1: `nums[0]` grabs the first element. Step 2: `nums[-1]` grabs the last, whatever the length. Step 3: `[..., ...]` builds a fresh two-item list to return.",
     pythonic: "Negative indexing shines here — no `len(nums) - 1` arithmetic needed.",
-    xp: 20,
+    xp: 10,
   },
   {
     id: "ex-collections-02",
@@ -172,7 +172,7 @@ window.SkillzifyPracticeData = [
     solution: "nums = [1, 2, 3]\nnums.append(4)   # [1, 2, 3, 4]\nnums[1] = 9      # [1, 9, 3, 4]\nprint(len(nums), nums[2])  # prints: 4 3",
     walkthrough: "Step 1: append(4) grows the list to [1, 2, 3, 4]. Step 2: nums[1] = 9 replaces the 2, giving [1, 9, 3, 4]. Step 3: len is 4. Step 4: nums[2] is still 3. Output: `4 3`.",
     pythonic: "Lists are mutable — methods like append change them in place instead of returning a new list.",
-    xp: 10,
+    xp: 20,
   },
   {
     id: "ex-collections-03",
@@ -218,7 +218,7 @@ window.SkillzifyPracticeData = [
     solution: "def sum_evens(n):\n    total = 0\n    for i in range(1, n + 1):\n        if i % 2 == 0:\n            total += i\n    return total",
     walkthrough: "Step 1: `range(1, n + 1)` yields every integer from 1 to n. Step 2: `i % 2 == 0` is True only for evens. Step 3: `total += i` accumulates them. Step 4: Return the final total (0 when n < 2).",
     pythonic: "One-liner: `sum(i for i in range(1, n + 1) if i % 2 == 0)` — a generator expression keeps it lazy and readable.",
-    xp: 20,
+    xp: 10,
   },
   {
     id: "ex-loops-02",
@@ -529,7 +529,7 @@ window.SkillzifyPracticeData = [
     solution: "def binary_search(nums, target):\n    lo, hi = 0, len(nums) - 1\n    while lo <= hi:\n        mid = (lo + hi) // 2\n        if nums[mid] == target:\n            return mid\n        if nums[mid] < target:\n            lo = mid + 1\n        else:\n            hi = mid - 1\n    return -1\n\n# Round 1: lo=0, hi=4, mid=2 -> nums[2]=8 < 12 -> lo=3\n# Round 2: lo=3, hi=4, mid=3 -> nums[3]=12 -> return 3\nprint(binary_search([2, 5, 8, 12, 16], 12))  # prints 3",
     walkthrough: "Step 1: lo=0, hi=4, mid=2 → nums[2]=8 < 12, so the target is right of mid: lo=3. Step 2: lo=3, hi=4, mid=3 → nums[3]=12 == target → return 3. Step 3: Two rounds for five items — that's the O(log n) magic.",
     pythonic: "For real code, `bisect` in the standard library does this — but tracing it by hand builds the intuition.",
-    xp: 10,
+    xp: 20,
   },
   {
     id: "ex-variables-04",

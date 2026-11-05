@@ -159,6 +159,9 @@ class Store(ctx: Context) {
             val keys = o.keys()
             while (keys.hasNext()) {
                 val k = keys.next()
+                // Drop junk keys the old shape mismatch left behind ("paths"
+                // was stored as a bogus enrollment, "updatedAt" is not a path).
+                if (k == "paths" || k == "updatedAt") continue
                 val e = o.optJSONObject(k) ?: continue
                 out[k] = e.optBoolean("enrolled", false) to e.optLong("at", 0)
             }

@@ -108,7 +108,16 @@ class SyncRepository(private val store: Store) {
     ): Map<String, Pair<Boolean, Long>> {
         val out = local.toMutableMap()
         val cloudMap = cloud as? Map<*, *> ?: return out
-        for ((id, raw) in cloudMap) {
+        // Cloud shape: the app (and new web writes) store the FLAT map
+        // { <pathId>: {enrolled, at}, updatedAt }, while older web writes
+        // stored the NESTED { paths: {...}, updatedAt }. Read both: unwrap
+        // the `paths` key ONLY when its values are path-entry maps — a flat
+        // doc can also carry a junk `paths` key ({enrolled, at}) left by old
+        // app merges, whose values are scalars, not maps.
+        val nested = cloudMap["paths"] as? Map<*, *>
+        val entries = if (nested != null && nested.values.all { it is Map<*, *> }) nested else cloudMap
+        for ((id, raw) in entries) {
+            if (id.toString() == "paths" || id.toString() == "updatedAt") continue
             val v = raw as? Map<*, *> ?: continue
             val cEnrolled = v["enrolled"] as? Boolean ?: false
             val cAt = (v["at"] as? Number)?.toLong() ?: 0

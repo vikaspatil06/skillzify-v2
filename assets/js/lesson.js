@@ -172,15 +172,15 @@
   /* ================= Locked / not-found views ================= */
   function renderNotFound() {
     document.title = "Lesson not found — Skillzify";
-    mount.innerHTML = '<div class="lesson-locked"><div class="big">\U0001F50D</div>' +
+    mount.innerHTML = '<div class="lesson-locked"><div class="big">\u{1F50D}</div>' +
       "<h2>Lesson not found</h2>" +
       '<p class="hint">We couldn\u2019t find that lesson. It may have been moved or the link is wrong.</p>' +
       '<p><a class="btn" href="learn.html">\u2190 Back to Learn</a></p></div>';
   }
 
   function renderLocked(lesson) {
-    document.title = "\U0001F512 " + lesson.title + " — Skillzify";
-    var track = TRACKS.filter(function (t) { return t.id === lesson.track; })[0] || { icon: "\U0001F4DA", name: "Python" };
+    document.title = "\u{1F512} " + lesson.title + " — Skillzify";
+    var track = TRACKS.filter(function (t) { return t.id === lesson.track; })[0] || { icon: "\u{1F4DA}", name: "Python" };
     var inPaths = [];
     try {
       var P = window.SkillzifyPaths;
@@ -190,14 +190,14 @@
       });
     } catch (e) {}
     var pathCta = inPaths.length ?
-      '<div class="card lesson-path-cta"><h3 style="margin-top:0">\U0001F513 Unlock it instantly</h3>' +
+      '<div class="card lesson-path-cta"><h3 style="margin-top:0">\u{1F513} Unlock it instantly</h3>' +
       '<p class="hint">This lesson is part of ' + inPaths.map(function (p) { return "<strong>" + esc(p.title) + "</strong>"; }).join(", ") +
       '. Enroll in the path to unlock it right away — no need to finish everything before it.</p>' +
       inPaths.map(function (p) { return '<a class="btn btn-sm" href="paths.html#path=' + p.id + '">View ' + esc(p.title) + "</a> "; }).join("") + "</div>"
       : "";
     mount.innerHTML =
       '<nav class="lesson-crumb"><a href="learn.html">Learn</a><span>\u203A</span><span>' + esc(track.name) + '</span></nav>' +
-      '<div class="lesson-locked"><div class="big">\U0001F512</div>' +
+      '<div class="lesson-locked"><div class="big">\u{1F512}</div>' +
       "<h2>This lesson is locked</h2>" +
       '<p class="hint">Finish the previous lessons in order to unlock <strong>' + esc(lesson.title) + "</strong>.</p>" +
       '<p><a class="btn" href="learn.html">\u2190 Back to Learn</a> <a class="btn btn-ghost" href="paths.html">Learning paths</a></p></div>' +
@@ -211,7 +211,7 @@
     curQuiz = buildQuiz(lesson); // fresh random pick + shuffled options, every open
     quizState = curQuiz.map(function () { return { correct: false, firstTry: true }; });
     challengeOk = isDone(lesson.id); // re-opening a done lesson: challenge pre-satisfied
-    var track = TRACKS.filter(function (t) { return t.id === lesson.track; })[0] || { icon: "\U0001F4DA", name: "Python" };
+    var track = TRACKS.filter(function (t) { return t.id === lesson.track; })[0] || { icon: "\u{1F4DA}", name: "Python" };
     var num = gi + 1;
     var pathOnly = !isDone(lesson.id) && isPathOnlyUnlocked(gi);
     var prev = prevUnlocked(gi), next = nextUnlocked(gi);
@@ -221,7 +221,7 @@
       '<nav class="lesson-crumb"><a href="learn.html">Learn</a><span>\u203A</span><span>' + esc(track.name) +
       '</span><span>\u203A</span><span class="crumb-cur">' + esc(lesson.title) + "</span></nav>" +
       '<div class="lm-kicker">' + track.icon + " " + esc(track.name) + " · Lesson " + num + " of " + LESSONS.length +
-      (pathOnly ? ' · <span class="unlock-badge">\U0001F513 Unlocked by your learning path</span>' : "") + "</div>" +
+      (pathOnly ? ' · <span class="unlock-badge">\u{1F513} Unlocked by your learning path</span>' : "") + "</div>" +
       "<h2>" + esc(lesson.title) + "</h2>" +
       '<p class="lm-explain">' + esc(lesson.explain) + "</p>" +
       '<ul class="list-check lm-points">' + lesson.takeaways.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>" +
@@ -231,14 +231,14 @@
       '<button class="btn btn-sm btn-ghost" id="lm-copy">\u29C9 Copy code</button>' +
       '<button class="btn btn-sm" id="lm-try">\u25B6 Try in compiler</button>' +
       '<button class="btn btn-sm btn-ghost" id="lm-star" aria-label="Star lesson">\u2B50</button>' +
-      '<button class="btn btn-sm btn-ghost" id="lm-pin" aria-label="Pin lesson">\U0001F4CC</button></div>' +
-      '<h3 class="lm-sec">\U0001F9E0 Quick quiz</h3><p class="hint" style="margin-top:0">Answer all correctly to proceed. Questions are picked fresh every time — no two attempts are the same. Wrong answers just cost you bonus XP — keep trying!</p>' +
+      '<button class="btn btn-sm btn-ghost" id="lm-pin" aria-label="Pin lesson">\u{1F4CC}</button></div>' +
+      '<h3 class="lm-sec">\u{1F9E0} Quick quiz</h3><p class="hint" style="margin-top:0">Answer all correctly to proceed. Questions are picked fresh every time — no two attempts are the same. Wrong answers just cost you bonus XP — keep trying!</p>' +
       '<div id="lm-quiz">' + quizHTML() + "</div>" +
-      '<h3 class="lm-sec">\U0001F3AF Mini challenge</h3><div class="challenge" id="lm-challenge">' + challengeHTML(lesson.challenge) + "</div>" +
+      '<h3 class="lm-sec">\u{1F3AF} Mini challenge</h3><div class="challenge" id="lm-challenge">' + challengeHTML(lesson.challenge) + "</div>" +
       '<div class="lm-complete" id="lm-complete-wrap">' +
       (isDone(lesson.id)
         ? '<div class="lesson-done-note">\u2705 You\u2019ve completed this lesson — nice work! Redo the quiz any time for practice.</div>'
-        : '<button class="btn" id="lm-complete" disabled>\U0001F512 Finish the quiz &amp; challenge to complete</button>') +
+        : '<button class="btn" id="lm-complete" disabled>\u{1F512} Finish the quiz &amp; challenge to complete</button>') +
       '<div class="lm-nav">' +
       (prev >= 0 ? '<a class="icon-btn" href="' + lessonHref(prev) + '" aria-label="Previous lesson">\u2190</a>'
                  : '<button class="icon-btn" disabled aria-label="No previous lesson">\u2190</button>') +
@@ -252,8 +252,8 @@
       var A = window.SkillzifyActivity; if (!A) return;
       var starBtn = document.getElementById("lm-star"), pinBtn = document.getElementById("lm-pin");
       function paint() {
-        starBtn.textContent = A.isStarred("lesson", lesson.id) ? "\U0001F31F Starred" : "\u2B50 Star";
-        pinBtn.textContent = A.isPinned("lesson", lesson.id) ? "\U0001F4CC Pinned" : "\U0001F4CC Pin";
+        starBtn.textContent = A.isStarred("lesson", lesson.id) ? "\u{1F31F} Starred" : "\u2B50 Star";
+        pinBtn.textContent = A.isPinned("lesson", lesson.id) ? "\u{1F4CC} Pinned" : "\u{1F4CC} Pin";
       }
       paint();
       starBtn.addEventListener("click", function () {
@@ -263,7 +263,7 @@
       });
       pinBtn.addEventListener("click", function () {
         var on = A.togglePin("lesson", lesson.id, lesson.title);
-        paint(); window.Skillzify.toast(on ? "Pinned \U0001F4CC" : "Unpinned", "success");
+        paint(); window.Skillzify.toast(on ? "Pinned \u{1F4CC}" : "Unpinned", "success");
       });
     })();
     bindQuiz();
@@ -290,9 +290,9 @@
     confetti();
     xpPop(gain);
     if (before !== after) {
-      window.Skillzify.toast("\U0001F389 LEVEL UP! You are now " + after + " (+" + gain + " XP)", "success");
+      window.Skillzify.toast("\u{1F389} LEVEL UP! You are now " + after + " (+" + gain + " XP)", "success");
     } else {
-      window.Skillzify.toast("Lesson complete! +" + gain + " XP \U0001F389", "success");
+      window.Skillzify.toast("Lesson complete! +" + gain + " XP \u{1F389}", "success");
     }
     var next = nextUnlocked(cur);
     var wrap = document.getElementById("lm-complete-wrap");
