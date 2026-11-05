@@ -23,6 +23,12 @@
      so a device that never had definitions (updatedAt 0, empty)
      never wipes the cloud's, while a delete-all (updatedAt now,
      empty) propagates as the newest write.
+   - workspace (website-only): per-file last-write-wins by each file's
+     mtime, with a `deleted` tombstone map ({name: deletedAt}) so a
+     deletion survives a stale device saving afterwards — a file
+     survives only when its mtime is newer than its tombstone; an
+     edit after the deletion resurrects it. tabs/active are
+     last-write-wins by updatedAt, filtered to surviving files.
    - updatedAt: set to now on every local write that gets pushed
 
    localStorage streak dates are NORMALIZED to yyyy-MM-dd for the
@@ -244,17 +250,19 @@
      Local format: the compiler's `skillzify_ws` JSON
      { files: {name: code}, tabs: [names], active: name } plus a
      separate `skillzify_ws_ts` timestamp stamped on every local save.
-     Cloud shape: { files, tabs, active, updatedAt }. Whole-workspace
-     last-write-wins by updatedAt, like profile / customPaths; tie ->
-     local. A side with no timestamp AND no files carries no
-     information and never wins over a side that has files — so a
-     fresh device can't wipe the cloud, while a real edit (stamped
-     with updatedAt=now by the save) propagates as the newest write.
-     Pre-timestamp workspaces (saved before the ts key existed) carry
-     updatedAt 0 but still count as information because they are
-     non-empty; the one exact-tie edge (both updatedAt 0, only one
-     side non-empty) prefers the non-empty side so a migration tie
-     can't wipe. Corrupt/missing data degrades to "no information". */
+     Cloud shape: { files, tabs, active, mtimes, deleted, updatedAt }.
+     Per-file last-write-wins by each file's mtime, with a `deleted`
+     tombstone map ({name: deletedAt}) — a file survives only when
+     some side holds a copy edited AFTER its tombstone, so a stale
+     device re-saving its old file set can never resurrect a deleted
+     file; an edit after the deletion resurrects it instead. tabs /
+     active are last-write-wins by updatedAt, filtered to the files
+     that survive. A side with no files AND no tombstones carries no
+     information and never wipes the cloud; a delete-all (no files,
+     but tombstones) propagates as the newest write. Pre-timestamp
+     workspaces (saved before mtimes existed) carry mtime 0, so a
+     tombstone newer than 0 still deletes them. Corrupt/missing data
+     degrades to "no information". */
   var WS_SYNC_MAX_BYTES = 700 * 1024;
   function sanitizeWorkspaceFiles(files) {
     var clean = {};
@@ -264,30 +272,63 @@
     });
     return clean;
   }
+  function sanitizeTsMap(m) {
+    var out = {};
+    if (!m || typeof m !== "object" || Array.isArray(m)) return out;
+    Object.keys(m).forEach(function (k) {
+      var v = m[k];
+      if (typeof k === "string" && typeof v === "number" && v > 0) out[k] = v;
+    });
+    return out;
+  }
   function normalizeWorkspace(doc) {
     doc = doc || {};
     var files = sanitizeWorkspaceFiles(doc.files);
+    var mtimes = sanitizeTsMap(doc.mtimes);
+    var deleted = sanitizeTsMap(doc.deleted);
     var tabs = Array.isArray(doc.tabs)
       ? doc.tabs.filter(function (t) { return typeof files[t] === "string"; })
       : Object.keys(files);
     var active = (typeof doc.active === "string" && typeof files[doc.active] === "string")
       ? doc.active : (tabs[0] || null);
     var ts = (typeof doc.updatedAt === "number" && doc.updatedAt > 0) ? doc.updatedAt : 0;
-    return { files: files, tabs: tabs, active: active, updatedAt: ts,
-             hasInfo: ts > 0 || Object.keys(files).length > 0 };
+    return { files: files, mtimes: mtimes, deleted: deleted, tabs: tabs, active: active, updatedAt: ts };
   }
   function mergeWorkspace(localDoc, cloudDoc) {
     var l = normalizeWorkspace(localDoc), c = normalizeWorkspace(cloudDoc);
-    if (!l.hasInfo && !c.hasInfo) return { files: {}, tabs: [], active: null, updatedAt: 0 };
-    if (!l.hasInfo) return { files: c.files, tabs: c.tabs, active: c.active, updatedAt: c.updatedAt };
-    if (!c.hasInfo) return { files: l.files, tabs: l.tabs, active: l.active, updatedAt: l.updatedAt };
-    var winner = l.updatedAt >= c.updatedAt ? l : c; // tie -> local
-    return { files: winner.files, tabs: winner.tabs, active: winner.active,
+    var names = {};
+    [l.files, c.files, l.deleted, c.deleted].forEach(function (m) {
+      Object.keys(m).forEach(function (k) { names[k] = true; });
+    });
+    var files = {}, mtimes = {}, deleted = {};
+    Object.keys(names).forEach(function (name) {
+      // A deletion is a tombstone, not an absence: the file survives
+      // only when some side holds a copy edited AFTER the deletion.
+      // A stale device re-saving its old file set therefore cannot
+      // resurrect a deleted file — its mtime predates the tombstone.
+      var d = Math.max(l.deleted[name] || 0, c.deleted[name] || 0);
+      var lm = l.files.hasOwnProperty(name) ? (l.mtimes[name] || 0) : -1;
+      var cm = c.files.hasOwnProperty(name) ? (c.mtimes[name] || 0) : -1;
+      var bestM = Math.max(lm, cm);
+      if (d === 0 ? bestM >= 0 : bestM > d) {
+        if (lm >= cm) { files[name] = l.files[name]; mtimes[name] = lm; }
+        else { files[name] = c.files[name]; mtimes[name] = cm; }
+      } else if (d > 0) {
+        deleted[name] = d; // deleted, and no newer copy exists anywhere
+      }
+    });
+    // tabs/active: whole-doc LWW by updatedAt, filtered to survivors
+    var w = l.updatedAt >= c.updatedAt ? l : c;
+    var tabs = (w.tabs || []).filter(function (t) { return files.hasOwnProperty(t); });
+    Object.keys(files).sort().forEach(function (n) { if (tabs.indexOf(n) < 0) tabs.push(n); });
+    var active = (w.active && files.hasOwnProperty(w.active)) ? w.active : (tabs[0] || null);
+    return { files: files, mtimes: mtimes, deleted: deleted, tabs: tabs, active: active,
              updatedAt: Math.max(l.updatedAt, c.updatedAt) };
   }
   function workspaceTooBig(doc) {
     try {
-      var s = JSON.stringify({ files: (doc && doc.files) || {}, tabs: (doc && doc.tabs) || [], active: (doc && doc.active) || null });
+      var s = JSON.stringify({ files: (doc && doc.files) || {}, tabs: (doc && doc.tabs) || [], active: (doc && doc.active) || null,
+                               mtimes: (doc && doc.mtimes) || {}, deleted: (doc && doc.deleted) || {} });
       return unescape(encodeURIComponent(s)).length > WS_SYNC_MAX_BYTES;
     } catch (e) { return false; }
   }
@@ -437,6 +478,8 @@
     }
     return {
       files: w.files,
+      mtimes: (w.mtimes && typeof w.mtimes === "object") ? w.mtimes : {},
+      deleted: (w.deleted && typeof w.deleted === "object") ? w.deleted : {},
       tabs: Array.isArray(w.tabs) ? w.tabs : Object.keys(w.files),
       active: (typeof w.active === "string") ? w.active : null,
       updatedAt: parseInt(lsGet(LS.WORKSPACE_TS) || "0", 10) || 0
@@ -444,13 +487,16 @@
   }
   function writeLocalWorkspace(doc) {
     var files = (doc && doc.files) || {};
-    if (!Object.keys(files).length) {
+    var deleted = (doc && doc.deleted) || {};
+    if (!Object.keys(files).length && !Object.keys(deleted).length) {
       // never wipe a real local workspace with an empty merge result
       var cur = storeGet(LS.WORKSPACE, null);
       if (cur && cur.files && Object.keys(cur.files).length) return;
     }
     storeSet(LS.WORKSPACE, {
       files: files,
+      mtimes: (doc && doc.mtimes) || {},
+      deleted: deleted,
       tabs: (doc && doc.tabs) || Object.keys(files),
       active: (doc && doc.active) || null
     });
@@ -545,10 +591,12 @@
           mergedCustomPaths.updatedAt = (cloud[4] && cloud[4].updatedAt) || mergedCustomPaths.updatedAt || 0;
         }
         // Workspace: same stamp-if-changed rule — but an empty merge
-        // (neither side has files) must never be stamped or pushed,
-        // or a fresh device would poison the cloud with an empty
-        // workspace carrying a fresh timestamp.
-        var wsHasFiles = Object.keys(mergedWorkspace.files || {}).length > 0;
+        // (neither side has files NOR tombstones) must never be stamped
+        // or pushed, or a fresh device would poison the cloud with an
+        // empty workspace carrying a fresh timestamp. A delete-all
+        // (no files, but tombstones) DOES count as information.
+        var wsHasFiles = Object.keys(mergedWorkspace.files || {}).length > 0 ||
+                         Object.keys(mergedWorkspace.deleted || {}).length > 0;
         if (wsHasFiles && contentChanged(mergedWorkspace, cloud[5])) {
           mergedWorkspace.updatedAt = now;
           lsSet(LS.WORKSPACE_TS, String(now));

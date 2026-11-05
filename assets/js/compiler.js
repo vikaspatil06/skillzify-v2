@@ -57,9 +57,14 @@
     try {
       var raw = localStorage.getItem(WS_KEY) || "null";
       var w = JSON.parse(raw);
-      if (w && w.files && Object.keys(w.files).length) { lastSavedJson = raw; return w; }
+      if (w && w.files && Object.keys(w.files).length) {
+        lastSavedJson = raw;
+        if (!w.mtimes || typeof w.mtimes !== "object") w.mtimes = {};
+        if (!w.deleted || typeof w.deleted !== "object") w.deleted = {};
+        return w;
+      }
     } catch (e) {}
-    return { files: { "main.py": DEFAULT_CODE }, tabs: ["main.py"], active: "main.py" };
+    return { files: { "main.py": DEFAULT_CODE }, tabs: ["main.py"], active: "main.py", mtimes: {}, deleted: {} };
   }
   function saveWS() {
     var json;
@@ -154,6 +159,9 @@
     if (!b || !b.files || !Object.keys(b.files).length) { toast("Backed-up workspace is empty", "error"); return; }
     var cur = ws;
     ws = b;
+    if (!ws.mtimes) ws.mtimes = {};
+    if (!ws.deleted) ws.deleted = {};
+    Object.keys(ws.files).forEach(function (k) { ws.mtimes[k] = Date.now(); delete ws.deleted[k]; });
     if (editor) editor.setValue(ws.active ? ws.files[ws.active] : "");
     saveWS();
     backupWorkspace(cur); // the replaced workspace becomes the new backup
@@ -161,7 +169,15 @@
     toast("Workspace restored from backup ↩", "success");
   }
   function persistActiveFile() {
-    if (ws.active && editor) ws.files[ws.active] = editor.getValue();
+    if (ws.active && editor) {
+      var v = editor.getValue();
+      if (ws.files[ws.active] !== v) {
+        ws.files[ws.active] = v;
+        if (!ws.mtimes) ws.mtimes = {};
+        ws.mtimes[ws.active] = Date.now(); // per-file edit time (drives sync)
+        if (ws.deleted) delete ws.deleted[ws.active]; // edited after a delete = re-created
+      }
+    }
   }
   function validName(n) {
     n = String(n || "").trim().replace(/[\/\\]/g, "");
@@ -243,6 +259,9 @@
     if (ws.files.hasOwnProperty(n)) { toast("File already exists", "error"); return; }
     persistActiveFile();
     ws.files[n] = "# " + n + "\n";
+    if (!ws.mtimes) ws.mtimes = {};
+    ws.mtimes[n] = Date.now();
+    if (ws.deleted) delete ws.deleted[n];
     ws.tabs.push(n); ws.active = n;
     if (editor) { editor.setValue(ws.files[n]); editor.focus(); }
     saveWS(); renderExplorer(); renderTabs();
@@ -252,9 +271,16 @@
     if (!confirm("Delete " + name + "?")) return;
     persistActiveFile();
     delete ws.files[name];
+    if (!ws.mtimes) ws.mtimes = {};
+    delete ws.mtimes[name];
+    if (!ws.deleted) ws.deleted = {};
+    ws.deleted[name] = Date.now(); // tombstone: the delete must outlive stale saves
     ws.tabs = ws.tabs.filter(function (t) { return t !== name; });
     if (ws.active === name) ws.active = ws.tabs.length ? ws.tabs[ws.tabs.length - 1] : null;
-    if (!Object.keys(ws.files).length) { ws.files["main.py"] = DEFAULT_CODE; ws.tabs = ["main.py"]; ws.active = "main.py"; }
+    if (!Object.keys(ws.files).length) {
+      ws.files["main.py"] = DEFAULT_CODE; ws.tabs = ["main.py"]; ws.active = "main.py";
+      ws.mtimes["main.py"] = Date.now(); delete ws.deleted["main.py"]; // fresh default, not a resurrection
+    }
     if (editor) editor.setValue(ws.active ? ws.files[ws.active] : "");
     saveWS(); renderExplorer(); renderTabs(); updateStatusBar();
   }
@@ -806,6 +832,8 @@
       if (d && d.files && Object.keys(d.files).length) {
         backupWorkspace();
         ws = { files: d.files, tabs: Object.keys(d.files), active: d.active || Object.keys(d.files)[0] };
+        ws.mtimes = {}; Object.keys(ws.files).forEach(function (k) { ws.mtimes[k] = Date.now(); });
+        ws.deleted = {};
         saveWS();
         clearShareHash();
         toast("Shared workspace opened — your previous workspace was backed up (Settings → Restore)", "success");
@@ -818,6 +846,8 @@
       try {
         backupWorkspace();
         ws = { files: { "main.py": b64d(m2[1]) }, tabs: ["main.py"], active: "main.py" };
+        ws.mtimes = { "main.py": Date.now() };
+        ws.deleted = {};
         saveWS();
         clearShareHash();
         toast("Shared code opened — your previous workspace was backed up (Settings → Restore)", "success");
@@ -845,8 +875,16 @@
     var myActive = ws.active, myCode = dirty ? editor.getValue() : null;
     backupWorkspace(ws);
     ws = fresh;
+    if (!ws.mtimes) ws.mtimes = {};
+    if (!ws.deleted) ws.deleted = {};
+    if (!Object.keys(ws.files).length) {
+      ws.files = { "main.py": DEFAULT_CODE }; ws.tabs = ["main.py"]; ws.active = "main.py";
+      ws.mtimes["main.py"] = Date.now(); delete ws.deleted["main.py"];
+    }
     if (dirty && myActive) {
       ws.files[myActive] = myCode; // my unsaved typing wins for this file
+      ws.mtimes[myActive] = Date.now();
+      delete ws.deleted[myActive];
       if (ws.tabs.indexOf(myActive) < 0) ws.tabs.push(myActive);
       if (!ws.active) ws.active = myActive;
       saveWS();
@@ -1003,6 +1041,9 @@
           ws.files[ln] = handed;
           ws.tabs.push(ln); ws.active = ln;
         }
+        if (!ws.mtimes) ws.mtimes = {};
+        ws.mtimes[ws.active] = Date.now();
+        if (ws.deleted) delete ws.deleted[ws.active];
         saveWS();
         localStorage.removeItem("skillzify_compiler_code");
       }
@@ -1067,6 +1108,9 @@
         while (ws.files.hasOwnProperty(base)) base = name.replace(/\.py$/, i++ + ".py");
         persistActiveFile();
         ws.files[base] = String(r.result || "");
+        if (!ws.mtimes) ws.mtimes = {};
+        ws.mtimes[base] = Date.now();
+        if (ws.deleted) delete ws.deleted[base];
         ws.tabs.push(base); ws.active = base;
         if (editor) editor.setValue(ws.files[base]);
         saveWS(); renderExplorer(); renderTabs(); updateStatusBar();

@@ -38,7 +38,7 @@
        where even the minimum layout (editor 200px + panel 120px + chrome)
        exceeds the viewport, the page scrolls instead of cutting content off. */
     body.ide-page { overflow-x: hidden; overflow-y: auto; }
-    body.ide-page main { display: flex; flex-direction: column; min-height: calc(100vh - 68px); }
+    body.ide-page main { display: flex; flex-direction: column; height: calc(100vh - 68px); }
     body.ide-page footer { display: none; }
 
     .ide { display: flex; flex: 1; min-height: 0; background: var(--ide-bg); color: var(--ide-text);
@@ -137,7 +137,7 @@
       border-bottom: 1px solid var(--ide-border); font-family: "JetBrains Mono", monospace; flex-shrink: 0; }
     .breadcrumbs .sep { margin: 0 6px; }
 
-    #editor-host { flex: 1; min-height: 200px; position: relative; }
+    #editor-host { flex: 1; min-height: 200px; position: relative; overflow: hidden; }
     #editor-host .CodeMirror { height: 100%; font-family: "JetBrains Mono", monospace; }
     .welcome { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       background: var(--ide-bg); z-index: 5; }
