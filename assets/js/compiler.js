@@ -26,6 +26,16 @@
   var outHistory = [];
   var problems = [];
 
+  /* Panel height clamp — the terminal may only grow by dragging (or the
+     maximize toggle) and must never push the status bar off-screen.
+     Reserve = tab bar (~36) + breadcrumbs (~27) + editor min-height
+     (200) + resize handle (5) + status bar (28) + slack (~24) = 320px.
+     The same 320px reserve is the CSS max-height on .panel, so the
+     maximize toggle is capped by the same budget. */
+  function clampPanelHeight(h, colH) {
+    return Math.max(120, Math.min(colH - 320, h));
+  }
+
   var SNIPPETS = {
     hello: { name: "👋 Hello World", code: 'print("Hello, Skillzify!")\nname = input("Your name: ")\nprint(f"Welcome, {name}! 🎉")' },
     fib: { name: "🌀 Fibonacci", code: 'def fib(n):\n    a, b = 0, 1\n    for _ in range(n):\n        print(a, end=" ")\n        a, b = b, a + b\n\nfib(12)' },
@@ -997,20 +1007,26 @@
       editor.setOption("lineWrapping", on);
       this.textContent = "Wrap: " + (on ? "on" : "off");
     });
-    /* panel resize */
+    /* panel resize — pointer events (mouse + touch). The height goes
+       through clampPanelHeight, so dragging can never push the panel
+       (and the status bar below it) off the bottom of the screen. */
     (function () {
       var handle = document.getElementById("panel-resize");
       var panel = document.getElementById("panel");
       var dragging = false;
-      handle.addEventListener("mousedown", function (e) { dragging = true; e.preventDefault(); });
-      document.addEventListener("mousemove", function (e) {
+      handle.addEventListener("pointerdown", function (e) {
+        dragging = true;
+        try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+        e.preventDefault();
+      });
+      handle.addEventListener("pointermove", function (e) {
         if (!dragging) return;
         var rect = panel.parentElement.getBoundingClientRect();
-        var h = rect.bottom - e.clientY;
-        h = Math.max(120, Math.min(rect.height * 0.7, h));
-        panel.style.height = h + "px";
+        panel.style.height = clampPanelHeight(rect.bottom - e.clientY, rect.height) + "px";
       });
-      document.addEventListener("mouseup", function () { dragging = false; });
+      function endDrag() { dragging = false; }
+      handle.addEventListener("pointerup", endDrag);
+      handle.addEventListener("pointercancel", endDrag);
     })();
     /* keyboard */
     document.addEventListener("keydown", function (e) {

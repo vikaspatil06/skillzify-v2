@@ -33,8 +33,12 @@
       --ide-accent: #007acc; --ide-tab: #2d2d2d; --ide-hover: #2a2d2e;
       --ide-input: #3c3c3c;
     }
-    body.ide-page { overflow: hidden; }
-    body.ide-page main { display: flex; flex-direction: column; height: calc(100vh - 68px); }
+    /* Page scroll appears only when needed: on normal screens the shell
+       still fills exactly the viewport (no scrollbar); on short windows
+       where even the minimum layout (editor 200px + panel 120px + chrome)
+       exceeds the viewport, the page scrolls instead of cutting content off. */
+    body.ide-page { overflow-x: hidden; overflow-y: auto; }
+    body.ide-page main { display: flex; flex-direction: column; min-height: calc(100vh - 68px); }
     body.ide-page footer { display: none; }
 
     .ide { display: flex; flex: 1; min-height: 0; background: var(--ide-bg); color: var(--ide-text);
@@ -158,10 +162,12 @@
       padding: 4px 7px; border-radius: 4px; }
     .findbar button:hover { color: #fff; background: var(--ide-hover); }
 
-    /* bottom panel */
-    .panel-resize { height: 5px; background: transparent; cursor: ns-resize; flex-shrink: 0; }
+    /* bottom panel — max-height keeps 320px for the tab bar, breadcrumbs,
+       editor minimum and status bar, so the panel can never push the status
+       bar off-screen (same 320px as the JS drag clamp in compiler.js) */
+    .panel-resize { height: 5px; background: transparent; cursor: ns-resize; flex-shrink: 0; touch-action: none; }
     .panel-resize:hover { background: var(--ide-accent); }
-    .panel { height: 230px; min-height: 120px; max-height: 60%; display: flex; flex-direction: column;
+    .panel { height: 230px; min-height: 120px; max-height: calc(100% - 320px); display: flex; flex-direction: column;
       background: var(--ide-bg); border-top: 1px solid var(--ide-border); flex-shrink: 0; }
     .panel-tabs { display: flex; align-items: center; gap: 2px; padding: 0 12px; flex-shrink: 0;
       border-bottom: 1px solid var(--ide-border); }
@@ -417,6 +423,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
-<script src="assets/js/compiler.js?v=9"></script>
+<script src="assets/js/compiler.js?v=10"></script>
 </body>
 </html>
