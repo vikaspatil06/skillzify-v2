@@ -196,9 +196,11 @@
         document.getElementById("profile-bio").textContent = "This learner hasn't shared a public profile yet — they need to open their own profile once to publish it.";
         return;
       }
-      document.getElementById("profile-avatar").innerHTML = A.identicon(p.displayName || "Learner", 96);
       document.getElementById("profile-name").textContent = p.displayName || "Learner";
       document.getElementById("profile-bio").textContent = "Community learner";
+      if (A && typeof A.identicon === "function") {
+        document.getElementById("profile-avatar").innerHTML = A.identicon(p.displayName || "Learner", 96);
+      }
       document.getElementById("profile-level").textContent = "⚡ " + (p.xp || 0).toLocaleString() + " XP";
       document.getElementById("profile-meta").textContent = "🔥 " + (p.streak || 0) + "d streak · 🏆 " + (p.achievements || []).length + " badges";
       var stats = [

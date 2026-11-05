@@ -5,7 +5,12 @@
 (function () {
   "use strict";
   var S = window.Skillzify;
-  function esc(s) { return S.esc(String(s == null ? "" : s)); }
+  // Local fallback: if app.js failed to load, S is undefined and every render
+  // would throw — the page must not go blank because of one missing script.
+  function esc(s) {
+    if (S && typeof S.esc === "function") return S.esc(String(s == null ? "" : s));
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; });
+  }
   function $(id) { return document.getElementById(id); }
 
   var C = window.SkillzifyCommunity || null;
@@ -13,7 +18,7 @@
   var DRAFT_KEY = "skillzify_community_draft";
 
   var state = {
-    tab: "questions", filter: "all", qid: null,
+    tab: "questions", filter: "all", qid: null, query: "",
     questions: [], showcase: [], showcaseLoaded: false,
     currentQ: null, currentAnswers: []
   };
@@ -142,18 +147,48 @@
       renderQuestions();
     }).catch(onApiError);
   }
+  // Delete buttons (author-only; the buttons only render for the author).
+  // Shared by the questions list, the question detail and the showcase.
+  function bindDelete(root) {
+    root.querySelectorAll("[data-del-q]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (!confirm("Delete this question? This can't be undone.")) return;
+        b.disabled = true;
+        C.deleteQuestion(b.getAttribute("data-del-q")).then(function () {
+          toast("Question deleted", "success");
+          if (state.qid) showList();
+          loadQuestions();
+        }).catch(function () { b.disabled = false; onApiError(); });
+      });
+    });
+    root.querySelectorAll("[data-del-s]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (!confirm("Delete this project? This can't be undone.")) return;
+        b.disabled = true;
+        C.deleteShowcase(b.getAttribute("data-del-s")).then(function () {
+          toast("Project deleted", "success");
+          loadShowcase();
+        }).catch(function () { b.disabled = false; onApiError(); });
+      });
+    });
+  }
+
   function renderQuestions() {
     var list = $("comm-q-list");
     if (!list) return;
-    if (!state.questions.length) {
-      list.innerHTML = state.filter === "unanswered"
+    var shown = state.questions;
+    try { shown = C.filterByQuery(state.questions, state.query || ""); } catch (e) { shown = state.questions; }
+    if (!shown.length) {
+      list.innerHTML = (state.query || "").trim()
+        ? '<p class="hint">No questions match "' + esc(state.query.trim()) + '".</p>'
+        : state.filter === "unanswered"
         ? '<p class="hint">No open questions right now — every question has an answer. Nice.</p>'
         : state.filter === "mine"
         ? '<p class="hint">You haven\'t asked anything yet.</p>'
         : '<p class="hint">No questions yet — be the first to ask.</p>';
       return;
     }
-    list.innerHTML = state.questions.map(function (q) {
+    list.innerHTML = shown.map(function (q) {
       var n = q.answerCount || 0;
       return '<article class="card comm-q">' +
         '<h3><a href="community.html?q=' + esc(q.id) + '" data-qid="' + esc(q.id) + '">' + esc(q.title) + "</a></h3>" +
@@ -163,6 +198,9 @@
         "<span>" + n + (n === 1 ? " answer" : " answers") + "</span>" +
         statusPill(q) + "</p>" +
         (q.body ? '<p class="comm-excerpt">' + esc(excerpt(q.body, 160)) + "</p>" : "") +
+        (q.authorUid && currentUid() === q.authorUid
+          ? '<div class="comm-actions"><button class="btn btn-sm btn-ghost" type="button" data-del-q="' + esc(q.id) + '">Delete</button></div>'
+          : "") +
         "</article>";
     }).join("");
     list.querySelectorAll("[data-qid]").forEach(function (a) {
@@ -171,6 +209,7 @@
         showQuestion(a.getAttribute("data-qid"));
       });
     });
+    bindDelete(list);
   }
   function setFilter(f) {
     state.filter = f;
@@ -247,6 +286,7 @@
       '<p class="comm-meta"><span>' + esc(q.authorName || "Anonymous") + "</span>" +
       "<span>" + esc(relTime(q.createdAt)) + "</span>" +
       lessonTag(q) + statusPill(q) + "</p>" +
+      (isAuthor ? '<div class="comm-actions"><button class="btn btn-sm btn-ghost" type="button" data-del-q="' + esc(q.id) + '">Delete question</button></div>' : "") +
       (q.body ? "<p>" + nl2br(q.body) + "</p>" : "") +
       (q.error ? '<p class="hint"><strong>Error:</strong> ' + esc(q.error) + "</p>" : "") +
       codeBlock(q.code, "q") +
@@ -281,6 +321,7 @@
         }).catch(function () { b.disabled = false; onApiError(); });
       });
     });
+    bindDelete(detail);
 
     var zone = $("comm-answer-zone");
     if (!zone) return;
@@ -424,6 +465,9 @@
       '<span data-star-icon="' + esc(p.id) + '">' + (starred ? "★" : "☆") + '</span> <span data-star-count="' + esc(p.id) + '">' + (p.starCount || 0) + "</span></button>" +
       (p.code ? '<button class="btn btn-sm btn-ghost" type="button" data-viewcode="' + esc(p.id) + '">View code</button>' : "") +
       '<button class="btn btn-sm" type="button" data-fork="' + esc(p.id) + '">Fork</button>' +
+      (p.authorUid && currentUid() === p.authorUid
+        ? '<button class="btn btn-sm btn-ghost" type="button" data-del-s="' + esc(p.id) + '">Delete</button>'
+        : "") +
       "</div></article>";
   }
   function renderFeatured() {
@@ -482,6 +526,7 @@
         b.textContent = hidden ? "View code" : "Hide code";
       });
     });
+    bindDelete(root);
   }
   function findPost(id) {
     for (var i = 0; i < state.showcase.length; i++) {
@@ -569,6 +614,25 @@
     if (filters) filters.querySelectorAll("[data-filter]").forEach(function (b) {
       b.addEventListener("click", function () { setFilter(b.getAttribute("data-filter")); });
     });
+
+    // Search (filters the loaded questions client-side)
+    var search = $("comm-q-search");
+    if (search) search.addEventListener("input", function () {
+      state.query = search.value || "";
+      renderQuestions();
+    });
+
+    // Lesson picker (the real lesson list — no typos, no bogus ids)
+    try {
+      var sel = $("ask-lesson");
+      if (sel && C.lessonList) {
+        C.lessonList().forEach(function (l) {
+          var o = document.createElement("option");
+          o.value = l.id; o.textContent = l.id + " — " + l.title;
+          sel.appendChild(o);
+        });
+      }
+    } catch (e) {}
 
     // Ask form
     var askBtn = $("comm-ask-btn");

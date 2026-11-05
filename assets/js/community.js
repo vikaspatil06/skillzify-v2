@@ -79,6 +79,26 @@
     return best;
   }
 
+  function lessonList() {
+    // The titles object is in base-then-new order (b1–b10, i1–i12, a1–a10,
+    // b11–b30, …) — sort into learning order: beginner, intermediate, advanced.
+    var order = { b: 0, i: 1, a: 2 };
+    return Object.keys(LESSON_TITLES).map(function (id) { return { id: id, title: LESSON_TITLES[id] }; })
+      .sort(function (x, y) {
+        var lx = x.id.charAt(0), ly = y.id.charAt(0);
+        if (lx !== ly) return (order[lx] || 0) - (order[ly] || 0);
+        return parseInt(x.id.slice(1), 10) - parseInt(y.id.slice(1), 10);
+      });
+  }
+  function filterByQuery(qs, query) {
+    query = String(query || "").trim().toLowerCase();
+    if (!query) return (qs || []).slice();
+    return (qs || []).filter(function (q) {
+      var hay = [q.title, q.body, q.authorName, lessonTitle(q.lessonId)].join(" ").toLowerCase();
+      return hay.indexOf(query) >= 0;
+    });
+  }
+
   /* ---------------- questions ---------------- */
   function askQuestion(input) {
     var err = validateQuestion(input);
@@ -189,6 +209,20 @@
     });
   }
 
+  // Deleting a question leaves its answers orphaned (answers are only ever
+  // listed through their question, so they become unreachable, not visible).
+  function deleteQuestion(id) {
+    var u = currentUser();
+    if (!u) return Promise.reject(new Error("Sign in to delete."));
+    var d = db();
+    if (!d) return Promise.reject(new Error("Community is unavailable right now."));
+    return d.collection("questions").doc(id).get().then(function (doc) {
+      if (!doc.exists) throw new Error("Question not found.");
+      if ((doc.data() || {}).authorUid !== u.uid) throw new Error("Only the person who posted it can delete it.");
+      return d.collection("questions").doc(id).delete();
+    });
+  }
+
   /* ---------------- showcase ---------------- */
   function listShowcase() {
     var d = db();
@@ -221,14 +255,30 @@
     var d = db();
     if (!d) return Promise.reject(new Error("Community is unavailable right now."));
     var ref = d.collection("showcase").doc(showcaseId);
-    return ref.get().then(function (doc) {
+    // Transaction: two people starring at once must not lose each other's star
+    // (a plain read-then-write lets the last writer silently drop the first).
+    return d.runTransaction(function (tx) {
+      return tx.get(ref).then(function (doc) {
+        if (!doc.exists) throw new Error("Project not found.");
+        var p = doc.data() || {};
+        var stars = p.stars || {};
+        var starred;
+        if (stars[u.uid]) { delete stars[u.uid]; starred = false; }
+        else { stars[u.uid] = true; starred = true; }
+        tx.update(ref, { stars: stars, starCount: Object.keys(stars).length });
+        return starred;
+      });
+    });
+  }
+  function deleteShowcase(id) {
+    var u = currentUser();
+    if (!u) return Promise.reject(new Error("Sign in to delete."));
+    var d = db();
+    if (!d) return Promise.reject(new Error("Community is unavailable right now."));
+    return d.collection("showcase").doc(id).get().then(function (doc) {
       if (!doc.exists) throw new Error("Project not found.");
-      var p = doc.data() || {};
-      var stars = p.stars || {};
-      var starred;
-      if (stars[u.uid]) { delete stars[u.uid]; starred = false; }
-      else { stars[u.uid] = true; starred = true; }
-      return ref.update({ stars: stars, starCount: Object.keys(stars).length }).then(function () { return starred; });
+      if ((doc.data() || {}).authorUid !== u.uid) throw new Error("Only the person who posted it can delete it.");
+      return d.collection("showcase").doc(id).delete();
     });
   }
   function forkShowcase(post) {
@@ -306,12 +356,15 @@
     currentUser: currentUser,
     askQuestion: askQuestion, listQuestions: listQuestions, getQuestion: getQuestion,
     listAnswers: listAnswers, postAnswer: postAnswer, markBest: markBest,
+    deleteQuestion: deleteQuestion,
     listShowcase: listShowcase, postShowcase: postShowcase, toggleStar: toggleStar,
+    deleteShowcase: deleteShowcase,
     forkShowcase: forkShowcase,
     publishPublicProfile: publishPublicProfile, getPublicProfile: getPublicProfile,
     claimXpGrants: claimXpGrants,
     validateQuestion: validateQuestion, validateShowcase: validateShowcase,
-    filterQuestions: filterQuestions, pickFeatured: pickFeatured, lessonTitle: lessonTitle,
+    filterQuestions: filterQuestions, filterByQuery: filterByQuery,
+    pickFeatured: pickFeatured, lessonTitle: lessonTitle, lessonList: lessonList,
     _setDb: function (x) { _testDb = x; }
   };
 })();

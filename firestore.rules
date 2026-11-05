@@ -21,13 +21,16 @@ service cloud.firestore {
         && request.resource.data.authorUid == request.auth.uid
         && request.resource.data.title is string
         && request.resource.data.title.size() >= 5
-        && request.resource.data.title.size() <= 140;
+        && request.resource.data.title.size() <= 140
+        && request.resource.data.body is string && request.resource.data.body.size() <= 4000
+        && request.resource.data.code is string && request.resource.data.code.size() <= 20000;
       allow update: if request.auth != null && (
         // the asker marks a best answer (status / bestAnswerId only)
         (resource.data.authorUid == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'bestAnswerId', 'updatedAt']))
-        // anyone signed in may bump the answer counter when answering
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answerCount', 'updatedAt']));
+        // anyone signed in may bump the answer counter by exactly one when answering
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answerCount', 'updatedAt'])
+          && request.resource.data.answerCount == resource.data.get('answerCount', 0) + 1));
       allow delete: if request.auth != null && resource.data.authorUid == request.auth.uid;
     }
 
@@ -36,7 +39,9 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null
         && request.resource.data.authorUid == request.auth.uid
-        && request.resource.data.questionId is string;
+        && request.resource.data.questionId is string
+        && request.resource.data.body is string && request.resource.data.body.size() <= 4000
+        && request.resource.data.code is string && request.resource.data.code.size() <= 20000;
       allow update: if request.auth != null
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isBest']);
       allow delete: if request.auth != null && resource.data.authorUid == request.auth.uid;
@@ -46,9 +51,16 @@ service cloud.firestore {
     match /showcase/{id} {
       allow read: if true;
       allow create: if request.auth != null
-        && request.resource.data.authorUid == request.auth.uid;
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 3
+        && request.resource.data.title.size() <= 100
+        && request.resource.data.desc is string && request.resource.data.desc.size() <= 2000
+        && request.resource.data.code is string
+        && request.resource.data.code.size() >= 1 && request.resource.data.code.size() <= 20000;
       allow update: if request.auth != null
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stars', 'starCount']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stars', 'starCount'])
+        && request.resource.data.starCount == request.resource.data.stars.size();
       allow delete: if request.auth != null && resource.data.authorUid == request.auth.uid;
     }
 
@@ -65,7 +77,9 @@ service cloud.firestore {
       allow create: if request.auth != null
         && request.resource.data.amount is number
         && request.resource.data.amount > 0 && request.resource.data.amount <= 10
-        && request.resource.data.toUid != request.auth.uid;
+        && request.resource.data.toUid != request.auth.uid
+        && request.resource.data.questionId is string
+        && request.resource.data.answerId is string;
       allow update: if request.auth != null && resource.data.toUid == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['claimed']);
     }

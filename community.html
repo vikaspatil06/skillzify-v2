@@ -25,6 +25,7 @@
     .comm-tab.active { color: var(--text); border-bottom-color: var(--accent); }
     .comm-error { background: rgba(231,76,60,.12); border: 1px solid rgba(231,76,60,.45); color: #e74c3c; border-radius: 10px; padding: 12px 14px; margin: 0 0 16px; font-size: .92rem; }
     .comm-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .comm-search { flex: 1 1 220px; min-width: 180px; }
     .comm-filters { display: flex; gap: 8px; flex-wrap: wrap; }
     .comm-q { margin-bottom: 12px; padding: 16px; }
     .comm-q h3 { margin: 0 0 6px; font-size: 1.05rem; }
@@ -91,6 +92,7 @@
             <button class="pill" data-filter="unanswered" type="button">Unanswered</button>
             <button class="pill" data-filter="mine" type="button">My questions</button>
           </div>
+          <input type="search" class="comm-search" id="comm-q-search" placeholder="Search questions…" autocomplete="off">
           <button class="btn btn-primary" id="comm-ask-btn" type="button">Ask a question</button>
         </div>
 
@@ -110,7 +112,9 @@
                 <textarea id="ask-code" rows="6" class="code-editor" placeholder="Paste the code that's misbehaving (optional)"></textarea>
               </label>
               <label>Lesson (optional)
-                <input type="text" id="ask-lesson" placeholder="e.g. b12" autocomplete="off">
+                <select id="ask-lesson">
+                  <option value="">No specific lesson</option>
+                </select>
               </label>
               <p class="comm-form-error" id="ask-error" hidden></p>
               <div class="comm-actions">
@@ -179,7 +183,7 @@
 <script src="assets/js/auth.js?v=3"></script>
 <script src="assets/js/sync.js?v=6"></script>
 <script src="assets/js/ai.js?v=8"></script>
-<script src="assets/js/community.js?v=1"></script>
-<script src="assets/js/community-page.js?v=1"></script>
+<script src="assets/js/community.js?v=3"></script>
+<script src="assets/js/community-page.js?v=3"></script>
 </body>
 </html>
