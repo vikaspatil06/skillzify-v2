@@ -52,15 +52,113 @@
   var DEFAULT_CODE = 'print("Hello, Skillzify! 👋")\n# Press Ctrl+Enter to run this file\n# Create more files with ＋ in the Explorer';
 
   /* ================= workspace ================= */
+  var lastSavedJson = null; // JSON of the workspace as last persisted (skip no-op saves)
   function loadWS() {
     try {
-      var w = JSON.parse(localStorage.getItem(WS_KEY) || "null");
-      if (w && w.files && Object.keys(w.files).length) return w;
+      var raw = localStorage.getItem(WS_KEY) || "null";
+      var w = JSON.parse(raw);
+      if (w && w.files && Object.keys(w.files).length) { lastSavedJson = raw; return w; }
     } catch (e) {}
     return { files: { "main.py": DEFAULT_CODE }, tabs: ["main.py"], active: "main.py" };
   }
   function saveWS() {
-    try { localStorage.setItem(WS_KEY, JSON.stringify(ws)); } catch (e) {}
+    var json;
+    try { json = JSON.stringify(ws); } catch (e) { updateSaveUI(false); return false; }
+    if (json === lastSavedJson) { updateSaveUI(true); return true; }
+    try {
+      localStorage.setItem(WS_KEY, json);
+      try { localStorage.setItem(WS_KEY + "_ts", String(Date.now())); } catch (e) {}
+    } catch (e) { updateSaveUI(false); return false; } // quota/full: LOUD, never silent
+    lastSavedJson = json;
+    if (window.SkillzifySync && window.SkillzifySync.markDirty) {
+      try { window.SkillzifySync.markDirty("workspace"); } catch (e) {}
+    }
+    updateSaveUI(true);
+    return true;
+  }
+
+  /* ---------- save state (status bar + tab dirty dot) ---------- */
+  var saveFailed = false;
+  function fmtSaveTime(ts) {
+    try { return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; }
+  }
+  function updateSaveUI(ok) {
+    var el = document.getElementById("st-save");
+    if (!el) return;
+    if (ok === false) {
+      el.textContent = "⚠ Save failed — storage full?";
+      el.title = "The workspace could not be saved in this browser. Free up storage, or download a backup (.py) before closing the tab.";
+      if (!saveFailed) {
+        saveFailed = true;
+        try { toast("Workspace save failed — browser storage is full", "error"); } catch (e) {}
+      }
+    } else {
+      saveFailed = false;
+      el.textContent = "Saved ✓ " + fmtSaveTime(Date.now());
+      el.title = "All files saved in this browser" + ((window.SkillzifySync && window.SkillzifySync.getStatus) ? " · " + window.SkillzifySync.getStatus() : "");
+    }
+    updateDirtyTab();
+  }
+  function markUnsaved() {
+    var el = document.getElementById("st-save");
+    if (el) {
+      el.textContent = "● Unsaved changes";
+      el.title = "You have unsaved changes — they auto-save as you type";
+    }
+    updateDirtyTab();
+  }
+  function updateDirtyTab() {
+    try {
+      if (!ws || !ws.active) return;
+      var tab = document.querySelector('.tab[data-tab="' + ws.active + '"]');
+      if (tab) tab.classList.toggle("dirty", !!(editor && editor.getValue() !== ws.files[ws.active]));
+    } catch (e) {}
+  }
+
+  /* ---------- workspace backup (one-step restore) ----------
+     Before anything replaces the whole workspace — a shared link, a
+     reset, or a newer copy arriving from another device — the current
+     workspace is stashed in `skillzify_ws_backup` (with its time), and
+     Settings offers a one-tap restore. Restoring swaps: the workspace
+     being replaced becomes the new backup, so a mistaken restore is
+     itself undoable. */
+  function backupWorkspace(obj) {
+    try {
+      var raw = obj ? JSON.stringify(obj) : localStorage.getItem(WS_KEY);
+      if (raw) {
+        localStorage.setItem(WS_KEY + "_backup", raw);
+        try { localStorage.setItem(WS_KEY + "_backup_at", String(Date.now())); } catch (e) {}
+      }
+    } catch (e) {}
+    updateRestoreButton();
+  }
+  function updateRestoreButton() {
+    var b = document.getElementById("restore-ws-btn");
+    if (!b) return;
+    var has = false, at = 0;
+    try {
+      has = !!localStorage.getItem(WS_KEY + "_backup");
+      at = parseInt(localStorage.getItem(WS_KEY + "_backup_at") || "0", 10) || 0;
+    } catch (e) {}
+    b.style.display = has ? "" : "none";
+    if (has && at) {
+      try { b.title = "Backup from " + new Date(at).toLocaleString(); } catch (e) {}
+    }
+  }
+  function restoreBackupWS() {
+    var raw = null;
+    try { raw = localStorage.getItem(WS_KEY + "_backup"); } catch (e) {}
+    if (!raw) { toast("No backed-up workspace found", "error"); return; }
+    var b = null;
+    try { b = JSON.parse(raw); } catch (e) {}
+    if (!b || !b.files || !Object.keys(b.files).length) { toast("Backed-up workspace is empty", "error"); return; }
+    var cur = ws;
+    ws = b;
+    if (editor) editor.setValue(ws.active ? ws.files[ws.active] : "");
+    saveWS();
+    backupWorkspace(cur); // the replaced workspace becomes the new backup
+    renderExplorer(); renderTabs(); updateStatusBar(); updateRestoreButton();
+    toast("Workspace restored from backup ↩", "success");
   }
   function persistActiveFile() {
     if (ws.active && editor) ws.files[ws.active] = editor.getValue();
@@ -695,14 +793,22 @@
     try { history.replaceState(null, "", "#ws=" + payload); } catch (e) {}
     if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { toast("Share link copied! 🔗", "success"); });
   }
+  function clearShareHash() {
+    // A refresh must not re-apply the same shared snapshot and wipe
+    // newer local edits, so the hash is cleared once it has been used.
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+  }
   function loadSharedWS() {
     var m = (location.hash || "").match(/^#ws=(.+)$/);
     if (!m) return false;
     try {
       var d = JSON.parse(b64d(m[1]));
       if (d && d.files && Object.keys(d.files).length) {
+        backupWorkspace();
         ws = { files: d.files, tabs: Object.keys(d.files), active: d.active || Object.keys(d.files)[0] };
         saveWS();
+        clearShareHash();
+        toast("Shared workspace opened — your previous workspace was backed up (Settings → Restore)", "success");
         return true;
       }
     } catch (e) {}
@@ -710,12 +816,47 @@
     var m2 = (location.hash || "").match(/^#code=(.+)$/);
     if (m2) {
       try {
+        backupWorkspace();
         ws = { files: { "main.py": b64d(m2[1]) }, tabs: ["main.py"], active: "main.py" };
         saveWS();
+        clearShareHash();
+        toast("Shared code opened — your previous workspace was backed up (Settings → Restore)", "success");
         return true;
       } catch (e) {}
     }
     return false;
+  }
+
+  /* Remote workspace arriving from another device (via the sync
+     engine's "skillzify-sync" event, which fires after every
+     pull/merge). The in-memory workspace is stale after a pull, so
+     re-read it from storage — but never clobber unsaved typing: the
+     file being edited keeps the editor's content, other files take
+     the remote version. The pre-sync workspace is backed up first. */
+  function applyRemoteWorkspace() {
+    if (!ws) return;
+    var raw = null;
+    try { raw = localStorage.getItem(WS_KEY); } catch (e) {}
+    var fresh = null;
+    try { fresh = raw ? JSON.parse(raw) : null; } catch (e) { fresh = null; }
+    if (!fresh || !fresh.files || !Object.keys(fresh.files).length) return;
+    if (raw === lastSavedJson) return; // already in sync
+    var dirty = !!(editor && ws.active && editor.getValue() !== ws.files[ws.active]);
+    var myActive = ws.active, myCode = dirty ? editor.getValue() : null;
+    backupWorkspace(ws);
+    ws = fresh;
+    if (dirty && myActive) {
+      ws.files[myActive] = myCode; // my unsaved typing wins for this file
+      if (ws.tabs.indexOf(myActive) < 0) ws.tabs.push(myActive);
+      if (!ws.active) ws.active = myActive;
+      saveWS();
+    } else {
+      lastSavedJson = raw;
+      updateSaveUI(true);
+    }
+    if (editor) editor.setValue(ws.active ? ws.files[ws.active] : "");
+    renderExplorer(); renderTabs(); updateStatusBar();
+    toast("Workspace updated from another device ✓", "success");
   }
   function downloadCode() {
     if (!ws.active) return;
@@ -849,9 +990,20 @@
     try {
       var handed = localStorage.getItem("skillzify_compiler_code");
       if (handed && !shared) {
-        ws.files["main.py"] = handed;
-        if (ws.tabs.indexOf("main.py") < 0) ws.tabs.unshift("main.py");
-        ws.active = "main.py";
+        if (ws.files["main.py"] === DEFAULT_CODE) {
+          // untouched default: the lesson code takes its place, as before
+          ws.files["main.py"] = handed;
+          if (ws.tabs.indexOf("main.py") < 0) ws.tabs.unshift("main.py");
+          ws.active = "main.py";
+        } else {
+          // main.py holds the user's own code: open the lesson code as a
+          // new file instead of overwriting it
+          var ln = "lesson.py", li = 2;
+          while (ws.files.hasOwnProperty(ln)) ln = "lesson" + (li++) + ".py";
+          ws.files[ln] = handed;
+          ws.tabs.push(ln); ws.active = ln;
+        }
+        saveWS();
         localStorage.removeItem("skillzify_compiler_code");
       }
     } catch (e) {}
@@ -876,7 +1028,7 @@
       var st = document.getElementById("st-theme");
       if (st) st.textContent = theme.charAt(0).toUpperCase() + theme.slice(1).replace("-darker", "");
       editor.on("cursorActivity", updateStatusBar);
-      editor.on("change", function () { updateStatusBar(); });
+      editor.on("change", function () { updateStatusBar(); markUnsaved(); });
       // auto-save workspace as they type (debounced)
       var saveT = null;
       editor.on("change", function () {
@@ -925,6 +1077,7 @@
     });
     document.getElementById("reset-ws-btn").addEventListener("click", function () {
       if (!confirm("Reset workspace? All files will be replaced with a fresh main.py.")) return;
+      backupWorkspace();
       ws = { files: { "main.py": DEFAULT_CODE }, tabs: ["main.py"], active: "main.py" };
       saveWS();
       if (editor) editor.setValue(ws.files["main.py"]);
@@ -1033,10 +1186,20 @@
       var mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === "f" && !e.shiftKey) { e.preventDefault(); openFind(false); }
       else if (mod && e.key.toLowerCase() === "h") { e.preventDefault(); openFind(true); }
-      else if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); persistActiveFile(); saveWS(); toast("Workspace saved 💾", "success"); }
+      else if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); persistActiveFile(); if (saveWS()) toast("Workspace saved 💾", "success"); }
       else if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); document.getElementById("sidebar").classList.toggle("open"); }
       else if (e.key === "Escape") { closeFind(); }
     });
+
+    /* save on exit: never lose the last keystrokes inside the autosave window */
+    window.addEventListener("beforeunload", function () { persistActiveFile(); saveWS(); });
+    /* remote workspace: a newer copy from another device arrives via sync */
+    window.addEventListener("skillzify-sync", applyRemoteWorkspace);
+    /* restore button (Settings -> Workspace) */
+    var rb = document.getElementById("restore-ws-btn");
+    if (rb) rb.addEventListener("click", restoreBackupWS);
+    updateRestoreButton();
+    updateSaveUI(true);
 
     /* warm the AI backend + load runtime (via the shared client) */
     try {

@@ -326,6 +326,7 @@
           <label style="margin-top:16px">Workspace</label>
           <button class="ide-btn ghost" id="upload-btn">⬆ Import .py file</button>
           <button class="ide-btn ghost" id="reset-ws-btn">🗑 Reset workspace</button>
+          <button class="ide-btn ghost" id="restore-ws-btn" style="display:none">↩ Restore backed-up workspace</button>
         </div>
       </div>
     </div>
@@ -392,6 +393,7 @@
         <button class="st-item" id="st-check" title="Check for problems">✓ 0 problems</button>
         <span class="st-item" id="st-file" style="font-family:'JetBrains Mono',monospace">main.py</span>
         <div class="right">
+          <span class="st-item" id="st-save" title="Workspace save status">Saved ✓</span>
           <span class="st-item" id="st-pos">Ln 1, Col 1</span>
           <span class="st-item">Spaces: 4</span>
           <span class="st-item">UTF-8</span>
@@ -415,7 +417,7 @@
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js?v=3"></script>
-<script src="assets/js/sync.js?v=5"></script>
+<script src="assets/js/sync.js?v=6"></script>
 <script src="assets/js/ai.js?v=8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
@@ -423,6 +425,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
-<script src="assets/js/compiler.js?v=10"></script>
+<script src="assets/js/compiler.js?v=11"></script>
 </body>
 </html>

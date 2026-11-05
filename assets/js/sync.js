@@ -5,7 +5,8 @@
 
    Syncs lesson progress, XP, streaks, exercise attempts and the
    profile between this website and the Android app via Cloud
-   Firestore, per firestore-spec.md v1. Merge rules MUST stay
+   Firestore, per firestore-spec.md v1. The Code Studio workspace
+   (compiler files) syncs website-to-website only. Merge rules MUST stay
    identical on web + Android:
 
    - lessons: UNION of keys
@@ -239,6 +240,58 @@
     };
   }
 
+  /* ---------- workspace (Code Studio files, website-only) ----------
+     Local format: the compiler's `skillzify_ws` JSON
+     { files: {name: code}, tabs: [names], active: name } plus a
+     separate `skillzify_ws_ts` timestamp stamped on every local save.
+     Cloud shape: { files, tabs, active, updatedAt }. Whole-workspace
+     last-write-wins by updatedAt, like profile / customPaths; tie ->
+     local. A side with no timestamp AND no files carries no
+     information and never wins over a side that has files — so a
+     fresh device can't wipe the cloud, while a real edit (stamped
+     with updatedAt=now by the save) propagates as the newest write.
+     Pre-timestamp workspaces (saved before the ts key existed) carry
+     updatedAt 0 but still count as information because they are
+     non-empty; the one exact-tie edge (both updatedAt 0, only one
+     side non-empty) prefers the non-empty side so a migration tie
+     can't wipe. Corrupt/missing data degrades to "no information". */
+  var WS_SYNC_MAX_BYTES = 700 * 1024;
+  function sanitizeWorkspaceFiles(files) {
+    var clean = {};
+    if (!files || typeof files !== "object" || Array.isArray(files)) return clean;
+    Object.keys(files).forEach(function (k) {
+      if (typeof k === "string" && typeof files[k] === "string") clean[k] = files[k];
+    });
+    return clean;
+  }
+  function normalizeWorkspace(doc) {
+    doc = doc || {};
+    var files = sanitizeWorkspaceFiles(doc.files);
+    var tabs = Array.isArray(doc.tabs)
+      ? doc.tabs.filter(function (t) { return typeof files[t] === "string"; })
+      : Object.keys(files);
+    var active = (typeof doc.active === "string" && typeof files[doc.active] === "string")
+      ? doc.active : (tabs[0] || null);
+    var ts = (typeof doc.updatedAt === "number" && doc.updatedAt > 0) ? doc.updatedAt : 0;
+    return { files: files, tabs: tabs, active: active, updatedAt: ts,
+             hasInfo: ts > 0 || Object.keys(files).length > 0 };
+  }
+  function mergeWorkspace(localDoc, cloudDoc) {
+    var l = normalizeWorkspace(localDoc), c = normalizeWorkspace(cloudDoc);
+    if (!l.hasInfo && !c.hasInfo) return { files: {}, tabs: [], active: null, updatedAt: 0 };
+    if (!l.hasInfo) return { files: c.files, tabs: c.tabs, active: c.active, updatedAt: c.updatedAt };
+    if (!c.hasInfo) return { files: l.files, tabs: l.tabs, active: l.active, updatedAt: l.updatedAt };
+    var winner = l.updatedAt >= c.updatedAt ? l : c; // tie -> local
+    return { files: winner.files, tabs: winner.tabs, active: winner.active,
+             updatedAt: Math.max(l.updatedAt, c.updatedAt) };
+  }
+  function workspaceTooBig(doc) {
+    try {
+      var s = JSON.stringify({ files: (doc && doc.files) || {}, tabs: (doc && doc.tabs) || [], active: (doc && doc.active) || null });
+      return unescape(encodeURIComponent(s)).length > WS_SYNC_MAX_BYTES;
+    } catch (e) { return false; }
+  }
+
   /* ---------- content comparison (ignores updatedAt) ----------
      Key-order-insensitive deep equality, used by syncCycle to decide
      whether a merged field actually changed vs the cloud. */
@@ -268,6 +321,8 @@
     mergeProfile: mergeProfile,
     mergePaths: mergePaths,
     mergeCustomPaths: mergeCustomPaths,
+    mergeWorkspace: mergeWorkspace,
+    workspaceTooBig: workspaceTooBig,
     contentChanged: contentChanged
   };
   root.SkillzifySyncMerge = Merge;
@@ -284,7 +339,9 @@
     PROFILE_TS: "skillzify_profile_ts",
     PATHS: "skillzify_enrolled_paths",
     CUSTOM_PATHS: "skillzify_custom_paths",
-    CUSTOM_PATHS_TS: "skillzify_custom_paths_ts"
+    CUSTOM_PATHS_TS: "skillzify_custom_paths_ts",
+    WORKSPACE: "skillzify_ws",
+    WORKSPACE_TS: "skillzify_ws_ts"
   };
 
   function lsGet(key) {
@@ -373,6 +430,32 @@
     storeSet(LS.CUSTOM_PATHS, (doc && doc.definitions) || []);
     lsSet(LS.CUSTOM_PATHS_TS, String((doc && doc.updatedAt) || 0));
   }
+  function readLocalWorkspace() {
+    var w = storeGet(LS.WORKSPACE, null);
+    if (!w || typeof w !== "object" || !w.files || typeof w.files !== "object") {
+      return { files: {}, tabs: [], active: null, updatedAt: 0 };
+    }
+    return {
+      files: w.files,
+      tabs: Array.isArray(w.tabs) ? w.tabs : Object.keys(w.files),
+      active: (typeof w.active === "string") ? w.active : null,
+      updatedAt: parseInt(lsGet(LS.WORKSPACE_TS) || "0", 10) || 0
+    };
+  }
+  function writeLocalWorkspace(doc) {
+    var files = (doc && doc.files) || {};
+    if (!Object.keys(files).length) {
+      // never wipe a real local workspace with an empty merge result
+      var cur = storeGet(LS.WORKSPACE, null);
+      if (cur && cur.files && Object.keys(cur.files).length) return;
+    }
+    storeSet(LS.WORKSPACE, {
+      files: files,
+      tabs: (doc && doc.tabs) || Object.keys(files),
+      active: (doc && doc.active) || null
+    });
+    lsSet(LS.WORKSPACE_TS, String((doc && doc.updatedAt) || 0));
+  }
 
   /* ---------- Firebase guards ---------- */
   function db() {
@@ -391,8 +474,10 @@
   function userDoc(d, u) {
     // Layout: ONE document per user at users/{uid} with map fields:
     // { profile: {...}, progress: {...}, exercises: {...}, paths: {...},
-    //   customPaths: {...} }. The Android app reads its fields by name
-    // and ignores the rest, so the extra customPaths field is safe.
+    //   customPaths: {...}, workspace: {...} }. The Android app reads its fields by name
+    // and ignores the rest, so the extra customPaths/workspace fields are safe.
+    // NOTE: `workspace` is website-only for now — the Android app has its
+    // own local compiler workspace and does not read this field.
     // (A doc ref needs an even number of path segments; users/{uid}/profile
     // would be a collection path and is invalid.)
     return d.doc("users/" + u);
@@ -417,7 +502,7 @@
 
   /* ---------- core: pull -> merge -> push ---------- */
   function syncCycle() {
-    var d, u;
+    var d, u, wsSkipped = false;
     try { d = db(); u = uid(); } catch (e) { d = null; u = null; }
     if (!d || !u) { setStatus("Sync offline"); return Promise.resolve(false); }
     setStatus("Syncing…");
@@ -426,18 +511,20 @@
     return ref.get()
       .then(function (snap) {
         var data = (snap && snap.exists) ? snap.data() : {};
-        var cloud = [data.profile || null, data.progress || null, data.exercises || null, data.paths || null, data.customPaths || null];
+        var cloud = [data.profile || null, data.progress || null, data.exercises || null, data.paths || null, data.customPaths || null, data.workspace || null];
         var mergedProfile = mergeProfile(readLocalProfile(), cloud[0]);
         var mergedProgress = mergeProgress(readLocalProgress(), cloud[1]);
         var mergedExercises = mergeExercises(readLocalExercises(), cloud[2]);
         var mergedPaths = mergePaths(readLocalPaths(), cloud[3]);
         var mergedCustomPaths = mergeCustomPaths(readLocalCustomPaths(), cloud[4]);
+        var mergedWorkspace = mergeWorkspace(readLocalWorkspace(), cloud[5]);
         // write merged state locally…
         writeLocalProfile(mergedProfile);
         writeLocalProgress(mergedProgress);
         writeLocalExercises(mergedExercises);
         writeLocalPaths(mergedPaths);
         writeLocalCustomPaths(mergedCustomPaths);
+        writeLocalWorkspace(mergedWorkspace);
         // …and push the merged doc to the cloud. Profile and customPaths
         // are whole-document last-write-wins by updatedAt, so ONLY stamp
         // them when this device actually contributed a change — re-stamping
@@ -457,6 +544,17 @@
         } else {
           mergedCustomPaths.updatedAt = (cloud[4] && cloud[4].updatedAt) || mergedCustomPaths.updatedAt || 0;
         }
+        // Workspace: same stamp-if-changed rule — but an empty merge
+        // (neither side has files) must never be stamped or pushed,
+        // or a fresh device would poison the cloud with an empty
+        // workspace carrying a fresh timestamp.
+        var wsHasFiles = Object.keys(mergedWorkspace.files || {}).length > 0;
+        if (wsHasFiles && contentChanged(mergedWorkspace, cloud[5])) {
+          mergedWorkspace.updatedAt = now;
+          lsSet(LS.WORKSPACE_TS, String(now));
+        } else {
+          mergedWorkspace.updatedAt = (cloud[5] && cloud[5].updatedAt) || mergedWorkspace.updatedAt || 0;
+        }
         mergedProgress.updatedAt = now;
         mergedExercises.updatedAt = now;
         mergedPaths.updatedAt = now;
@@ -465,11 +563,21 @@
         // what broke cross-device enrollment sync (each side read the shape
         // the other never wrote). mergePaths still reads both shapes.
         var flatPaths = Object.assign({}, mergedPaths.paths, { updatedAt: now });
-        return ref.set({ profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises, paths: flatPaths, customPaths: mergedCustomPaths },
-          { merge: true }).catch(function () {});
+        var payload = { profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises, paths: flatPaths, customPaths: mergedCustomPaths };
+        if (wsHasFiles && !workspaceTooBig(mergedWorkspace)) {
+          payload.workspace = mergedWorkspace;
+        } else if (wsHasFiles) {
+          wsSkipped = true; // too large for the 1 MiB doc limit: keep cloud's copy
+        }
+        return ref.set(payload, { merge: true }).catch(function () {});
       })
       .then(function () {
-        setStatus("Synced ✓ " + fmtTime(Date.now()));
+        if (wsSkipped) setStatus("Workspace too large to sync (700 KB limit)");
+        else setStatus("Synced ✓ " + fmtTime(Date.now()));
+        try {
+          if (typeof CustomEvent === "function")
+            window.dispatchEvent(new CustomEvent("skillzify-sync", { detail: { at: Date.now() } }));
+        } catch (e) {}
         return true;
       })
       .catch(function () {
@@ -500,6 +608,7 @@
     writeLocalExercises(mergeExercises(readLocalExercises(), cloud[2]));
     writeLocalPaths(mergePaths(readLocalPaths(), data.paths || null));
     writeLocalCustomPaths(mergeCustomPaths(readLocalCustomPaths(), data.customPaths || null));
+    writeLocalWorkspace(mergeWorkspace(readLocalWorkspace(), data.workspace || null));
     setStatus("Synced ✓ " + fmtTime(Date.now()));
     try {
       if (typeof CustomEvent === "function")
