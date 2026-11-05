@@ -10,8 +10,66 @@ data class TestsOutcome(val codeOk: Boolean, val error: String, val results: Lis
     val allPassed: Boolean get() = codeOk && results.isNotEmpty() && results.all { it.ok }
 }
 
+data class FlowNode(val id: String, val type: String, val label: String)
+data class FlowEdge(val from: String, val to: String, val label: String)
+data class FlowGraph(val nodes: List<FlowNode>, val edges: List<FlowEdge>, val truncated: Boolean, val error: String?) {
+    /** Mermaid `flowchart TD` text for copy/share (website export parity). */
+    fun toMermaid(): String {
+        val sb = StringBuilder("flowchart TD\n")
+        for (n in nodes) {
+            val safe = n.label.replace("\"", "'").replace("[", "(").replace("]", ")")
+                .replace("{", "(").replace("}", ")").replace(";", ",")
+            val shape = when (n.type) {
+                "start", "end" -> "([\"$safe\"])"
+                "io" -> "[/\"$safe\"/]"
+                "decision" -> "{\"$safe\"}"
+                else -> "[\"$safe\"]"
+            }
+            sb.append("    ${n.id}$shape\n")
+        }
+        for (e in edges) {
+            if (e.label.isNotEmpty()) sb.append("    ${e.from} -->|${e.label}| ${e.to}\n")
+            else sb.append("    ${e.from} --> ${e.to}\n")
+        }
+        return sb.toString()
+    }
+}
+
 /** Runs Python via Chaquopy's skillzify_runner module on a background thread. */
 object PythonRunner {
+    /**
+     * Flowchart Lab (website parity): AST graph for Python code, or the
+     * pseudocode parser for algorithm text. Returns FlowGraph; error is set
+     * for syntax problems instead of throwing.
+     */
+    fun flowchart(input: String, algo: Boolean): FlowGraph {
+        return try {
+            val mod = Python.getInstance().getModule(
+                if (algo) "flowchart_algo" else "flowchart_gen"
+            )
+            val json = mod.callAttr(
+                if (algo) "algo_flowchart_json" else "flowchart_json", input
+            ).toString()
+            val o = JSONObject(json)
+            val nodes = o.getJSONArray("nodes").let { arr ->
+                (0 until arr.length()).map {
+                    val n = arr.getJSONObject(it)
+                    FlowNode(n.getString("id"), n.getString("type"), n.getString("label"))
+                }
+            }
+            val edges = o.getJSONArray("edges").let { arr ->
+                (0 until arr.length()).map {
+                    val e = arr.getJSONObject(it)
+                    FlowEdge(e.getString("from"), e.getString("to"), e.optString("label", ""))
+                }
+            }
+            FlowGraph(nodes, edges, o.optBoolean("truncated", false),
+                if (o.isNull("error")) null else o.optString("error"))
+        } catch (e: Exception) {
+            FlowGraph(emptyList(), emptyList(), false,
+                "Flowchart failed: ${e.message ?: e.javaClass.simpleName}")
+        }
+    }
     fun run(code: String, stdinText: String): RunResult {
         return try {
             val mod = Python.getInstance().getModule("skillzify_runner")
@@ -39,6 +97,31 @@ object PythonRunner {
             val mod = Python.getInstance().getModule("skillzify_runner")
             val filesJson = org.json.JSONObject(files as Map<*, *>).toString()
             val json = mod.callAttr("run_multi", filesJson, mainFile, stdinText).toString()
+            val o = JSONObject(json)
+            RunResult(
+                ok = o.getBoolean("ok"),
+                output = o.getString("output"),
+                error = o.getString("error"),
+                ms = o.getLong("ms")
+            )
+        } catch (e: Exception) {
+            RunResult(
+                ok = false,
+                output = "",
+                error = "Runner failed: ${e.message ?: e.javaClass.simpleName}",
+                ms = 0
+            )
+        }
+    }
+
+    /** Multi-file workspace run with a live interactive terminal (website
+        Code Studio parity). The bridge streams output and blocks input()
+        until the user answers in the terminal. Call from a background thread. */
+    fun runMultiInteractive(files: Map<String, String>, mainFile: String, bridge: TerminalBridge): RunResult {
+        return try {
+            val mod = Python.getInstance().getModule("skillzify_runner")
+            val filesJson = org.json.JSONObject(files as Map<*, *>).toString()
+            val json = mod.callAttr("run_multi_interactive", filesJson, mainFile, bridge).toString()
             val o = JSONObject(json)
             RunResult(
                 ok = o.getBoolean("ok"),

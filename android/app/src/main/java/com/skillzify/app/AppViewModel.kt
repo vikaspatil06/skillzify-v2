@@ -95,6 +95,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Manual sync refresh (Dashboard ↻ button): full pull + merge + push. */
+    var syncRefreshing by mutableStateOf(false); private set
+
+    fun refreshSync() {
+        val uid = authRepo.currentUser()?.uid
+        if (uid == null) {
+            syncStatus = "Not synced"
+            return
+        }
+        if (syncRefreshing) return
+        syncRefreshing = true
+        viewModelScope.launch {
+            syncStatus = "Syncing..."
+            val ok = syncRepo.syncNow(uid)
+            refreshFromStore()
+            syncStatus = syncRepo.lastStatus
+            if (!ok) syncStatus = "Sync offline"
+            syncRefreshing = false
+        }
+    }
+
     /** Re-reads UI state from the store after a sync merge. */
     private fun refreshFromStore() {
         doneIds = store.doneIds()
@@ -108,6 +129,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     init {
         // Parse catalog JSON off the main thread (startup hitch fix).
         viewModelScope.launch(Dispatchers.IO) {
+            // Pre-warm the Chaquopy interpreter in the background, so the
+            // FIRST compiler Run feels instant instead of paying the
+            // interpreter-startup hitch mid-interaction.
+            try { com.chaquo.python.Python.getInstance() } catch (e: Exception) { /* starts on first use */ }
             val c = loadCatalog(app)
             val sn = loadSnippets(app)
             val ex = loadExercises(app)
@@ -131,6 +156,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         authRepo.login(email, password)
 
     fun logout() = authRepo.logout()
+
+    suspend fun resetPassword(email: String): String? = authRepo.resetPassword(email)
 
     var doneIds by mutableStateOf(store.doneIds()); private set
     var xp by mutableStateOf(store.getXp()); private set
@@ -349,6 +376,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun saveLastCode(code: String) = store.saveLastCode(code)
+
+    /**
+     * One-shot compiler handoff: Projects/Reference "Try in compiler" sets the
+     * code here AND writes it to workspace main.py; CompilerTab consumes it on
+     * arrival so the code shows even if the compiler tab was already in the
+     * back stack (its editor state would otherwise keep the old code).
+     */
+    var pendingCompilerCode by mutableStateOf<String?>(null); private set
+
+    fun openInCompiler(code: String) {
+        saveWorkspaceFile("main.py", code)
+        saveLastCode(code)
+        pendingCompilerCode = code
+    }
+
+    fun consumePendingCompilerCode() {
+        pendingCompilerCode = null
+    }
     fun lastCode(): String = store.getLastCode()
 
     /* ---------- exercises ---------- */

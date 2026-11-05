@@ -82,7 +82,10 @@ class SyncRepository(private val store: Store) {
     @Suppress("UNCHECKED_CAST")
     private fun cloudAttempts(data: Map<String, Any?>?): Map<String, ExerciseAttempt> =
         (data?.get("attempts") as? Map<*, *>)
-            ?.entries?.associate { (k, v) -> k.toString() to cloudAttempt(v as Map<String, Any?>) }
+            ?.entries?.mapNotNull { (k, v) ->
+                val m = v as? Map<String, Any?> ?: return@mapNotNull null
+                k.toString() to cloudAttempt(m)
+            }?.toMap()
             ?: emptyMap()
 
     private fun attemptMap(a: ExerciseAttempt): Map<String, Any> = mapOf(
@@ -104,12 +107,14 @@ class SyncRepository(private val store: Store) {
         cloud: Map<String, Any?>?
     ): Map<String, Pair<Boolean, Long>> {
         val out = local.toMutableMap()
-        val cloudMap = cloud as? Map<String, Map<String, Any?>> ?: emptyMap()
-        for ((id, v) in cloudMap) {
+        val cloudMap = cloud as? Map<*, *> ?: return out
+        for ((id, raw) in cloudMap) {
+            val v = raw as? Map<*, *> ?: continue
             val cEnrolled = v["enrolled"] as? Boolean ?: false
             val cAt = (v["at"] as? Number)?.toLong() ?: 0
-            val l = out[id]
-            if (l == null || cAt > l.second) out[id] = cEnrolled to cAt
+            val key = id.toString()
+            val l = out[key]
+            if (l == null || cAt > l.second) out[key] = cEnrolled to cAt
         }
         return out
     }

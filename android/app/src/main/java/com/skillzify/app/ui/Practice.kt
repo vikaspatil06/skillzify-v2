@@ -46,7 +46,12 @@ private fun diffLabel(d: Int) = when (d) {
 fun PracticeTab(vm: AppViewModel, nav: NavController) {
     val topics = remember { listOf("All") + vm.exercises.map { it.topic }.distinct() }
     var topic by remember { mutableStateOf("All") }
-    val list = vm.exercises.filter { topic == "All" || it.topic == topic }
+    // derivedStateOf: refilter only when the topic changes.
+    val list by remember {
+        androidx.compose.runtime.derivedStateOf {
+            vm.exercises.filter { topic == "All" || it.topic == topic }
+        }
+    }
     val solved = vm.solvedExerciseCount()
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
@@ -84,7 +89,7 @@ fun PracticeTab(vm: AppViewModel, nav: NavController) {
                 val att = vm.getAttempt(ex.id)
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Card),
-                    modifier = Modifier.fillMaxWidth().clickable { nav.navigate("exercise/${ex.id}") }
+                    modifier = Modifier.fillMaxWidth().animateItem().clickable { nav.navigate("exercise/${ex.id}") }
                 ) {
                     Column(Modifier.fillMaxWidth().padding(14.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {

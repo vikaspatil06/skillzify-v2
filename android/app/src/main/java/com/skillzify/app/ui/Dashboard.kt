@@ -41,6 +41,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.skillzify.app.AppViewModel
 import com.skillzify.app.ui.theme.BgSoft
 import com.skillzify.app.ui.theme.Card
@@ -56,6 +58,9 @@ import java.util.Locale
 @Composable
 fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // Which track's certificate was just saved (brief "✓ Saved" feedback).
+    var savedCert by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
     val user by vm.firebaseUser.collectAsStateWithLifecycle()
     val level = vm.currentLevel()
     val next = vm.nextLevelInfo()
@@ -86,7 +91,7 @@ fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
                 Button(
                     onClick = { vm.logout() },
                     colors = ButtonDefaults.buttonColors(containerColor = Danger.copy(alpha = 0.15f)),
-                ) { Text("Logout", color = Danger, fontSize = 13.sp) }
+                ) { Text("Logout", color = Danger, fontSize = 13.sp, maxLines = 1) }
             }
         }
 
@@ -102,12 +107,35 @@ fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             StatCard("🏋️", "${vm.solvedExerciseCount()}/${vm.exercises.size}", "Exercises", Modifier.weight(1f))
-            StatCard(
-                "☁️",
-                vm.syncStatus.replace("Syncing…", "…").replace("Synced ✓", "✓").replace("Synced", "✓"),
-                "Cloud sync",
-                Modifier.weight(1f)
-            )
+            // Cloud sync card with manual refresh (↻) — retries a failed/offline sync.
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Card),
+                modifier = Modifier.weight(1f)
+            ) {
+                Column(
+                    Modifier.padding(14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("☁️", fontSize = 22.sp)
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (vm.syncRefreshing) "…" else vm.syncStatus
+                                .replace("Syncing…", "…")
+                                .replace("Synced ✓", "✓")
+                                .replace("Synced", "✓"),
+                            fontSize = 20.sp, fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                    Text("Cloud sync", color = TextMuted, fontSize = 11.sp)
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedButton(
+                        onClick = { vm.refreshSync() },
+                        enabled = !vm.syncRefreshing,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (vm.syncRefreshing) "Syncing…" else "↻ Refresh sync", fontSize = 12.sp, maxLines = 1) }
+                }
+            }
         }
 
         // Profile editing
@@ -129,7 +157,7 @@ fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
                         editName = vm.profileName()
                         editBio = vm.profileBio()
                         editingProfile = true
-                    }) { Text("Edit", fontSize = 13.sp) }
+                    }) { Text("Edit", fontSize = 13.sp, maxLines = 1) }
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(vm.profileName().ifBlank { "Learner" }, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
@@ -157,10 +185,10 @@ fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
                     Button(onClick = {
                         vm.saveProfile(editName, editBio)
                         editingProfile = false
-                    }) { Text("Save") }
+                    }) { Text("Save", maxLines = 1) }
                 },
                 dismissButton = {
-                    OutlinedButton(onClick = { editingProfile = false }) { Text("Cancel") }
+                    OutlinedButton(onClick = { editingProfile = false }) { Text("Cancel", maxLines = 1) }
                 }
             )
         }
@@ -253,7 +281,7 @@ fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
                         ) {
                             Text("↻ ${ex.title}", fontSize = 13.sp, modifier = Modifier.weight(1f))
                             OutlinedButton(onClick = { nav.navigate("exercise/${ex.id}") }) {
-                                Text("Retry", fontSize = 12.sp)
+                                Text("Retry", fontSize = 12.sp, maxLines = 1)
                             }
                         }
                     }
@@ -360,8 +388,18 @@ fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
                         ) {
                             Text("${t.icon} ${t.name}", fontSize = 13.sp, modifier = Modifier.weight(1f))
                             OutlinedButton(onClick = {
-                                downloadCertificate(ctx, vm.profileName().ifBlank { "Learner" }, t.name)
-                            }) { Text("Download", fontSize = 12.sp) }
+                                // Bitmap rendering + file I/O off the main
+                                // thread: a 1200×800 canvas draw used to hitch
+                                // the UI on every tap.
+                                scope.launch {
+                                    withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        downloadCertificate(ctx, vm.profileName().ifBlank { "Learner" }, t.name)
+                                    }
+                                    savedCert = t.id
+                                    kotlinx.coroutines.delay(2500)
+                                    if (savedCert == t.id) savedCert = null
+                                }
+                            }) { Text(if (savedCert == t.id) "✓ Saved" else "Download", fontSize = 12.sp, maxLines = 1) }
                         }
                     }
                 }
@@ -419,11 +457,11 @@ fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
                     OutlinedButton(
                         onClick = { vm.setTheme(true, vm.themeAccent) },
                         modifier = Modifier.weight(1f)
-                    ) { Text(if (vm.themeDark) "🌙 Dark ✓" else "🌙 Dark", fontSize = 13.sp) }
+                    ) { Text(if (vm.themeDark) "🌙 Dark ✓" else "🌙 Dark", fontSize = 13.sp, maxLines = 1) }
                     OutlinedButton(
                         onClick = { vm.setTheme(false, vm.themeAccent) },
                         modifier = Modifier.weight(1f)
-                    ) { Text(if (!vm.themeDark) "☀️ Light ✓" else "☀️ Light", fontSize = 13.sp) }
+                    ) { Text(if (!vm.themeDark) "☀️ Light ✓" else "☀️ Light", fontSize = 13.sp, maxLines = 1) }
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

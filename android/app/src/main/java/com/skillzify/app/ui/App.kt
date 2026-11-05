@@ -1,5 +1,10 @@
 package com.skillzify.app.ui
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -100,17 +105,32 @@ fun SkillzifyApp(vm: AppViewModel = viewModel()) {
                             }
                         },
                         icon = { Icon(t.icon, contentDescription = t.label) },
-                        label = { Text(t.label) }
+                        label = { Text(t.label, maxLines = 1) }
                     )
                 }
             }
         },
         containerColor = Bg
     ) { pad ->
+        // Screen transitions: a short slide + fade on every navigation, so
+        // moving between tabs and detail screens feels continuous instead
+        // of cutting instantly. 300ms matches Material motion guidance.
         NavHost(
             navController = nav,
             startDestination = "learn",
-            modifier = Modifier.padding(pad)
+            modifier = Modifier.padding(pad),
+            enterTransition = {
+                slideInHorizontally(tween(300), initialOffsetX = { it / 4 }) + fadeIn(tween(300))
+            },
+            exitTransition = {
+                slideOutHorizontally(tween(300), targetOffsetX = { -it / 4 }) + fadeOut(tween(300))
+            },
+            popEnterTransition = {
+                slideInHorizontally(tween(300), initialOffsetX = { -it / 4 }) + fadeIn(tween(300))
+            },
+            popExitTransition = {
+                slideOutHorizontally(tween(300), targetOffsetX = { it / 4 }) + fadeOut(tween(300))
+            }
         ) {
             composable("learn") { LearnTab(vm, nav) }
             composable("practice") { PracticeTab(vm, nav) }
@@ -143,7 +163,8 @@ fun SkillzifyApp(vm: AppViewModel = viewModel()) {
             ) { entry ->
                 ProjectDetail(vm, entry.arguments!!.getString("id")!!, nav)
             }
-            composable("reference") { ReferenceScreen(vm) }
+            composable("reference") { ReferenceScreen(vm, nav) }
+            composable("flowchart") { FlowchartScreen(vm, nav) }
         }
     }
 }

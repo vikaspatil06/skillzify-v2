@@ -63,6 +63,19 @@ class AuthRepository {
 
     fun logout() = auth.signOut()
 
+    /** Sends a Firebase password-reset email (website parity: forgot password).
+        Returns an error message, or null on success. */
+    suspend fun resetPassword(email: String): String? {
+        val e = email.trim()
+        if (!isValidEmail(e)) return "Please enter a valid email address first."
+        return try {
+            auth.sendPasswordResetEmail(e).await()
+            null
+        } catch (ex: Exception) {
+            friendlyError(ex)
+        }
+    }
+
     private fun isValidEmail(e: String) =
         Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(e)
 

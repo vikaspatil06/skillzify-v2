@@ -120,3 +120,85 @@ def run_tests(code, tests_json):
     ms = int((time.time() - t0) * 1000)
     sys.stdout, sys.stderr = old_stdout, old_stderr
     return json.dumps({"ok": code_ok, "error": code_err, "results": results, "ms": ms})
+
+
+class _Cancelled(Exception):
+    """Raised when the user taps Stop while code waits for terminal input."""
+    pass
+
+
+class _BridgeOut:
+    """sys.stdout/stderr that streams each write to the Kotlin terminal UI."""
+
+    def __init__(self, bridge):
+        self.bridge = bridge
+
+    def write(self, s):
+        if s:
+            self.bridge.onOutput(s)
+        return len(s)
+
+    def flush(self):
+        pass
+
+
+class _BridgeIn:
+    """sys.stdin whose readline() blocks until the user submits a terminal line.
+
+    The Kotlin bridge shows an inline input row while blocked; Stop cancels
+    the wait by returning None, which surfaces as _Cancelled.
+    """
+
+    def __init__(self, bridge):
+        self.bridge = bridge
+
+    def readline(self, prompt=""):
+        line = self.bridge.readLine(prompt if prompt else "")
+        if line is None:
+            raise _Cancelled()
+        return line + "\n"
+
+    def read(self, *args):
+        raise _Cancelled()
+
+
+def run_multi_interactive(files_json, main_file, bridge):
+    """Multi-file workspace run with a live interactive terminal (website
+    Code Studio parity: input() prompts inline, output streams as it runs).
+
+    bridge: Kotlin TerminalBridge with onOutput(str) / readLine(prompt)->str|None.
+    Returns JSON {ok, output: "" (already streamed), error, ms}.
+    """
+    import os
+    import tempfile
+    files = json.loads(files_json)
+    old_stdin, old_stdout, old_stderr = sys.stdin, sys.stdout, sys.stderr
+    old_path = list(sys.path)
+    out = _BridgeOut(bridge)
+    sys.stdin, sys.stdout, sys.stderr = _BridgeIn(bridge), out, out
+    t0 = time.time()
+    ok = True
+    err_text = ""
+    try:
+        tmp = tempfile.mkdtemp(prefix="skillzify_ws_")
+        for name, code in files.items():
+            safe = os.path.basename(str(name))
+            if not safe:
+                continue
+            with open(os.path.join(tmp, safe), "w", encoding="utf-8") as f:
+                f.write(code)
+        sys.path.insert(0, tmp)
+        main_code = files.get(main_file, "")
+        ns = {"__name__": "__main__", "__file__": os.path.join(tmp, main_file)}
+        exec(compile(main_code, main_file, "exec"), ns)
+    except _Cancelled:
+        ok = False
+        err_text = "⏹ Stopped."
+    except BaseException:
+        ok = False
+        err_text = traceback.format_exc()
+    finally:
+        ms = int((time.time() - t0) * 1000)
+        sys.stdin, sys.stdout, sys.stderr = old_stdin, old_stdout, old_stderr
+        sys.path = old_path
+    return json.dumps({"ok": ok, "output": "", "error": err_text, "ms": ms})

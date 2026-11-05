@@ -33,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -90,9 +91,25 @@ fun CompilerTab(vm: AppViewModel) {
     var code by remember(activeFile) {
         mutableStateOf(effectiveFiles[activeFile] ?: "")
     }
-    var programInput by remember { mutableStateOf("") }
+    // One-shot handoff from Projects/Reference "Try in compiler": load the
+    // code even when this tab was already in the back stack.
+    val pendingCode = vm.pendingCompilerCode
+    androidx.compose.runtime.LaunchedEffect(pendingCode) {
+        if (pendingCode != null) {
+            vm.saveWorkspaceFile("main.py", pendingCode)
+            activeFile = "main.py"
+            code = pendingCode
+            vm.consumePendingCompilerCode()
+        }
+    }
     var running by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<RunResult?>(null) }
+    // Interactive terminal (website Code Studio parity): output streams live,
+    // input() blocks until the user answers in the terminal input row.
+    // The bridge is @Stable and the panel/input-row collect its flows
+    // THEMSELVES, so streaming output recomposes only those small scopes —
+    // never the editor, buttons, or the rest of this screen.
+    val bridge = remember { com.skillzify.app.data.TerminalBridge() }
     var showExplainer by remember { mutableStateOf(false) }
     var snippetExpanded by remember { mutableStateOf(false) }
     var snippetIdx by remember { mutableStateOf(0) }
@@ -104,6 +121,49 @@ fun CompilerTab(vm: AppViewModel) {
     var snippetName by remember { mutableStateOf("") }
     var showAddFile by remember { mutableStateOf(false) }
     var newFileName by remember { mutableStateOf("") }
+    // AI tutor (Render proxy; local heuristic Explainer stays as fallback).
+    var aiBusy by remember { mutableStateOf(false) }
+    var aiText by remember { mutableStateOf<String?>(null) }
+    var aiCode by remember { mutableStateOf<String?>(null) }
+    var aiNote by remember { mutableStateOf<String?>(null) }
+    var showGenerate by remember { mutableStateOf(false) }
+    var generatePrompt by remember { mutableStateOf("") }
+
+    fun askAi(mode: String, aiCodeInput: String, aiError: String = "") {
+        if (aiBusy) return
+        aiBusy = true
+        aiText = null; aiCode = null; aiNote = null
+        scope.launch {
+            val res = com.skillzify.app.data.AiRepository.ask(aiCodeInput, aiError, mode)
+            aiBusy = false
+            res.onSuccess { text ->
+                if (mode == "generate" || mode == "fix") {
+                    val extracted = com.skillzify.app.data.AiRepository.extractCode(text)
+                    if (extracted != null) {
+                        aiCode = extracted
+                        aiText = com.skillzify.app.data.AiRepository.afterCode(text)
+                            .takeIf { it.isNotBlank() }
+                    } else {
+                        // Old server build without mode support, or fence-less
+                        // answer: show the raw text so nothing is lost.
+                        aiText = text
+                        aiNote = "The server returned no code block — copy what you need from below."
+                    }
+                } else {
+                    aiText = text
+                }
+            }.onFailure { e ->
+                // AI down? Fall back to the instant local explainer for errors.
+                if (aiError.isNotEmpty()) {
+                    val ex = Explainer.explain(aiError)
+                    aiText = "⚠️ AI unavailable right now (${e.message}) — local explanation:\n\n" +
+                        ex.title + "\n" + ex.tips.joinToString("\n") { "• $it" }
+                } else {
+                    aiText = "⚠️ AI unavailable right now (${e.message}). Try again in a bit."
+                }
+            }
+        }
+    }
 
     fun persistActive() {
         vm.saveWorkspaceFile(activeFile, code)
@@ -116,7 +176,10 @@ fun CompilerTab(vm: AppViewModel) {
             result = r
             running = false
             runFuture = null
-            history.add(0, HistoryEntry(activeFile, r.ok, r.output.ifEmpty { r.error }, r.ms, System.currentTimeMillis()))
+            // Interactive runs stream output into the terminal; history keeps
+            // that transcript (r.output is empty for interactive runs).
+            val transcript = bridge.output.value.ifEmpty { r.output.ifEmpty { r.error } }
+            history.add(0, HistoryEntry(activeFile, r.ok, transcript, r.ms, System.currentTimeMillis()))
             vm.addRun(code, r.ok)
             panelTab = if (r.ok) 0 else 1
         }
@@ -127,24 +190,31 @@ fun CompilerTab(vm: AppViewModel) {
         running = true
         result = null
         showExplainer = false
+        inputLine = ""
+        bridge.reset()
         persistActive()
         val filesSnap = vm.workspaceFiles.toMutableMap()
         filesSnap[activeFile] = code
         val mainSnap = activeFile
-        val inputSnap = programInput
         runFuture = runExec.submit {
             try {
-                val r = PythonRunner.runMulti(filesSnap, mainSnap, PythonRunner.makeStdin(inputSnap))
+                val r = PythonRunner.runMultiInteractive(filesSnap, mainSnap, bridge)
                 finishOnMain(r)
             } catch (e: Exception) {
                 finishOnMain(RunResult(false, "", "Runner failed: ${e.message}", 0))
             }
         }
-        // 15s auto-timeout (web parity): abandon runaway code, recover UI
+        // 15s auto-timeout (web parity) — but the clock pauses while the
+        // program waits for terminal input, so thinking time never kills a run.
         scope.launch(Dispatchers.IO) {
-            kotlinx.coroutines.delay(15000)
+            var budgetMs = 15000L
+            while (running && budgetMs > 0) {
+                kotlinx.coroutines.delay(1000)
+                if (bridge.waitingPrompt.value == null) budgetMs -= 1000
+            }
             withContext(Dispatchers.Main) {
-                if (running) {
+                if (running && bridge.waitingPrompt.value == null) {
+                    bridge.cancel()
                     runFuture?.cancel(true)
                     runFuture = null
                     running = false
@@ -156,6 +226,7 @@ fun CompilerTab(vm: AppViewModel) {
     }
 
     fun stop() {
+        bridge.cancel()
         runFuture?.cancel(true)
         runFuture = null
         running = false
@@ -199,7 +270,7 @@ fun CompilerTab(vm: AppViewModel) {
         ) {
             Text("🤖 Python Compiler", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
             Text(
-                "Real Python 3.11 on-device via Chaquopy · multi-file workspace, like Code Studio.",
+                "Real Python 3.11 on-device · interactive terminal: input() asks right here, like Code Studio.",
                 color = TextMuted, fontSize = 13.sp
             )
 
@@ -259,10 +330,10 @@ fun CompilerTab(vm: AppViewModel) {
                             activeFile = n
                             code = vm.workspaceFiles[n] ?: ""
                             showAddFile = false
-                        }) { Text("Create") }
+                        }) { Text("Create", maxLines = 1) }
                     },
                     dismissButton = {
-                        OutlinedButton(onClick = { showAddFile = false }) { Text("Cancel") }
+                        OutlinedButton(onClick = { showAddFile = false }) { Text("Cancel", maxLines = 1) }
                     }
                 )
             }
@@ -304,14 +375,6 @@ fun CompilerTab(vm: AppViewModel) {
                 )
             )
 
-            OutlinedTextField(
-                value = programInput,
-                onValueChange = { programInput = it },
-                label = { Text("⌨️ Program input — one line per input() call") },
-                modifier = Modifier.fillMaxWidth(),
-                textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
-            )
-
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (running) {
                     Button(
@@ -319,13 +382,13 @@ fun CompilerTab(vm: AppViewModel) {
                         colors = ButtonDefaults.buttonColors(containerColor = Danger),
                         modifier = Modifier.weight(1f).height(50.dp),
                         shape = RoundedCornerShape(12.dp)
-                    ) { Text("⏹ Stop", fontSize = 15.sp) }
+                    ) { Text("⏹ Stop", fontSize = 15.sp, maxLines = 1) }
                 } else {
                     Button(
                         onClick = ::run,
                         modifier = Modifier.weight(1f).height(50.dp),
                         shape = RoundedCornerShape(12.dp)
-                    ) { Text("▶ Run", fontSize = 15.sp) }
+                    ) { Text("▶ Run", fontSize = 15.sp, maxLines = 1) }
                 }
                 Button(
                     onClick = { code = ""; result = null; showExplainer = false },
@@ -333,21 +396,21 @@ fun CompilerTab(vm: AppViewModel) {
                     colors = ButtonDefaults.buttonColors(containerColor = Card),
                     modifier = Modifier.weight(1f).height(50.dp),
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("Clear", fontSize = 15.sp) }
+                ) { Text("Clear", fontSize = 15.sp, maxLines = 1) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(
                     onClick = ::shareCode,
                     modifier = Modifier.weight(1f)
-                ) { Text("🔗 Share") }
+                ) { Text("🔗 Share", maxLines = 1) }
                 OutlinedButton(
                     onClick = ::downloadCode,
                     modifier = Modifier.weight(1f)
-                ) { Text("⬇️ Save .py") }
+                ) { Text("⬇️ Save .py", maxLines = 1) }
                 OutlinedButton(
                     onClick = { snippetName = ""; showSaveSnippet = true },
                     modifier = Modifier.weight(1f)
-                ) { Text("💾 Snippet") }
+                ) { Text("💾 Snippet", maxLines = 1) }
             }
             if (showSaveSnippet) {
                 AlertDialog(
@@ -366,12 +429,90 @@ fun CompilerTab(vm: AppViewModel) {
                             vm.saveUserSnippet(n, code)
                             showSaveSnippet = false
                             scope.launch { snackbar.showSnackbar("Snippet saved ✓") }
-                        }) { Text("Save") }
+                        }) { Text("Save", maxLines = 1) }
                     },
                     dismissButton = {
-                        OutlinedButton(onClick = { showSaveSnippet = false }) { Text("Cancel") }
+                        OutlinedButton(onClick = { showSaveSnippet = false }) { Text("Cancel", maxLines = 1) }
                     }
                 )
+            }
+
+            // ---- AI tutor row (Render proxy; website compiler parity) ----
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        val r = result
+                        askAi("", code, if (r != null && !r.ok) r.error else "")
+                    },
+                    enabled = !aiBusy && code.isNotBlank(),
+                    modifier = Modifier.weight(1f)
+                ) { Text(if (aiBusy) "Thinking…" else "✨ AI Explain", maxLines = 1) }
+                OutlinedButton(
+                    onClick = { generatePrompt = ""; showGenerate = true },
+                    enabled = !aiBusy,
+                    modifier = Modifier.weight(1f)
+                ) { Text("🤖 AI Generate", maxLines = 1) }
+                val r = result
+                if (r != null && !r.ok && r.error.isNotEmpty()) {
+                    OutlinedButton(
+                        onClick = { askAi("fix", code, r.error) },
+                        enabled = !aiBusy,
+                        modifier = Modifier.weight(1f)
+                    ) { Text("🩹 AI Fix", maxLines = 1) }
+                }
+            }
+            if (showGenerate) {
+                AlertDialog(
+                    onDismissRequest = { showGenerate = false },
+                    title = { Text("AI Generate") },
+                    text = {
+                        OutlinedTextField(
+                            value = generatePrompt, onValueChange = { generatePrompt = it },
+                            label = { Text("Describe what to build…") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = { showGenerate = false; askAi("generate", generatePrompt) },
+                            enabled = generatePrompt.isNotBlank()
+                        ) { Text("Generate", maxLines = 1) }
+                    },
+                    dismissButton = {
+                        OutlinedButton(onClick = { showGenerate = false }) { Text("Cancel", maxLines = 1) }
+                    }
+                )
+            }
+            if (aiText != null || aiCode != null) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Card),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("🤖 AI tutor", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            OutlinedButton(onClick = { aiText = null; aiCode = null; aiNote = null }) {
+                                Text("Dismiss", fontSize = 12.sp, maxLines = 1)
+                            }
+                        }
+                        aiNote?.let { Text(it, fontSize = 12.sp, color = TextMuted) }
+                        aiCode?.let { generated ->
+                            CodeBlock(generated)
+                            Button(
+                                onClick = { code = generated; persistActive(); aiText = null; aiCode = null; aiNote = null },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Use this code in the editor", maxLines = 1) }
+                        }
+                        aiText?.let {
+                            Text(it, fontSize = 13.sp, lineHeight = 20.sp,
+                                modifier = Modifier.verticalScroll(rememberScrollState()).heightIn(max = 320.dp))
+                        }
+                    }
+                }
             }
 
             // ---- My snippets ----
@@ -386,13 +527,15 @@ fun CompilerTab(vm: AppViewModel) {
                         Text(s.name, fontSize = 13.sp, modifier = Modifier.weight(1f))
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             OutlinedButton(onClick = { code = s.code }) { Text("Load", fontSize = 12.sp) }
-                            OutlinedButton(onClick = { vm.deleteUserSnippet(s.id) }) { Text("Delete", fontSize = 12.sp) }
+                            OutlinedButton(onClick = { vm.deleteUserSnippet(s.id) }) { Text("Delete", fontSize = 12.sp, maxLines = 1) }
                         }
                     }
                 }
             }
 
             // ---- Bottom panel: OUTPUT / PROBLEMS / HISTORY ----
+            // Own composable scope: streaming output recomposes ONLY the panel,
+            // never the editor or buttons above it.
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("📟 Output", "⚠️ Problems", "🕘 History").forEachIndexed { i, label ->
                     FilterChip(
@@ -402,66 +545,12 @@ fun CompilerTab(vm: AppViewModel) {
                     )
                 }
             }
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 140.dp, max = 320.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(CodeBg)
-                    .verticalScroll(rememberScrollState())
-                    .padding(14.dp)
-            ) {
-                when (panelTab) {
-                    0 -> when {
-                        running -> Text("Running…", fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TextMuted)
-                        result == null -> Text(
-                            "Press Run to execute your code…",
-                            fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TextMuted
-                        )
-                        else -> {
-                            val r = result!!
-                            if (r.output.isNotEmpty()) Text(r.output, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
-                            if (!r.ok && r.error.isNotEmpty()) Text(r.error, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Danger)
-                            Text(
-                                if (r.ok) "✅ Done in ${r.ms} ms" else "❌ Error after ${r.ms} ms",
-                                fontSize = 12.sp,
-                                color = if (r.ok) Success else Danger,
-                                modifier = Modifier.padding(top = 6.dp)
-                            )
-                        }
-                    }
-                    1 -> {
-                        val r = result
-                        if (running) {
-                            Text("Running…", fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TextMuted)
-                        } else if (r == null || r.ok) {
-                            Text("✅ No problems — last run succeeded.", fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = Success)
-                        } else {
-                            Text(r.error, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Danger)
-                        }
-                    }
-                    2 -> {
-                        if (history.isEmpty()) {
-                            Text("No runs yet this session.", fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TextMuted)
-                        } else {
-                            val fmt = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
-                            history.forEach { h ->
-                                Column(Modifier.padding(vertical = 4.dp)) {
-                                    Text(
-                                        "${if (h.ok) "✅" else "❌"} ${h.file} · ${h.ms} ms · ${fmt.format(Date(h.ts))}",
-                                        fontSize = 12.sp, color = TextMuted
-                                    )
-                                    Text(
-                                        h.output.take(200),
-                                        fontFamily = FontFamily.Monospace, fontSize = 12.sp,
-                                        maxLines = 3
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            BottomPanel(bridge, panelTab, result, running, history)
+
+            // Terminal input row — appears inline when the running program
+            // calls input(), exactly like the website's terminal prompt.
+            // Own composable scope: the waiting prompt recomposes only this row.
+            TerminalInputRow(bridge, running)
 
             val r = result
             if (r != null && !r.ok && r.error.isNotEmpty()) {
@@ -500,4 +589,144 @@ fun CompilerTab(vm: AppViewModel) {
             Spacer(Modifier.height(8.dp))
         } // Column
     } // Scaffold
+}
+
+/**
+ * Compiler bottom panel (OUTPUT / PROBLEMS / HISTORY) in its own scope.
+ * It collects the terminal transcript ITSELF, so every streamed write
+ * recomposes only this panel — the editor, buttons, and AI card above it
+ * are untouched. Params are all stable (Int/Boolean/stable data class/
+ * @Stable bridge), so unrelated parent recompositions skip it entirely.
+ */
+@Composable
+private fun BottomPanel(
+    bridge: com.skillzify.app.data.TerminalBridge,
+    panelTab: Int,
+    result: RunResult?,
+    running: Boolean,
+    history: List<HistoryEntry>
+) {
+    val terminalText by bridge.output.collectAsState()
+    val outputScroll = rememberScrollState()
+    // Auto-scroll, but only while the user is already near the bottom —
+    // never yank the view away from output they scrolled up to read.
+    androidx.compose.runtime.LaunchedEffect(terminalText) {
+        if (panelTab == 0 && outputScroll.value >= outputScroll.maxValue - 200) {
+            outputScroll.scrollTo(outputScroll.maxValue)
+        }
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 140.dp, max = 320.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(CodeBg)
+            .verticalScroll(outputScroll)
+            .padding(14.dp)
+    ) {
+        when (panelTab) {
+            0 -> when {
+                // Live terminal transcript (streams as the program runs;
+                // the traceback already streams here, so it is NOT
+                // repeated from r.error after an error).
+                terminalText.isNotEmpty() -> {
+                    Text(terminalText, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                    val r = result
+                    if (r != null && !running) {
+                        Text(
+                            if (r.ok) "✅ Done in ${r.ms} ms" else "❌ Error after ${r.ms} ms",
+                            fontSize = 12.sp,
+                            color = if (r.ok) Success else Danger,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+                }
+                running -> Text("Running…", fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TextMuted)
+                result != null -> {
+                    val r = result!!
+                    Text(
+                        if (r.ok) "✅ Done in ${r.ms} ms" else "❌ ${r.error}",
+                        fontSize = 12.sp,
+                        color = if (r.ok) Success else Danger
+                    )
+                }
+                else -> Text(
+                    "Press Run to execute your code…",
+                    fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TextMuted
+                )
+            }
+            1 -> {
+                val r = result
+                if (running) {
+                    Text("Running…", fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TextMuted)
+                } else if (r == null || r.ok) {
+                    Text("✅ No problems — last run succeeded.", fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = Success)
+                } else {
+                    Text(r.error, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Danger)
+                }
+            }
+            2 -> {
+                if (history.isEmpty()) {
+                    Text("No runs yet this session.", fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TextMuted)
+                } else {
+                    val fmt = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+                    history.forEach { h ->
+                        Column(Modifier.padding(vertical = 4.dp)) {
+                            Text(
+                                "${if (h.ok) "✅" else "❌"} ${h.file} · ${h.ms} ms · ${fmt.format(Date(h.ts))}",
+                                fontSize = 12.sp, color = TextMuted
+                            )
+                            Text(
+                                h.output.take(200),
+                                fontFamily = FontFamily.Monospace, fontSize = 12.sp,
+                                maxLines = 3
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Terminal input row in its own scope: the waiting-prompt state change
+    recomposes only this row, never the editor or the panel. */
+@Composable
+private fun TerminalInputRow(bridge: com.skillzify.app.data.TerminalBridge, running: Boolean) {
+    val waitingPrompt by bridge.waitingPrompt.collectAsState()
+    var inputLine by remember { mutableStateOf("") }
+    if (running && waitingPrompt != null) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = inputLine,
+                onValueChange = { inputLine = it },
+                label = { Text("⌨️ Type your input, then Send") },
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Send
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    onSend = {
+                        bridge.submitInput(inputLine)
+                        inputLine = ""
+                    }
+                ),
+                modifier = Modifier.weight(1f),
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    fontFamily = FontFamily.Monospace, fontSize = 13.sp
+                )
+            )
+            Button(
+                onClick = {
+                    bridge.submitInput(inputLine)
+                    inputLine = ""
+                },
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("Send ➤", maxLines = 1) }
+        }
+    }
 }

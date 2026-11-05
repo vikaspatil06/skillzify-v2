@@ -1,6 +1,7 @@
 package com.skillzify.app.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -44,8 +46,14 @@ fun LearnTab(vm: AppViewModel, nav: NavController) {
     var query by remember { mutableStateOf("") }
     val track = vm.catalog.tracks.first { it.id == trackId }
     val unlocked = vm.trackUnlocked(trackId)
-    val lessons = vm.catalog.lessons.filter { it.track == trackId }
-        .filter { query.isBlank() || it.title.contains(query, ignoreCase = true) }
+    // derivedStateOf: the 95-lesson filter recomputes ONLY when the query or
+    // track changes — not on every unrelated recomposition (e.g. XP updates).
+    val lessons by remember {
+        androidx.compose.runtime.derivedStateOf {
+            vm.catalog.lessons.filter { it.track == trackId }
+                .filter { query.isBlank() || it.title.contains(query, ignoreCase = true) }
+        }
+    }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("📚 Learn Python", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
@@ -53,14 +61,19 @@ fun LearnTab(vm: AppViewModel, nav: NavController) {
             "${vm.xp} XP · ${vm.currentLevel().name}",
             color = TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Track selector: horizontally scrollable so Beginner / Intermediate /
+        // Advanced never wrap or clip on narrow screens.
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             vm.catalog.tracks.forEach { t ->
                 val ok = vm.trackUnlocked(t.id)
                 FilterChip(
                     selected = trackId == t.id,
                     enabled = ok,
                     onClick = { trackId = t.id },
-                    label = { Text("${t.icon} ${t.name}${if (ok) "" else " 🔒"}") }
+                    label = { Text("${t.icon} ${t.name}${if (ok) "" else " 🔒"}", maxLines = 1) }
                 )
             }
         }
@@ -100,7 +113,7 @@ fun LearnTab(vm: AppViewModel, nav: NavController) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(lessons, key = { it.id }) { lesson ->
                     val gi = vm.lessonIndex(lesson.id)
-                    LessonRow(lesson, gi, vm) { nav.navigate("lesson/${lesson.id}") }
+                    LessonRow(lesson, gi, vm, Modifier.animateItem()) { nav.navigate("lesson/${lesson.id}") }
                 }
             }
         }
@@ -108,14 +121,14 @@ fun LearnTab(vm: AppViewModel, nav: NavController) {
 }
 
 @Composable
-private fun LessonRow(lesson: Lesson, globalIndex: Int, vm: AppViewModel, onClick: () -> Unit) {
+private fun LessonRow(lesson: Lesson, globalIndex: Int, vm: AppViewModel, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val done = vm.isDone(lesson.id)
     val unlocked = vm.isUnlocked(globalIndex)
     val pathOnly = vm.isPathOnlyUnlocked(globalIndex)
     val isCurrent = unlocked && !done
     Card(
         colors = CardDefaults.cardColors(containerColor = Card),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .clickable(enabled = unlocked, onClick = onClick)

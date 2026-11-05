@@ -1,5 +1,6 @@
 package com.skillzify.app.ui
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -54,7 +56,8 @@ fun LibraryTab(vm: AppViewModel, nav: NavController) {
         for (c in listOf(
             LibCard("paths", "🗺️", "Learning Paths", "Step-by-step roadmaps: Fundamentals, DSA, Automation, Data Analysis, Interview Prep."),
             LibCard("projects", "🛠️", "Guided Projects", "Build real things: file organizer, weather client, scraper, CSV analyzer."),
-            LibCard("reference", "📖", "Python Reference", "${vm.reference.size} quick-lookup entries with examples — functions, types, control flow.")
+            LibCard("reference", "📖", "Python Reference", "${vm.reference.size} quick-lookup entries with examples — functions, types, control flow."),
+            LibCard("flowchart", "🔀", "Flowchart Lab", "Turn Python code or an algorithm into a step-by-step flowchart — and trace it.")
         )) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = Card),
@@ -86,7 +89,7 @@ fun PathsScreen(vm: AppViewModel, nav: NavController) {
             val enrolled = vm.isEnrolled(p.id)
             Card(
                 colors = CardDefaults.cardColors(containerColor = Card),
-                modifier = Modifier.fillMaxWidth().clickable { nav.navigate("path/${p.id}") }
+                modifier = Modifier.fillMaxWidth().animateItem().clickable { nav.navigate("path/${p.id}") }
             ) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -197,7 +200,7 @@ fun ProjectsScreen(vm: AppViewModel, nav: NavController) {
         items(vm.projects, key = { it.id }) { pr ->
             Card(
                 colors = CardDefaults.cardColors(containerColor = Card),
-                modifier = Modifier.fillMaxWidth().clickable { nav.navigate("project/${pr.id}") }
+                modifier = Modifier.fillMaxWidth().animateItem().clickable { nav.navigate("project/${pr.id}") }
             ) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
                     Text("${pr.icon} ${pr.title}", fontWeight = FontWeight.Bold, fontSize = 15.sp)
@@ -212,6 +215,12 @@ fun ProjectsScreen(vm: AppViewModel, nav: NavController) {
 
 @Composable
 fun ProjectDetail(vm: AppViewModel, id: String, nav: NavController) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val clipboard = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+    var copied by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(copied) {
+        if (copied) { kotlinx.coroutines.delay(2000); copied = false }
+    }
     val pr = vm.projects.firstOrNull { it.id == id }
     if (pr == null) {
         Column(Modifier.fillMaxSize().padding(16.dp)) { Text("Project not found.", color = TextMuted) }
@@ -233,9 +242,23 @@ fun ProjectDetail(vm: AppViewModel, id: String, nav: NavController) {
         if (pr.starter.isNotBlank()) {
             Text("Starter code", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             CodeBlock(pr.starter)
-        }
-        OutlinedButton(onClick = { nav.navigate("compiler") }, modifier = Modifier.fillMaxWidth()) {
-            Text("Open in compiler →")
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("skillzify", pr.starter))
+                        copied = true
+                    },
+                    modifier = Modifier.weight(1f)
+                ) { Text(if (copied) "✓ Copied!" else "📋 Copy code", maxLines = 1) }
+                Button(
+                    onClick = { vm.openInCompiler(pr.starter); nav.navigate("compiler") },
+                    modifier = Modifier.weight(1f)
+                ) { Text("▶ Try in compiler", maxLines = 1) }
+            }
+        } else {
+            OutlinedButton(onClick = { nav.navigate("compiler") }, modifier = Modifier.fillMaxWidth()) {
+                Text("Open in compiler →", maxLines = 1)
+            }
         }
     }
 }
@@ -243,13 +266,20 @@ fun ProjectDetail(vm: AppViewModel, id: String, nav: NavController) {
 /* ---------------- Reference ---------------- */
 
 @Composable
-fun ReferenceScreen(vm: AppViewModel) {
+fun ReferenceScreen(vm: AppViewModel, nav: NavController) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val clipboard = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
     var q by remember { mutableStateOf("") }
     val cats = remember { listOf("All") + vm.reference.map { it.category }.distinct() }
     var cat by remember { mutableStateOf("All") }
-    val list = vm.reference.filter {
-        (cat == "All" || it.category == cat) &&
-            (q.isBlank() || it.name.contains(q, true) || it.desc.contains(q, true))
+    // derivedStateOf: refilter only when the query or category changes.
+    val list by remember {
+        androidx.compose.runtime.derivedStateOf {
+            vm.reference.filter {
+                (cat == "All" || it.category == cat) &&
+                    (q.isBlank() || it.name.contains(q, true) || it.desc.contains(q, true))
+            }
+        }
     }
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("📖 Python Reference", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
@@ -262,7 +292,7 @@ fun ReferenceScreen(vm: AppViewModel) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(cats) { c ->
                 FilterChip(
-                    selected = cat == c, onClick = { cat = c }, label = { Text(c) }
+                    selected = cat == c, onClick = { cat = c }, label = { Text(c, maxLines = 1) }
                 )
             }
         }
@@ -272,9 +302,9 @@ fun ReferenceScreen(vm: AppViewModel) {
                 var open by remember { mutableStateOf(false) }
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Card),
-                    modifier = Modifier.fillMaxWidth().clickable { open = !open }
+                    modifier = Modifier.fillMaxWidth().animateItem().clickable { open = !open }
                 ) {
-                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                    Column(Modifier.fillMaxWidth().animateContentSize().padding(12.dp)) {
                         Text(r.name, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         if (r.syntax.isNotBlank()) Text(r.syntax, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TextMuted)
                         if (open) {
@@ -283,6 +313,21 @@ fun ReferenceScreen(vm: AppViewModel) {
                             if (r.example.isNotBlank()) {
                                 Spacer(Modifier.height(6.dp))
                                 CodeBlock(r.example)
+                                Spacer(Modifier.height(8.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            clipboard.setPrimaryClip(
+                                                android.content.ClipData.newPlainText("skillzify", r.example)
+                                            )
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) { Text("📋 Copy code", fontSize = 12.sp, maxLines = 1) }
+                                    Button(
+                                        onClick = { vm.openInCompiler(r.example); nav.navigate("compiler") },
+                                        modifier = Modifier.weight(1f)
+                                    ) { Text("▶ Try in compiler", fontSize = 12.sp, maxLines = 1) }
+                                }
                             }
                         }
                     }
