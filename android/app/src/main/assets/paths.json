@@ -1,277 +1,417 @@
 [
-  {
-    "id": "fundamentals",
-    "title": "Python Fundamentals",
-    "desc": "Zero to confident: every core concept in the right order, with practice after each step.",
-    "icon": "🌱",
-    "steps": [
-      {
-        "type": "lesson",
-        "ref": "b1",
-        "title": "Hello, Python! Your First Program"
-      },
-      {
-        "type": "lesson",
-        "ref": "b2",
-        "title": "Variables & Data Types"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-variables-01",
-        "title": "Reassignment relay"
-      },
-      {
-        "type": "lesson",
-        "ref": "b3",
-        "title": "Strings & f-strings"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-strings-01",
-        "title": "Index detective"
-      },
-      {
-        "type": "lesson",
-        "ref": "b8",
-        "title": "Conditionals & Logic"
-      },
-      {
-        "type": "lesson",
-        "ref": "b6",
-        "title": "Lists & Tuples"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-collections-01",
-        "title": "First and last"
-      },
-      {
-        "type": "lesson",
-        "ref": "b9",
-        "title": "Loops: for & while"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-loops-01",
-        "title": "Sum of evens"
-      },
-      {
-        "type": "lesson",
-        "ref": "b7",
-        "title": "Dictionaries & Sets"
-      },
-      {
-        "type": "lesson",
-        "ref": "b10",
-        "title": "Functions"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-functions-01",
-        "title": "Area of a circle"
-      }
-    ]
-  },
-  {
-    "id": "dsa",
-    "title": "DSA with Python",
-    "desc": "Data structures and algorithms the Pythonic way — from lists to binary search.",
-    "icon": "🧠",
-    "steps": [
-      {
-        "type": "lesson",
-        "ref": "b6",
-        "title": "Lists & Tuples"
-      },
-      {
-        "type": "lesson",
-        "ref": "b9",
-        "title": "Loops: for & while"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-loops-03",
-        "title": "FizzBuzz list"
-      },
-      {
-        "type": "lesson",
-        "ref": "i7",
-        "title": "List Comprehensions"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-collections-02",
-        "title": "Mutating the list"
-      },
-      {
-        "type": "lesson",
-        "ref": "a8",
-        "title": "Recursion"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-dsa-01",
-        "title": "Linear search"
-      },
-      {
-        "type": "lesson",
-        "ref": "a9",
-        "title": "Sorting & Searching"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-dsa-02",
-        "title": "Palindrome check"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-dsa-03",
-        "title": "Binary search trace"
-      }
-    ]
-  },
-  {
-    "id": "automation",
-    "title": "Automation & Scripting",
-    "desc": "Make Python do your boring work: files, scripts, and bulletproof error handling.",
-    "icon": "🤖",
-    "steps": [
-      {
-        "type": "lesson",
-        "ref": "b10",
-        "title": "Functions"
-      },
-      {
-        "type": "lesson",
-        "ref": "i9",
-        "title": "File Handling"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-exceptions-02",
-        "title": "Safe divide"
-      },
-      {
-        "type": "lesson",
-        "ref": "i8",
-        "title": "Error Handling"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-exceptions-03",
-        "title": "Catching the wrong error"
-      },
-      {
-        "type": "lesson",
-        "ref": "i11",
-        "title": "Modules & Imports"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-functions-03",
-        "title": "Nowhere to return"
-      }
-    ]
-  },
-  {
-    "id": "data",
-    "title": "Data Analysis Basics",
-    "desc": "From raw data to answers: collections, comprehensions, and file wrangling.",
-    "icon": "📊",
-    "steps": [
-      {
-        "type": "lesson",
-        "ref": "b6",
-        "title": "Lists & Tuples"
-      },
-      {
-        "type": "lesson",
-        "ref": "b7",
-        "title": "Dictionaries & Sets"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-collections-03",
-        "title": "Missing the first item"
-      },
-      {
-        "type": "lesson",
-        "ref": "i7",
-        "title": "List Comprehensions"
-      },
-      {
-        "type": "lesson",
-        "ref": "i12",
-        "title": "Lambda, map, filter"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-strings-02",
-        "title": "Shout it back"
-      },
-      {
-        "type": "lesson",
-        "ref": "i9",
-        "title": "File Handling"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-functions-02",
-        "title": "Default greeting"
-      }
-    ]
-  },
-  {
-    "id": "interview",
-    "title": "Interview Prep",
-    "desc": "The highest-yield problems and patterns for Python coding interviews.",
-    "icon": "🎯",
-    "steps": [
-      {
-        "type": "lesson",
-        "ref": "i7",
-        "title": "List Comprehensions"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-strings-03",
-        "title": "Silent vowel counter"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-collections-02",
-        "title": "Mutating the list"
-      },
-      {
-        "type": "lesson",
-        "ref": "a8",
-        "title": "Recursion"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-dsa-01",
-        "title": "Linear search"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-dsa-02",
-        "title": "Palindrome check"
-      },
-      {
-        "type": "lesson",
-        "ref": "a9",
-        "title": "Sorting & Searching"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-loops-03",
-        "title": "FizzBuzz list"
-      },
-      {
-        "type": "exercise",
-        "ref": "ex-oop-03",
-        "title": "Lost coordinates"
-      }
-    ]
-  }
+ {
+  "id": "fundamentals",
+  "title": "Python Fundamentals",
+  "desc": "Zero to confident: every core concept in the right order, with practice after each step.",
+  "icon": "🌱",
+  "color": "#34d399",
+  "level": "Beginner",
+  "steps": [
+   {
+    "type": "lesson",
+    "ref": "b1",
+    "title": "Hello, Python! Your First Program"
+   },
+   {
+    "type": "lesson",
+    "ref": "b2",
+    "title": "Variables & Data Types"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-variables-01",
+    "title": "Reassignment relay"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-variables-04",
+    "title": "F-string forecast"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-variables-05",
+    "title": "The score that never grows"
+   },
+   {
+    "type": "lesson",
+    "ref": "b3",
+    "title": "Strings & f-strings"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-strings-01",
+    "title": "Index detective"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-strings-05",
+    "title": "The messy greeting"
+   },
+   {
+    "type": "lesson",
+    "ref": "b8",
+    "title": "Conditionals & Logic"
+   },
+   {
+    "type": "lesson",
+    "ref": "b6",
+    "title": "Lists & Tuples"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-collections-01",
+    "title": "First and last"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-collections-06",
+    "title": "Zip into a dict"
+   },
+   {
+    "type": "lesson",
+    "ref": "b9",
+    "title": "Loops: for & while"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-loops-01",
+    "title": "Sum of evens"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-loops-05",
+    "title": "First even, please"
+   },
+   {
+    "type": "lesson",
+    "ref": "b7",
+    "title": "Dictionaries & Sets"
+   },
+   {
+    "type": "lesson",
+    "ref": "b10",
+    "title": "Functions"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-functions-01",
+    "title": "Area of a circle"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-functions-04",
+    "title": "Add them all"
+   }
+  ]
+ },
+ {
+  "id": "dsa",
+  "title": "DSA with Python",
+  "desc": "Data structures and algorithms the Pythonic way — from lists to binary search.",
+  "icon": "🧠",
+  "color": "#9d6bff",
+  "level": "Intermediate",
+  "steps": [
+   {
+    "type": "lesson",
+    "ref": "b6",
+    "title": "Lists & Tuples"
+   },
+   {
+    "type": "lesson",
+    "ref": "b9",
+    "title": "Loops: for & while"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-loops-03",
+    "title": "FizzBuzz list"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-loops-04",
+    "title": "Counting with enumerate"
+   },
+   {
+    "type": "lesson",
+    "ref": "i7",
+    "title": "List Comprehensions"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-collections-02",
+    "title": "Mutating the list"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-collections-04",
+    "title": "Safe lookups"
+   },
+   {
+    "type": "lesson",
+    "ref": "a8",
+    "title": "Recursion"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-dsa-01",
+    "title": "Linear search"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-dsa-04",
+    "title": "Mirror, mirror"
+   },
+   {
+    "type": "lesson",
+    "ref": "a9",
+    "title": "Sorting & Searching"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-dsa-02",
+    "title": "Palindrome check"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-functions-06",
+    "title": "Runaway recursion"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-dsa-05",
+    "title": "Binary search, off by one"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-dsa-03",
+    "title": "Binary search trace"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-dsa-06",
+    "title": "Two sum"
+   }
+  ]
+ },
+ {
+  "id": "automation",
+  "title": "Automation & Scripting",
+  "desc": "Make Python do your boring work: files, scripts, and bulletproof error handling.",
+  "icon": "🤖",
+  "color": "#22d3ee",
+  "level": "Intermediate",
+  "steps": [
+   {
+    "type": "lesson",
+    "ref": "b10",
+    "title": "Functions"
+   },
+   {
+    "type": "lesson",
+    "ref": "i9",
+    "title": "File Handling"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-exceptions-02",
+    "title": "Safe divide"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-exceptions-05",
+    "title": "Catch the right culprit"
+   },
+   {
+    "type": "lesson",
+    "ref": "i8",
+    "title": "Error Handling"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-exceptions-03",
+    "title": "Catching the wrong error"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-exceptions-04",
+    "title": "The full try story"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-exceptions-06",
+    "title": "Raise your own flag"
+   },
+   {
+    "type": "lesson",
+    "ref": "i11",
+    "title": "Modules & Imports"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-functions-03",
+    "title": "Nowhere to return"
+   }
+  ]
+ },
+ {
+  "id": "data",
+  "title": "Data Analysis Basics",
+  "desc": "From raw data to answers: collections, comprehensions, and file wrangling.",
+  "icon": "📊",
+  "color": "#fbbf24",
+  "level": "Intermediate",
+  "steps": [
+   {
+    "type": "lesson",
+    "ref": "b6",
+    "title": "Lists & Tuples"
+   },
+   {
+    "type": "lesson",
+    "ref": "b7",
+    "title": "Dictionaries & Sets"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-collections-03",
+    "title": "Missing the first item"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-collections-04",
+    "title": "Safe lookups"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-collections-05",
+    "title": "Common ground"
+   },
+   {
+    "type": "lesson",
+    "ref": "i7",
+    "title": "List Comprehensions"
+   },
+   {
+    "type": "lesson",
+    "ref": "i12",
+    "title": "Lambda, map, filter"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-strings-02",
+    "title": "Shout it back"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-strings-04",
+    "title": "Slice, then repeat"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-strings-06",
+    "title": "Mask that email"
+   },
+   {
+    "type": "lesson",
+    "ref": "i9",
+    "title": "File Handling"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-functions-02",
+    "title": "Default greeting"
+   }
+  ]
+ },
+ {
+  "id": "interview",
+  "title": "Interview Prep",
+  "desc": "The highest-yield problems and patterns for Python coding interviews.",
+  "icon": "🎯",
+  "color": "#f472b6",
+  "level": "Advanced",
+  "steps": [
+   {
+    "type": "lesson",
+    "ref": "i7",
+    "title": "List Comprehensions"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-strings-03",
+    "title": "Silent vowel counter"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-strings-06",
+    "title": "Mask that email"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-collections-02",
+    "title": "Mutating the list"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-collections-05",
+    "title": "Common ground"
+   },
+   {
+    "type": "lesson",
+    "ref": "a8",
+    "title": "Recursion"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-dsa-01",
+    "title": "Linear search"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-dsa-04",
+    "title": "Mirror, mirror"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-dsa-02",
+    "title": "Palindrome check"
+   },
+   {
+    "type": "lesson",
+    "ref": "a9",
+    "title": "Sorting & Searching"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-dsa-06",
+    "title": "Two sum"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-loops-03",
+    "title": "FizzBuzz list"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-functions-05",
+    "title": "The adder factory"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-oop-03",
+    "title": "Lost coordinates"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-oop-04",
+    "title": "Whose count is it?"
+   },
+   {
+    "type": "ex",
+    "ref": "ex-oop-06",
+    "title": "Louder bark"
+   }
+  ]
+ }
 ]

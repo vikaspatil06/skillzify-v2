@@ -33,6 +33,29 @@ object PythonRunner {
         }
     }
 
+    /** Multi-file workspace run (website Code Studio parity). */
+    fun runMulti(files: Map<String, String>, mainFile: String, stdinText: String): RunResult {
+        return try {
+            val mod = Python.getInstance().getModule("skillzify_runner")
+            val filesJson = org.json.JSONObject(files as Map<*, *>).toString()
+            val json = mod.callAttr("run_multi", filesJson, mainFile, stdinText).toString()
+            val o = JSONObject(json)
+            RunResult(
+                ok = o.getBoolean("ok"),
+                output = o.getString("output"),
+                error = o.getString("error"),
+                ms = o.getLong("ms")
+            )
+        } catch (e: Exception) {
+            RunResult(
+                ok = false,
+                output = "",
+                error = "Runner failed: ${e.message ?: e.javaClass.simpleName}",
+                ms = 0
+            )
+        }
+    }
+
     /** Mirrors the web app's stdin handling: one line per input() call. */
     fun makeStdin(raw: String): String {
         val lines = raw.split("\n").toMutableList()
@@ -42,16 +65,20 @@ object PythonRunner {
 
     /**
      * Runs hidden tests against user code (Practice Mode).
-     * tests: list of (expression, expected str) pairs.
+     * tests: list of ExTest (expression + expected str, or expectError).
      * Call from a background thread; Chaquopy calls are blocking.
      */
-    fun runTests(code: String, tests: List<Pair<String, String>>): TestsOutcome {
+    fun runTests(code: String, tests: List<ExTest>): TestsOutcome {
         return try {
             val mod = Python.getInstance().getModule("skillzify_runner")
             val testsJson = org.json.JSONArray().apply {
-                for ((expr, expect) in tests) put(
-                    org.json.JSONObject().put("run", expr).put("expect", expect)
-                )
+                for (t in tests) {
+                    val o = org.json.JSONObject()
+                        .put("run", t.run ?: t.expr ?: "")
+                        .put("expect", t.expect)
+                    if (t.expectError != null) o.put("expectError", t.expectError)
+                    put(o)
+                }
             }.toString()
             val json = mod.callAttr("run_tests", code, testsJson).toString()
             val o = JSONObject(json)

@@ -54,7 +54,7 @@ fun LibraryTab(vm: AppViewModel, nav: NavController) {
         for (c in listOf(
             LibCard("paths", "🗺️", "Learning Paths", "Step-by-step roadmaps: Fundamentals, DSA, Automation, Data Analysis, Interview Prep."),
             LibCard("projects", "🛠️", "Guided Projects", "Build real things: file organizer, weather client, scraper, CSV analyzer."),
-            LibCard("reference", "📖", "Python Reference", "33 quick-lookup entries with examples — functions, types, control flow.")
+            LibCard("reference", "📖", "Python Reference", "${vm.reference.size} quick-lookup entries with examples — functions, types, control flow.")
         )) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = Card),
@@ -83,12 +83,20 @@ fun PathsScreen(vm: AppViewModel, nav: NavController) {
             Spacer(Modifier.height(4.dp))
         }
         items(vm.paths, key = { it.id }) { p ->
+            val enrolled = vm.isEnrolled(p.id)
             Card(
                 colors = CardDefaults.cardColors(containerColor = Card),
                 modifier = Modifier.fillMaxWidth().clickable { nav.navigate("path/${p.id}") }
             ) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                    Text("${p.icon} ${p.title}", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${p.icon} ${p.title}", fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        if (enrolled) {
+                            Text("✓ Enrolled", color = Success, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        } else {
+                            OutlinedButton(onClick = { vm.enroll(p.id) }) { Text("Enroll", fontSize = 12.sp) }
+                        }
+                    }
                     Text(p.desc, color = TextMuted, fontSize = 13.sp)
                     Spacer(Modifier.height(6.dp))
                     val done = p.steps.count { s ->
@@ -101,6 +109,20 @@ fun PathsScreen(vm: AppViewModel, nav: NavController) {
                         )
                         Spacer(Modifier.width(8.dp))
                         Text("$done/${p.steps.size}", color = TextMuted, fontSize = 12.sp)
+                    }
+                    if (enrolled) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Leave path",
+                            color = TextMuted, fontSize = 12.sp,
+                            modifier = Modifier.clickable { vm.leave(p.id) }
+                        )
+                    } else {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Enrolling unlocks every lesson in this path — even locked ones.",
+                            color = TextMuted, fontSize = 12.sp
+                        )
                     }
                 }
             }
@@ -120,12 +142,23 @@ fun PathDetail(vm: AppViewModel, id: String, nav: NavController) {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
-            Text("${p.icon} ${p.title}", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+            val enrolled = vm.isEnrolled(p.id)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${p.icon} ${p.title}", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                if (enrolled) {
+                    OutlinedButton(onClick = { vm.leave(p.id) }) { Text("Leave", fontSize = 12.sp) }
+                } else {
+                    OutlinedButton(onClick = { vm.enroll(p.id) }) { Text("Enroll", fontSize = 12.sp) }
+                }
+            }
             Text(p.desc, color = TextMuted, fontSize = 13.sp)
+            if (enrolled) Text("✓ Enrolled — every lesson below is unlocked.", color = Success, fontSize = 13.sp)
             Spacer(Modifier.height(4.dp))
         }
-        items(p.steps.withIndex().toList()) { (i, s) ->
+        items(p.steps.withIndex().toList(), key = { (i, s) -> "${p.id}-${s.type}-${s.ref}-$i" }) { (i, s) ->
             val done = if (s.type == "lesson") vm.isDone(s.ref) else vm.getAttempt(s.ref).solved
+            val pathUnlocked = s.type == "lesson" && !done &&
+                vm.unlockMap.containsKey(s.ref)
             Card(
                 colors = CardDefaults.cardColors(containerColor = Card),
                 modifier = Modifier.fillMaxWidth().clickable {
@@ -134,10 +167,14 @@ fun PathDetail(vm: AppViewModel, id: String, nav: NavController) {
                 }
             ) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (done) "✅" else "${i + 1}.", fontSize = 14.sp, modifier = Modifier.width(32.dp))
+                    Text(if (done) "✅" else if (pathUnlocked) "🔓" else "${i + 1}.", fontSize = 14.sp, modifier = Modifier.width(32.dp))
                     Column(Modifier.weight(1f)) {
                         Text(s.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        Text(if (s.type == "lesson") "Lesson" else "Exercise", color = TextMuted, fontSize = 12.sp)
+                        Text(
+                            (if (s.type == "lesson") "Lesson" else "Exercise") +
+                                if (pathUnlocked) " · unlocked by this path" else "",
+                            color = TextMuted, fontSize = 12.sp
+                        )
                     }
                 }
             }

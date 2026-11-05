@@ -41,9 +41,11 @@ import com.skillzify.app.ui.theme.Warning
 @Composable
 fun LearnTab(vm: AppViewModel, nav: NavController) {
     var trackId by remember { mutableStateOf(vm.catalog.tracks.first().id) }
+    var query by remember { mutableStateOf("") }
     val track = vm.catalog.tracks.first { it.id == trackId }
     val unlocked = vm.trackUnlocked(trackId)
     val lessons = vm.catalog.lessons.filter { it.track == trackId }
+        .filter { query.isBlank() || it.title.contains(query, ignoreCase = true) }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("📚 Learn Python", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
@@ -75,6 +77,13 @@ fun LearnTab(vm: AppViewModel, nav: NavController) {
             Spacer(Modifier.width(8.dp))
             Text("${vm.trackProgress(trackId)}%", color = TextMuted, fontSize = 13.sp)
         }
+        androidx.compose.material3.OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            placeholder = { Text("Search lessons…", fontSize = 13.sp) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+        )
         if (!unlocked) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = Card),
@@ -85,9 +94,11 @@ fun LearnTab(vm: AppViewModel, nav: NavController) {
                     modifier = Modifier.padding(18.dp), color = TextMuted
                 )
             }
+        } else if (lessons.isEmpty()) {
+            Text("No lessons match “$query”.", color = TextMuted, fontSize = 13.sp)
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(lessons) { lesson ->
+                items(lessons, key = { it.id }) { lesson ->
                     val gi = vm.lessonIndex(lesson.id)
                     LessonRow(lesson, gi, vm) { nav.navigate("lesson/${lesson.id}") }
                 }
@@ -100,6 +111,7 @@ fun LearnTab(vm: AppViewModel, nav: NavController) {
 private fun LessonRow(lesson: Lesson, globalIndex: Int, vm: AppViewModel, onClick: () -> Unit) {
     val done = vm.isDone(lesson.id)
     val unlocked = vm.isUnlocked(globalIndex)
+    val pathOnly = vm.isPathOnlyUnlocked(globalIndex)
     val isCurrent = unlocked && !done
     Card(
         colors = CardDefaults.cardColors(containerColor = Card),
@@ -115,6 +127,7 @@ private fun LessonRow(lesson: Lesson, globalIndex: Int, vm: AppViewModel, onClic
             Text(
                 text = when {
                     done -> "✅"
+                    pathOnly -> "🔓"
                     isCurrent -> "▶️"
                     else -> "🔒"
                 },
@@ -125,10 +138,13 @@ private fun LessonRow(lesson: Lesson, globalIndex: Int, vm: AppViewModel, onClic
             Column(Modifier.weight(1f)) {
                 Text(lesson.title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 Text(
-                    lesson.explain.take(90) + "…",
+                    (if (pathOnly) "Unlocked by your learning path · " else "") +
+                        lesson.explain.take(90) + "…",
                     color = TextMuted, fontSize = 12.sp, maxLines = 2
                 )
             }
+            if (lesson.id in vm.starredLessons) Text("⭐", fontSize = 14.sp)
+            if (lesson.id in vm.pinnedLessons) Text("📌", fontSize = 14.sp)
             if (done) Text("+XP ✓", color = Warning, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
     }

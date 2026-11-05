@@ -91,6 +91,36 @@ class SyncRepository(private val store: Store) {
         "bestMs" to a.bestMs, "lastTry" to a.lastTry
     )
 
+    /* ---------------- enrollment merge (mirrors web mergePaths) ---------------- */
+
+    /**
+     * Per-path last-write-wins by `at` timestamp; tie -> local (web parity).
+     * Leaving writes a tombstone {enrolled:false} so it propagates instead
+     * of resurrecting.
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun mergePaths(
+        local: Map<String, Pair<Boolean, Long>>,
+        cloud: Map<String, Any?>?
+    ): Map<String, Pair<Boolean, Long>> {
+        val out = local.toMutableMap()
+        val cloudMap = cloud as? Map<String, Map<String, Any?>> ?: emptyMap()
+        for ((id, v) in cloudMap) {
+            val cEnrolled = v["enrolled"] as? Boolean ?: false
+            val cAt = (v["at"] as? Number)?.toLong() ?: 0
+            val l = out[id]
+            if (l == null || cAt > l.second) out[id] = cEnrolled to cAt
+        }
+        return out
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun cloudPaths(data: Map<String, Any?>?): Map<String, Any?>? =
+        data?.get("paths") as? Map<String, Any?>
+
+    private fun pathsMap(paths: Map<String, Pair<Boolean, Long>>): Map<String, Any> =
+        paths.mapValues { (_, v) -> mapOf("enrolled" to v.first, "at" to v.second) }
+
     /* ---------------- sync ---------------- */
 
     /**
@@ -135,6 +165,10 @@ class SyncRepository(private val store: Store) {
             val finalBio = if (cTs > lTs) cBio else store.getProfileBio()
             val finalTs = maxOf(cTs, lTs)
 
+            // merge enrollments (per-path last-write-wins)
+            val mergedPaths = mergePaths(store.getEnrolledPaths(), cloudPaths(data))
+            store.applySyncedEnrollments(mergedPaths)
+
             // push merged doc
             userDoc(uid).set(mapOf(
                 "profile" to mapOf("name" to finalName, "bio" to finalBio, "updatedAt" to finalTs),
@@ -148,7 +182,8 @@ class SyncRepository(private val store: Store) {
                 "exercises" to mapOf(
                     "attempts" to mergedAtt.mapValues { (_, a) -> attemptMap(a) },
                     "updatedAt" to now
-                )
+                ),
+                "paths" to pathsMap(mergedPaths)
             ), SetOptions.merge()).await()
 
             lastSyncAt = now
@@ -180,6 +215,7 @@ class SyncRepository(private val store: Store) {
             val mergedAtt = ids.associateWith { id ->
                 mergeAttempt(store.getAttempt(id), cloudAtt[id] ?: ExerciseAttempt())
             }
+            val mergedPaths = mergePaths(store.getEnrolledPaths(), cloudPaths(data))
             userDoc(uid).set(mapOf(
                 "progress" to mapOf(
                     "lessons" to merged.lessons.associateWith { true },
@@ -191,7 +227,8 @@ class SyncRepository(private val store: Store) {
                 "exercises" to mapOf(
                     "attempts" to mergedAtt.mapValues { (_, a) -> attemptMap(a) },
                     "updatedAt" to now
-                )
+                ),
+                "paths" to pathsMap(mergedPaths)
             ), SetOptions.merge()).await()
             lastSyncAt = now
             lastStatus = "Synced"
@@ -263,5 +300,8 @@ class SyncRepository(private val store: Store) {
         val cTs = (cloudProfile?.get("updatedAt") as? Number)?.toLong() ?: 0
         val lTs = store.getProfileUpdatedAt()
         if (cTs > lTs) store.applySyncedProfile(cName, cBio, cTs)
+
+        val mergedPaths = mergePaths(store.getEnrolledPaths(), cloudPaths(data))
+        store.applySyncedEnrollments(mergedPaths)
     }
 }

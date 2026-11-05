@@ -79,7 +79,7 @@ data class ExerciseAttempt(
     val lastTry: Long = 0
 )
 
-data class ExTest(val run: String?, val expr: String?, val expect: String)
+data class ExTest(val run: String?, val expr: String?, val expect: String, val expectError: String? = null)
 data class Exercise(
     val id: String, val topic: String, val title: String, val kind: String,
     val diff: Int, val prompt: String, val starter: String,
@@ -133,7 +133,8 @@ fun loadSnippets(ctx: Context): List<Snippet> {
 private fun parseExTest(o: JSONObject) = ExTest(
     run = if (o.isNull("run")) null else o.getString("run"),
     expr = if (o.isNull("expr")) null else o.getString("expr"),
-    expect = o.getString("expect")
+    expect = o.optString("expect", ""),
+    expectError = if (o.isNull("expectError")) null else o.getString("expectError")
 )
 
 fun loadExercises(ctx: Context): List<Exercise> {

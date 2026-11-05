@@ -54,7 +54,7 @@ fun ExerciseDetail(vm: AppViewModel, id: String, nav: NavController) {
         return
     }
     val scope = rememberCoroutineScope()
-    var code by remember { mutableStateOf(ex.starter) }
+    var code by remember { mutableStateOf(vm.store.getExerciseDraft(ex.id) ?: ex.starter) }
     var running by remember { mutableStateOf(false) }
     var testResults by remember { mutableStateOf<List<TestResult>?>(null) }
     var codeOk by remember { mutableStateOf(true) }
@@ -70,11 +70,11 @@ fun ExerciseDetail(vm: AppViewModel, id: String, nav: NavController) {
     fun doRecord(solved: Boolean, ms: Long) {
         val gain = vm.recordAttempt(ex.id, solved, ms, hintsShown, showModel)
         xpMsg = when {
-            gain > 0 -> "+$gain XP earned! 🎉"
+            gain > 0 -> "+$gain XP earned! 🎉" +
+                if (hintsShown == 0 && !showModel) " (no-hint bonus)" else ""
             solved -> "Already solved — no extra XP."
             else -> ""
         }
-        testResults = null // force recompose of attempt state
     }
 
     Column(
@@ -129,7 +129,10 @@ fun ExerciseDetail(vm: AppViewModel, id: String, nav: NavController) {
             // code / fix: editor + hidden tests
             OutlinedTextField(
                 value = code,
-                onValueChange = { code = it },
+                onValueChange = {
+                    code = it
+                    vm.store.saveExerciseDraft(ex.id, it)
+                },
                 modifier = Modifier.fillMaxWidth().height(220.dp),
                 textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
                 label = { Text("Your code") }
@@ -141,10 +144,7 @@ fun ExerciseDetail(vm: AppViewModel, id: String, nav: NavController) {
                     scope.launch(Dispatchers.Default) {
                         val t0 = System.currentTimeMillis()
                         val outcome = withTimeoutOrNull(15000) {
-                            PythonRunner.runTests(
-                                code,
-                                ex.tests.map { (it.run ?: it.expr ?: "") to it.expect }
-                            )
+                            PythonRunner.runTests(code, ex.tests)
                         }
                         val ms = System.currentTimeMillis() - t0
                         withContext(Dispatchers.Main) {

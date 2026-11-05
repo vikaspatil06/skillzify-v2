@@ -50,6 +50,26 @@ import kotlinx.coroutines.launch
 @Composable
 fun LessonDetail(vm: AppViewModel, lessonId: String, nav: NavController) {
     val lesson = remember(lessonId) { vm.catalog.lessons.first { it.id == lessonId } }
+    val gi = remember(lessonId) { vm.lessonIndex(lessonId) }
+    // Unlock gate: sequential chain OR enrolled-path unlock (web parity).
+    if (gi < 0 || !vm.isUnlocked(gi)) {
+        Column(
+            Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+        ) {
+            Text("🔒", fontSize = 48.sp)
+            Spacer(Modifier.height(8.dp))
+            Text("This lesson is locked", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+            Text(
+                "Finish the previous lessons in order — or enroll in a learning path that includes it to unlock it instantly.",
+                color = TextMuted, fontSize = 14.sp
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = { nav.popBackStack() }) { Text("← Back") }
+        }
+        return
+    }
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     // Randomized quiz: fresh 3-question pick from the 5-question bank, options shuffled (web parity).
@@ -82,6 +102,15 @@ fun LessonDetail(vm: AppViewModel, lessonId: String, nav: NavController) {
                 .padding(horizontal = 16.dp)
         ) {
             Text(lesson.title, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { vm.toggleStar(lessonId) }) {
+                    Text(if (lessonId in vm.starredLessons) "⭐ Starred" else "☆ Star", fontSize = 12.sp)
+                }
+                OutlinedButton(onClick = { vm.togglePin(lessonId) }) {
+                    Text(if (lessonId in vm.pinnedLessons) "📌 Pinned" else "📍 Pin", fontSize = 12.sp)
+                }
+            }
             Spacer(Modifier.height(8.dp))
             Text(lesson.explain, color = TextMuted, fontSize = 14.sp)
             if (lesson.takeaways.isNotEmpty()) {

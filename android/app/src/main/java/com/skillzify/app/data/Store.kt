@@ -44,7 +44,10 @@ class Store(ctx: Context) {
         if (last == today) return getStreak()
         val yesterday = dayString(-1)
         val count = if (last == yesterday) getStreak() + 1 else 1
-        prefs.edit().putString("streak_last", today).putInt("streak_count", count).apply()
+        markActiveDay(today)
+        val e = prefs.edit().putString("streak_last", today).putInt("streak_count", count)
+        if (count > getLongestStreak()) e.putInt("streak_longest", count)
+        e.apply()
         return count
     }
 
@@ -142,5 +145,179 @@ class Store(ctx: Context) {
 
     fun applySyncedAttempts(merged: Map<String, ExerciseAttempt>) {
         for ((id, a) in merged) saveAttempt(id, a)
+    }
+
+    /* ---------- path enrollments (syncs via Firestore, mirrors web) ----------
+       Stored as JSON under the web's key: { pathId: { enrolled, at } }.
+       Leaving writes a tombstone so it propagates instead of resurrecting. */
+
+    fun getEnrolledPaths(): Map<String, Pair<Boolean, Long>> {
+        val raw = prefs.getString("skillzify_enrolled_paths", null) ?: return emptyMap()
+        return try {
+            val o = JSONObject(raw)
+            val out = mutableMapOf<String, Pair<Boolean, Long>>()
+            val keys = o.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val e = o.optJSONObject(k) ?: continue
+                out[k] = e.optBoolean("enrolled", false) to e.optLong("at", 0)
+            }
+            out
+        } catch (e: Exception) { emptyMap() }
+    }
+
+    fun setEnrollment(id: String, enrolled: Boolean, at: Long) {
+        val raw = prefs.getString("skillzify_enrolled_paths", null)
+        val o = try { if (raw != null) JSONObject(raw) else JSONObject() } catch (e: Exception) { JSONObject() }
+        o.put(id, JSONObject().put("enrolled", enrolled).put("at", at))
+        prefs.edit().putString("skillzify_enrolled_paths", o.toString()).apply()
+    }
+
+    fun isEnrolled(id: String): Boolean = getEnrolledPaths()[id]?.first == true
+
+    fun applySyncedEnrollments(paths: Map<String, Pair<Boolean, Long>>) {
+        val o = JSONObject()
+        for ((id, v) in paths) o.put(id, JSONObject().put("enrolled", v.first).put("at", v.second))
+        prefs.edit().putString("skillzify_enrolled_paths", o.toString()).apply()
+    }
+
+    /* ---------- starred / pinned lessons (website parity) ---------- */
+
+    private fun stringSet(key: String): Set<String> =
+        prefs.getStringSet(key, emptySet())?.toSet() ?: emptySet()
+
+    fun starredLessons(): Set<String> = stringSet("starred_lessons")
+    fun pinnedLessons(): Set<String> = stringSet("pinned_lessons")
+
+    fun setStarred(id: String, on: Boolean) {
+        val s = starredLessons().toMutableSet()
+        if (on) s.add(id) else s.remove(id)
+        prefs.edit().putStringSet("starred_lessons", s).apply()
+    }
+
+    fun setPinned(id: String, on: Boolean) {
+        val s = pinnedLessons().toMutableSet()
+        if (on) s.add(id) else s.remove(id)
+        prefs.edit().putStringSet("pinned_lessons", s).apply()
+    }
+
+    /* ---------- activity: run totals, longest streak, active days ---------- */
+
+    fun getRunCount(): Int = prefs.getInt("run_count_total", 0)
+
+    fun getLongestStreak(): Int = prefs.getInt("streak_longest", 0)
+
+    /** Records one activity day (yyyy-MM-dd) for the heatmap. */
+    fun markActiveDay(day: String) {
+        val s = stringSet("active_days").toMutableSet()
+        if (s.add(day)) prefs.edit().putStringSet("active_days", s).apply()
+    }
+
+    fun activeDays(): Set<String> = stringSet("active_days")
+
+    /** Call on every code run: total counter + activity day + night/early-bird flags. */
+    fun recordRun() {
+        val now = System.currentTimeMillis()
+        val cal = Calendar.getInstance()
+        val day = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
+        markActiveDay(day)
+        val hour = cal.get(Calendar.HOUR_OF_DAY)
+        val e = prefs.edit().putInt("run_count_total", getRunCount() + 1)
+        if (hour in 0..4) e.putBoolean("ach_night_owl", true)
+        if (hour in 5..7) e.putBoolean("ach_early_bird", true)
+        e.apply()
+    }
+
+    fun hasNightOwl(): Boolean = prefs.getBoolean("ach_night_owl", false)
+    fun hasEarlyBird(): Boolean = prefs.getBoolean("ach_early_bird", false)
+
+    /* ---------- user snippets (website parity: save your own code) ---------- */
+
+    fun userSnippets(): List<Snippet> {
+        val raw = prefs.getString("user_snippets", null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map {
+                val o = arr.getJSONObject(it)
+                Snippet(o.getString("id"), o.getString("name"), o.getString("code"))
+            }
+        } catch (e: Exception) { emptyList() }
+    }
+
+    fun saveUserSnippet(name: String, code: String) {
+        val arr = JSONArray()
+        for (s in userSnippets()) {
+            arr.put(JSONObject().put("id", s.id).put("name", s.name).put("code", s.code))
+        }
+        arr.put(JSONObject().put("id", "u" + System.currentTimeMillis())
+            .put("name", name).put("code", code))
+        prefs.edit().putString("user_snippets", arr.toString()).apply()
+    }
+
+    fun deleteUserSnippet(id: String) {
+        val arr = JSONArray()
+        for (s in userSnippets()) {
+            if (s.id != id) arr.put(JSONObject().put("id", s.id).put("name", s.name).put("code", s.code))
+        }
+        prefs.edit().putString("user_snippets", arr.toString()).apply()
+    }
+
+    /* ---------- exercise drafts (website parity: auto-save) ---------- */
+
+    fun getExerciseDraft(id: String): String? {
+        val raw = prefs.getString("exercise_drafts", null) ?: return null
+        return try { JSONObject(raw).optString(id, "").ifEmpty { null } } catch (e: Exception) { null }
+    }
+
+    fun saveExerciseDraft(id: String, code: String) {
+        val raw = prefs.getString("exercise_drafts", null)
+        val o = try { if (raw != null) JSONObject(raw) else JSONObject() } catch (e: Exception) { JSONObject() }
+        o.put(id, code)
+        prefs.edit().putString("exercise_drafts", o.toString()).apply()
+    }
+
+    /* ---------- theme (website parity: dark/light + 6 accents) ---------- */
+
+    fun getThemeDark(): Boolean = prefs.getBoolean("theme_dark", true)
+    fun getThemeAccent(): Int = prefs.getInt("theme_accent", 0)
+    fun saveTheme(dark: Boolean, accent: Int) {
+        prefs.edit().putBoolean("theme_dark", dark).putInt("theme_accent", accent).apply()
+    }
+
+    /* ---------- compiler workspace: multi-file (website Code Studio parity) ---------- */
+
+    /** Map of filename -> code. Empty = no workspace yet (caller seeds main.py). */
+    fun workspaceFiles(): Map<String, String> {
+        val raw = prefs.getString("workspace_files", null) ?: return emptyMap()
+        return try {
+            val o = JSONObject(raw)
+            val out = LinkedHashMap<String, String>()
+            val keys = o.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                out[k] = o.optString(k, "")
+            }
+            out
+        } catch (e: Exception) { emptyMap() }
+    }
+
+    fun saveWorkspaceFile(name: String, code: String) {
+        val o = JSONObject()
+        val cur = workspaceFiles()
+        for ((k, v) in cur) o.put(k, v)
+        o.put(name, code)
+        prefs.edit().putString("workspace_files", o.toString()).apply()
+    }
+
+    fun deleteWorkspaceFile(name: String) {
+        val o = JSONObject()
+        for ((k, v) in workspaceFiles()) if (k != name) o.put(k, v)
+        prefs.edit().putString("workspace_files", o.toString()).apply()
+    }
+
+    fun renameWorkspaceFile(old: String, new: String) {
+        val o = JSONObject()
+        for ((k, v) in workspaceFiles()) o.put(if (k == old) new else k, v)
+        prefs.edit().putString("workspace_files", o.toString()).apply()
     }
 }

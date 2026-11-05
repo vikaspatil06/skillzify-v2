@@ -12,6 +12,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Theme state (dark/light + accent) loads from Store before first frame.
+        com.skillzify.app.ui.theme.syncThemeFromStore(vm.store)
         // Python is started by PyApplication (see AndroidManifest) before this runs.
         setContent {
             SkillzifyTheme {

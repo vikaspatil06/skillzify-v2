@@ -3,10 +3,15 @@ package com.skillzify.app.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.FitnessCenter
@@ -21,6 +26,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -38,6 +44,7 @@ import androidx.navigation.navArgument
 import com.skillzify.app.AppViewModel
 import com.skillzify.app.ui.theme.Bg
 import com.skillzify.app.ui.theme.CodeBg
+import com.skillzify.app.ui.theme.TextMuted
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
 
@@ -57,6 +64,22 @@ fun SkillzifyApp(vm: AppViewModel = viewModel()) {
         // Logged out → auth gate. Session persists via Firebase, so a
         // returning user lands straight in the app.
         AuthScreen(vm)
+        return
+    }
+
+    if (!vm.catalogLoaded) {
+        // Catalog JSON parses on IO (startup hitch fix) — show a splash
+        // instead of a frozen frame. No screen touches vm.catalog before this.
+        Box(
+            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator()
+                Spacer(Modifier.height(12.dp))
+                Text("Loading your lessons…", color = TextMuted, fontSize = 14.sp)
+            }
+        }
         return
     }
 
@@ -93,7 +116,7 @@ fun SkillzifyApp(vm: AppViewModel = viewModel()) {
             composable("practice") { PracticeTab(vm, nav) }
             composable("compiler") { CompilerTab(vm) }
             composable("library") { LibraryTab(vm, nav) }
-            composable("dashboard") { DashboardTab(vm) }
+            composable("dashboard") { DashboardTab(vm, nav) }
             composable(
                 "lesson/{id}",
                 arguments = listOf(navArgument("id") { type = NavType.StringType })
