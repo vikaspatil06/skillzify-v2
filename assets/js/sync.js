@@ -15,6 +15,13 @@
    - exercises.attempts: per-exercise merge — solved/revealed OR,
      attempts/hintsUsed/lastTry MAX, bestMs MIN of non-zero (else 0)
    - profile: last-write-wins by updatedAt (whole document)
+   - customPaths: last-write-wins by updatedAt (whole document —
+     same shape as profile). Definitions live in localStorage
+     `skillzify_custom_paths` (array of {id, title, steps, ...});
+     `skillzify_custom_paths_ts` records the last local save/delete
+     so a device that never had definitions (updatedAt 0, empty)
+     never wipes the cloud's, while a delete-all (updatedAt now,
+     empty) propagates as the newest write.
    - updatedAt: set to now on every local write that gets pushed
 
    localStorage streak dates are NORMALIZED to yyyy-MM-dd for the
@@ -173,12 +180,95 @@
     return { paths: out, updatedAt: Math.max(maxAt, localDoc.updatedAt || 0, cloudDoc.updatedAt || 0) };
   }
 
+  /* ---------- custom-path definitions (F5 "Build my path") ----------
+     Local format (unchanged): an array of {id, title, steps, ...} in
+     localStorage `skillzify_custom_paths`. Cloud shape mirrors the
+     profile: { definitions: [...], updatedAt }. Whole-document
+     last-write-wins by updatedAt; tie -> local. A side with no
+     timestamp AND no definitions carries no information and never
+     wins over a side that has definitions — so a fresh device can't
+     wipe the cloud, while an explicit delete-all (empty definitions
+     stamped with updatedAt=now by the save) propagates as the
+     newest write. Corrupt/missing data degrades to "no information"
+     on both the local read and the merge, and bad entries (no string
+     id) are dropped, never the whole list. Pre-existing definitions
+     saved before the timestamp key existed carry updatedAt 0 but
+     still count as information because they are non-empty; the one
+     exact-tie edge (both updatedAt 0, only one side non-empty)
+     prefers the non-empty side so a migration tie can't wipe. */
+  function sanitizeCustomPaths(v) {
+    if (!Array.isArray(v)) return [];
+    var out = [];
+    v.forEach(function (cp) {
+      if (!cp || typeof cp !== "object" || typeof cp.id !== "string" || !cp.id) return;
+      out.push(cp);
+    });
+    return out;
+  }
+  function normalizeCustomPaths(doc) {
+    // Accept the {definitions, updatedAt} shape and, defensively, a
+    // raw array (never written by this code, but cheap to accept).
+    if (Array.isArray(doc)) {
+      var defs = sanitizeCustomPaths(doc);
+      return { definitions: defs, updatedAt: 0, hasInfo: defs.length > 0 };
+    }
+    doc = doc || {};
+    // A present-but-non-array `definitions` is malformed, not an
+    // intentional empty list: it carries no information, so it can
+    // never wipe the other side. (A real delete-all is an array [].)
+    var isArr = Array.isArray(doc.definitions);
+    var d = isArr ? sanitizeCustomPaths(doc.definitions) : [];
+    var ts = (typeof doc.updatedAt === "number" && doc.updatedAt > 0) ? doc.updatedAt : 0;
+    return { definitions: d, updatedAt: ts, hasInfo: isArr && (ts > 0 || d.length > 0) };
+  }
+  function mergeCustomPaths(localDoc, cloudDoc) {
+    var l = normalizeCustomPaths(localDoc), c = normalizeCustomPaths(cloudDoc);
+    if (!l.hasInfo && !c.hasInfo) return { definitions: [], updatedAt: 0 };
+    if (!l.hasInfo) return { definitions: c.definitions, updatedAt: c.updatedAt };
+    if (!c.hasInfo) return { definitions: l.definitions, updatedAt: l.updatedAt };
+    var winner;
+    if (l.updatedAt === c.updatedAt && l.updatedAt === 0) {
+      // migration tie: both pre-timestamp — prefer the non-empty side
+      winner = l.definitions.length ? l : c;
+    } else {
+      winner = l.updatedAt >= c.updatedAt ? l : c; // tie -> local
+    }
+    return {
+      definitions: winner.definitions,
+      updatedAt: Math.max(l.updatedAt, c.updatedAt)
+    };
+  }
+
+  /* ---------- content comparison (ignores updatedAt) ----------
+     Key-order-insensitive deep equality, used by syncCycle to decide
+     whether a merged field actually changed vs the cloud. */
+  function deepEq(a, b) {
+    if (a === b) return true;
+    if (a == null || b == null) return false;
+    if (typeof a !== "object" || typeof b !== "object") return false;
+    var ka = Object.keys(a).sort(), kb = Object.keys(b).sort();
+    if (ka.length !== kb.length) return false;
+    for (var i = 0; i < ka.length; i++) {
+      if (ka[i] !== kb[i]) return false;
+      if (!deepEq(a[ka[i]], b[kb[i]])) return false;
+    }
+    return true;
+  }
+  function contentChanged(merged, cloud) {
+    if (!cloud) return true;
+    var m = Object.assign({}, merged); delete m.updatedAt;
+    var c = Object.assign({}, cloud); delete c.updatedAt;
+    return !deepEq(m, c);
+  }
+
   var Merge = {
     normalizeDate: normalizeDate,
     mergeProgress: mergeProgress,
     mergeExercises: mergeExercises,
     mergeProfile: mergeProfile,
-    mergePaths: mergePaths
+    mergePaths: mergePaths,
+    mergeCustomPaths: mergeCustomPaths,
+    contentChanged: contentChanged
   };
   root.SkillzifySyncMerge = Merge;
 
@@ -192,7 +282,9 @@
     ATTEMPTS: "skillzify_exercise_attempts",
     PROFILE: "skillzify_profile",
     PROFILE_TS: "skillzify_profile_ts",
-    PATHS: "skillzify_enrolled_paths"
+    PATHS: "skillzify_enrolled_paths",
+    CUSTOM_PATHS: "skillzify_custom_paths",
+    CUSTOM_PATHS_TS: "skillzify_custom_paths_ts"
   };
 
   function lsGet(key) {
@@ -259,6 +351,28 @@
   function writeLocalPaths(doc) {
     writeEnrollMap((doc && doc.paths) || {});
   }
+  function readLocalCustomPaths() {
+    // Corrupt JSON, a missing key, or a non-array value degrades to
+    // "no information" (empty + updatedAt 0), so the merge keeps the
+    // cloud's copy and the write-back below heals the local store.
+    // Only a successfully parsed array may carry its timestamp.
+    var defs = [], ts = 0;
+    try {
+      var raw = lsGet(LS.CUSTOM_PATHS);
+      if (raw !== null) {
+        var v = JSON.parse(raw);
+        if (Array.isArray(v)) {
+          defs = sanitizeCustomPaths(v);
+          ts = parseInt(lsGet(LS.CUSTOM_PATHS_TS) || "0", 10) || 0;
+        }
+      }
+    } catch (e) { defs = []; ts = 0; }
+    return { definitions: defs, updatedAt: ts };
+  }
+  function writeLocalCustomPaths(doc) {
+    storeSet(LS.CUSTOM_PATHS, (doc && doc.definitions) || []);
+    lsSet(LS.CUSTOM_PATHS_TS, String((doc && doc.updatedAt) || 0));
+  }
 
   /* ---------- Firebase guards ---------- */
   function db() {
@@ -275,8 +389,10 @@
     } catch (e) { return null; }
   }
   function userDoc(d, u) {
-    // Layout: ONE document per user at users/{uid} with three map fields:
-    // { profile: {...}, progress: {...}, exercises: {...} }.
+    // Layout: ONE document per user at users/{uid} with map fields:
+    // { profile: {...}, progress: {...}, exercises: {...}, paths: {...},
+    //   customPaths: {...} }. The Android app reads its fields by name
+    // and ignores the rest, so the extra customPaths field is safe.
     // (A doc ref needs an even number of path segments; users/{uid}/profile
     // would be a collection path and is invalid.)
     return d.doc("users/" + u);
@@ -310,29 +426,46 @@
     return ref.get()
       .then(function (snap) {
         var data = (snap && snap.exists) ? snap.data() : {};
-        var cloud = [data.profile || null, data.progress || null, data.exercises || null, data.paths || null];
+        var cloud = [data.profile || null, data.progress || null, data.exercises || null, data.paths || null, data.customPaths || null];
         var mergedProfile = mergeProfile(readLocalProfile(), cloud[0]);
         var mergedProgress = mergeProgress(readLocalProgress(), cloud[1]);
         var mergedExercises = mergeExercises(readLocalExercises(), cloud[2]);
         var mergedPaths = mergePaths(readLocalPaths(), cloud[3]);
+        var mergedCustomPaths = mergeCustomPaths(readLocalCustomPaths(), cloud[4]);
         // write merged state locally…
         writeLocalProfile(mergedProfile);
         writeLocalProgress(mergedProgress);
         writeLocalExercises(mergedExercises);
         writeLocalPaths(mergedPaths);
-        // …and push the merged doc to the cloud with updatedAt=now.
+        writeLocalCustomPaths(mergedCustomPaths);
+        // …and push the merged doc to the cloud. Profile and customPaths
+        // are whole-document last-write-wins by updatedAt, so ONLY stamp
+        // them when this device actually contributed a change — re-stamping
+        // an unchanged doc let an idle device's old content win over a
+        // genuinely newer edit from another device. progress/exercises/
+        // paths merge per-item, so their timestamps can't clobber anything.
         var now = Date.now();
-        mergedProfile.updatedAt = now;
+        if (contentChanged(mergedProfile, cloud[0])) {
+          mergedProfile.updatedAt = now;
+          lsSet(LS.PROFILE_TS, String(now));
+        } else {
+          mergedProfile.updatedAt = (cloud[0] && cloud[0].updatedAt) || mergedProfile.updatedAt || 0;
+        }
+        if (contentChanged(mergedCustomPaths, cloud[4])) {
+          mergedCustomPaths.updatedAt = now;
+          lsSet(LS.CUSTOM_PATHS_TS, String(now));
+        } else {
+          mergedCustomPaths.updatedAt = (cloud[4] && cloud[4].updatedAt) || mergedCustomPaths.updatedAt || 0;
+        }
         mergedProgress.updatedAt = now;
         mergedExercises.updatedAt = now;
         mergedPaths.updatedAt = now;
-        lsSet(LS.PROFILE_TS, String(now));
         // NOTE: `paths` is pushed FLAT ({ <pathId>: {enrolled, at}, updatedAt })
         // to match the Android app — the old nested { paths: {...} } shape is
         // what broke cross-device enrollment sync (each side read the shape
         // the other never wrote). mergePaths still reads both shapes.
         var flatPaths = Object.assign({}, mergedPaths.paths, { updatedAt: now });
-        return ref.set({ profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises, paths: flatPaths },
+        return ref.set({ profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises, paths: flatPaths, customPaths: mergedCustomPaths },
           { merge: true }).catch(function () {});
       })
       .then(function () {
@@ -366,6 +499,7 @@
     writeLocalProgress(mergeProgress(readLocalProgress(), cloud[1]));
     writeLocalExercises(mergeExercises(readLocalExercises(), cloud[2]));
     writeLocalPaths(mergePaths(readLocalPaths(), data.paths || null));
+    writeLocalCustomPaths(mergeCustomPaths(readLocalCustomPaths(), data.customPaths || null));
     setStatus("Synced ✓ " + fmtTime(Date.now()));
     try {
       if (typeof CustomEvent === "function")
@@ -394,7 +528,7 @@
      Called BEFORE signOut so nothing is lost. The auth-state listener below
      also wipes as a safety net if logout happens another way. */
   function clearLocalUserData() {
-    [LS.PROGRESS, LS.XP, LS.STREAK, LS.ATTEMPTS, LS.PROFILE, LS.PROFILE_TS, LS.PATHS].forEach(function (k) {
+    [LS.PROGRESS, LS.XP, LS.STREAK, LS.ATTEMPTS, LS.PROFILE, LS.PROFILE_TS, LS.PATHS, LS.CUSTOM_PATHS, LS.CUSTOM_PATHS_TS].forEach(function (k) {
       try { localStorage.removeItem(k); } catch (e) {}
     });
   }
@@ -438,6 +572,9 @@
     try {
       // profile edits need a local updatedAt for last-write-wins
       if (hint === "profile") lsSet(LS.PROFILE_TS, String(Date.now()));
+      // custom-path saves/deletes likewise stamp the definitions'
+      // updatedAt, so a delete-all propagates as the newest write
+      if (hint === "customPaths") lsSet(LS.CUSTOM_PATHS_TS, String(Date.now()));
       schedulePush();
     } catch (e) {}
   }

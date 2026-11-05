@@ -190,6 +190,8 @@ print("Result:", total)</textarea>
             <button onclick="loadExample('code','fib')">Fibonacci<small>for loop + list</small></button>
           </div>
         </div>
+        <button class="btn btn-ghost" id="btn-explain-code" onclick="explainFlowchart()">💡 Explain this flowchart</button>
+        <button class="btn btn-ghost" id="btn-fc-code-code" onclick="flowchartToCode()">🧩 Flowchart → code</button>
       </div>
     </div>
 
@@ -217,6 +219,8 @@ END</textarea>
             <button onclick="loadExample('algo','sum')">Sum of digits<small>REPEAT/UNTIL</small></button>
           </div>
         </div>
+        <button class="btn btn-ghost" id="btn-explain-algo" onclick="explainFlowchart()">💡 Explain this flowchart</button>
+        <button class="btn btn-ghost" id="btn-fc-code-algo" onclick="flowchartToCode()">🧩 Flowchart → code</button>
       </div>
       <p class="hint"><code>START</code> <code>END</code> <code>INPUT</code> <code>PRINT</code> <code>SET</code> <code>IF/THEN/ELSE/END IF</code> <code>WHILE/END WHILE</code> <code>FOR/FROM/TO/END FOR</code> <code>REPEAT/UNTIL</code></p>
     </div>
@@ -225,11 +229,18 @@ END</textarea>
       <input class="q-input" id="question-input" value="Write a program to check if a number is prime" placeholder="e.g. Write a program to find the factorial of a number">
       <div class="toolbar">
         <button class="btn" id="btn-question" onclick="genFromQuestion()">🤖 AI → Flowchart</button>
+        <button class="btn btn-ghost" id="btn-explain" onclick="explainFlowchart()">💡 Explain this flowchart</button>
+        <button class="btn btn-ghost" id="btn-fc-code" onclick="flowchartToCode()">🧩 Flowchart → code</button>
       </div>
       <div id="ai-preview">
         <p class="hint">AI-generated code:</p>
         <textarea id="ai-code-text" readonly style="min-height:110px;font-size:.78rem;"></textarea>
       </div>
+    </div>
+
+    <div id="explain-out" style="display:none;margin-top:12px;">
+      <p class="hint">AI explanation:</p>
+      <textarea id="explain-text" readonly style="min-height:140px;font-size:.85rem;font-family:inherit;line-height:1.6;"></textarea>
     </div>
 
     <div id="status"></div>
@@ -289,9 +300,12 @@ END</textarea>
   </div>
 </main>
 
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
+<script src="assets/js/auth.js?v=3"></script>
+<script src="assets/js/ai.js?v=7"></script>
 <script>
-let pyodide = null, currentGraph = null, currentSVG = null, currentMermaid = null, currentZoom = 1;
-const API_BASE = 'https://skillzify-v2.onrender.com';
+let pyodide = null, currentGraph = null, currentSVG = null, currentMermaid = null, currentZoom = 1, currentSource = null;
 mermaid.initialize({ startOnLoad: false, theme: 'default', flowchart: { useMaxWidth: true } });
 
 /* ---------- tabs ---------- */
@@ -304,10 +318,18 @@ document.querySelectorAll('.mode-card').forEach(c => {
   });
 });
 
-function setStatus(msg, type='') {
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function setStatus(msg, type='', extraHtml='') {
   const el = document.getElementById('status');
   el.className = type;
-  el.innerHTML = (type==='working' ? '<span class="spin"></span> ' : '') + msg;
+  // The message itself is always escaped; extraHtml is trusted markup
+  // only (the ai.js capLink sign-in link) appended unescaped.
+  el.innerHTML = (type==='working' ? '<span class="spin"></span> ' : '') + esc(msg) + (extraHtml || '');
+}
+// DAILY_CAP sign-in link, via the shared ai.js helper: "" when signed
+// in (at the 50/day cap), the link only when signed out.
+function aiCapLink(err) {
+  try { return (err && err.code === 'DAILY_CAP' && window.SkillzifyAI && window.SkillzifyAI.capLink) ? window.SkillzifyAI.capLink() : ''; } catch (e) { return ''; }
 }
 function setBtn(id, loading) { const b = document.getElementById(id); if (b) b.disabled = loading; }
 
@@ -595,20 +617,22 @@ function toggleFullscreen() {
 }
 
 async function genFromCode() {
-  if (!pyodide) return setStatus('Engine loading…','err');
+  if (!pyodide) return setStatus('Engine loading…','working');
   setBtn('btn-code', true); setStatus('Analyzing Python code…','working');
   try {
     pyodide.globals.set('__uc', document.getElementById('code-input').value);
     await renderGraph(pyodide.runPython('flowchart_json(__uc)'));
+    currentSource = 'code';
   } catch(e) { setStatus('✗ '+e.message,'err'); }
   setBtn('btn-code', false);
 }
 async function genFromAlgo() {
-  if (!pyodide) return setStatus('Engine loading…','err');
+  if (!pyodide) return setStatus('Engine loading…','working');
   setBtn('btn-algo', true); setStatus('Parsing algorithm…','working');
   try {
     pyodide.globals.set('__ua', document.getElementById('algo-input').value);
     await renderGraph(pyodide.runPython('algo_flowchart_json(__ua)'));
+    currentSource = 'algo';
   } catch(e) { setStatus('✗ '+e.message,'err'); }
   setBtn('btn-algo', false);
 }
@@ -616,23 +640,77 @@ async function genFromQuestion() {
   const q = document.getElementById('question-input').value.trim();
   if (!q) return setStatus('Type a question first','err');
   if (!pyodide) return setStatus('Engine loading…','err');
+  const AI = window.SkillzifyAI;
+  if (!AI) return setStatus('AI module did not load — reload the page','err');
   setBtn('btn-question', true); setStatus('🤖 AI is writing Python code…','working');
-  try {
-    const r = await fetch(API_BASE + '/api/explain', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ mode:'flowchart', code: q }) });
-    if (!r.ok) throw new Error('AI backend unavailable ('+r.status+') — redeploy Render for the flowchart mode');
-    const d = await r.json();
-    let code = (d.explanation||d.code||'').replace(/```python\n?/gi,'').replace(/```\n?/g,'').trim();
-    if (!code) throw new Error('AI returned empty code');
-    document.getElementById('ai-preview').classList.add('on');
-    document.getElementById('ai-code-text').value = code;
-    document.getElementById('code-input').value = code;
-    setStatus('Generating flowchart…','working');
-    pyodide.globals.set('__uc', code);
-    await renderGraph(pyodide.runPython('flowchart_json(__uc)'));
-  } catch(e) { setStatus('✗ '+e.message,'err'); }
-  setBtn('btn-question', false);
+  AI.ask({ mode: 'flowchart', code: q }, async function (err, res) {
+    var capLink = aiCapLink(err);
+    try {
+      if (err) throw new Error(err.message || 'AI backend unavailable');
+      let code = (res.text || '').replace(/```python\n?/gi,'').replace(/```\n?/g,'').trim();
+      if (!code) throw new Error('AI returned empty code');
+      document.getElementById('ai-preview').classList.add('on');
+      document.getElementById('ai-code-text').value = code;
+      document.getElementById('code-input').value = code;
+      setStatus('Generating flowchart…','working');
+      pyodide.globals.set('__uc', code);
+      await renderGraph(pyodide.runPython('flowchart_json(__uc)'));
+      currentSource = 'question';
+    } catch(e) { setStatus('✗ '+e.message,'err',capLink); }
+    setBtn('btn-question', false);
+  });
+}
+
+/* ---------- F9: explain flowchart + flowchart -> code ---------- */
+// All six Explain / Flowchart→code buttons (one per panel) — disabled
+// together while an AI call is in flight so a double-click can't queue
+// a duplicate cap-consuming request.
+var FLOWCHART_AI_BTN_IDS = ['btn-explain', 'btn-explain-code', 'btn-explain-algo', 'btn-fc-code', 'btn-fc-code-code', 'btn-fc-code-algo'];
+function setFlowchartAiButtons(disabled) { FLOWCHART_AI_BTN_IDS.forEach(function (id) { setBtn(id, disabled); }); }
+function explainFlowchart() {
+  if (!currentSource) return setStatus('Generate a flowchart first, then ask for an explanation.', 'err');
+  var code = (currentSource === 'algo' ? document.getElementById('algo-input').value : document.getElementById('code-input').value).trim();
+  if (!code) return setStatus('Type an algorithm or some code first', 'err');
+  var AI = window.SkillzifyAI;
+  if (!AI) return setStatus('AI module did not load — reload the page', 'err');
+  setFlowchartAiButtons(true); setStatus('🤖 AI is explaining the flowchart…', 'working');
+  AI.ask({ mode: 'flowchart-explain', code: code }, function (err, res) {
+    var capLink = aiCapLink(err);
+    try {
+      if (err) throw new Error(err.message || 'AI backend unavailable');
+      var txt = (res.text || '').trim();
+      if (!txt) throw new Error('AI returned an empty explanation');
+      document.getElementById('explain-out').style.display = 'block';
+      document.getElementById('explain-text').value = txt;
+      setStatus('✓ Explanation ready', 'ok');
+    } catch (e) { setStatus('✗ ' + e.message, 'err', capLink); }
+    setFlowchartAiButtons(false);
+  });
+}
+
+function flowchartToCode() {
+  if (currentSource !== 'algo') return setStatus('Flowchart → code works from an algorithm — switch to the Algorithm tab and generate a flowchart first.', 'err');
+  var algo = document.getElementById('algo-input').value.trim();
+  if (!algo) return setStatus('Type the flowchart steps first', 'err');
+  if (!pyodide) return setStatus('Engine loading…', 'err');
+  var AI = window.SkillzifyAI;
+  if (!AI) return setStatus('AI module did not load — reload the page', 'err');
+  if (document.getElementById('code-input').value.trim() && !confirm('This will replace the code in the Code tab. Continue?')) return;
+  setFlowchartAiButtons(true); setStatus('🤖 AI is turning the flowchart into code…', 'working');
+  AI.ask({ mode: 'flowchart-code', code: algo }, async function (err, res) {
+    var capLink = aiCapLink(err);
+    try {
+      if (err) throw new Error(err.message || 'AI backend unavailable');
+      var code = (res.text || '').replace(/```python\n?/gi, '').replace(/```\n?/g, '').trim();
+      if (!code) throw new Error('AI returned empty code');
+      document.getElementById('code-input').value = code;
+      setStatus('Generating flowchart…', 'working');
+      pyodide.globals.set('__uc', code);
+      await renderGraph(pyodide.runPython('flowchart_json(__uc)'));
+      currentSource = 'code';
+    } catch (e) { setStatus('✗ ' + e.message, 'err', capLink); }
+    setFlowchartAiButtons(false);
+  });
 }
 
 const EXAMPLES = {

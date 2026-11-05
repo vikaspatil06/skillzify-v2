@@ -94,11 +94,11 @@
           st.correct = true;
           btn.classList.add("correct");
           box.querySelectorAll(".quiz-opt").forEach(function (b) { b.disabled = true; });
-          showWhy(qi, "✅ Correct! " + q.why);
+          showWhy(qi, "✅ Correct!" + (q.why ? " " + q.why : ""));
         } else {
           st.firstTry = false;
           btn.classList.add("wrong"); btn.disabled = true;
-          showWhy(qi, "❌ Not quite — try again. " + q.why);
+          showWhy(qi, "❌ Not quite — try again." + (q.why ? " " + q.why : ""));
         }
         refreshComplete();
       });
@@ -107,6 +107,127 @@
   function showWhy(qi, msg) {
     var w = document.getElementById("why-" + qi);
     if (w) { w.textContent = msg; w.classList.add("show"); }
+  }
+
+  /* ================= AI tutor (F1) ================= */
+  // Signed-out users get 10 AI answers/day (50/day signed in) — the
+  // tutor card says so, and only there. Guarded: no auth module, no hint.
+  function capHintHtml() {
+    var signedOut = false;
+    try { signedOut = !!(window.SkillzifyAuth && typeof window.SkillzifyAuth.currentUser === "function" && !window.SkillzifyAuth.currentUser()); } catch (e) { signedOut = false; }
+    return signedOut ? '<p class="hint" style="margin-top:0">Signed out? AI answers are 10/day — sign in for 50/day.</p>' : "";
+  }
+  // M3: refresh the tutor cap hint when auth state changes (e.g.
+  // sign-in/out in another tab) — re-renders the hint line only,
+  // never the tutor answer or the quiz.
+  function refreshCapHint() {
+    var host = document.getElementById("tutor-cap-hint");
+    if (host) host.innerHTML = capHintHtml();
+  }
+  function bindTutor(lesson) {
+    var AI = window.SkillzifyAI;
+    var askBtn = document.getElementById("tutor-ask");
+    var input = document.getElementById("tutor-q");
+    var ans = document.getElementById("tutor-answer");
+    if (!askBtn || !input || !ans) return;
+    if (!AI) { ans.textContent = "AI is unavailable on this page."; askBtn.disabled = true; return; }
+    function ask() {
+      var q = input.value.trim();
+      if (!q) { ans.textContent = "Type a question about this lesson first."; return; }
+      askBtn.disabled = true; input.disabled = true;
+      ans.innerHTML = "\u{1F916} Thinking\u2026";
+      var code = lesson.title + "\n\n" + lesson.explain + "\n\n" + lesson.code +
+        "\n\nStudent question: " + q;
+      AI.ask({
+        mode: "tutor-lesson",
+        code: code,
+        context: AI.buildContext({ lesson: lesson.title })
+      }, function (err, res) {
+        askBtn.disabled = false; input.disabled = false;
+        if (err) {
+          var m = (err && err.message) || "The AI didn't answer.";
+          if (m.slice(-1) !== ".") m += ".";
+          if (err && err.code === "DAILY_CAP") {
+            // Sign-in link only when signed out (ai.js capLink
+            // returns "" for signed-in users at the 50/day cap).
+            ans.innerHTML = esc(m) + " Try again." +
+              (AI.capLink ? AI.capLink() : "");
+          } else {
+            ans.textContent = m + " Try again.";
+          }
+          return;
+        }
+        var text = (res && res.text) || "No answer returned.";
+        // Item 8a (round 4): a repeat question served from cache gets a
+        // small muted "(cached)" note — same .hint styling as the card.
+        ans.innerHTML = (res && res.cached ? '<span class="hint">(cached)</span> ' : "") + esc(text).replace(/\n/g, "<br>");
+      });
+    }
+    askBtn.addEventListener("click", ask);
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter") ask(); });
+  }
+
+  /* ================= Fresh quiz (F7) ================= */
+  function bindFreshQuiz(lesson) {
+    var AI = window.SkillzifyAI;
+    var btn = document.getElementById("lm-new-quiz");
+    var note = document.getElementById("lm-quiz-note");
+    if (!btn) return;
+    if (!AI) { btn.disabled = true; return; }
+    btn.addEventListener("click", function () {
+      // Don't wipe answers already given: ask first, abort on cancel.
+      var answered = quizState.filter(function (q) { return q.correct || !q.firstTry; }).length;
+      if (answered > 0 && !confirm("You've answered " + answered + " of " + quizState.length +
+          " — get new questions and lose these answers?")) return;
+      btn.disabled = true;
+      var label = btn.textContent;
+      btn.textContent = "\u{1F916} Fetching\u2026";
+      if (note) note.textContent = "";
+      var payload = {
+        title: lesson.title,
+        explain: lesson.explain,
+        code: lesson.code,
+        existingQuiz: (lesson.quiz || []).map(function (q) { return q.q; })
+      };
+      AI.ask({
+        mode: "quiz",
+        json: true,
+        code: JSON.stringify(payload),
+        context: AI.buildContext({ lesson: lesson.title })
+      }, function (err, res) {
+        btn.disabled = false;
+        btn.textContent = label;
+        var qs = res && res.data && res.data.questions;
+        var ok = !err && Array.isArray(qs) && qs.length > 0 && qs.every(function (q) {
+          return q && typeof q.q === "string" &&
+            Array.isArray(q.options) && q.options.length === 4 &&
+            q.options.every(function (o) { return typeof o === "string"; }) &&
+            typeof q.answer === "number" && q.answer >= 0 && q.answer <= 3 &&
+            Math.floor(q.answer) === q.answer;
+        });
+        if (!ok) {
+          if (note) {
+            if (err && err.code === "DAILY_CAP") {
+              // Sign-in link only when signed out (ai.js capLink
+              // returns "" for signed-in users at the 50/day cap).
+              note.innerHTML = esc(err.message || "You've used your AI answers for today — they reset tomorrow.") +
+                (AI.capLink ? AI.capLink() : "");
+            } else {
+              note.textContent = "Couldn't fetch new questions \u2014 keeping the current quiz.";
+            }
+          }
+          return;
+        }
+        curQuiz = qs.map(function (q) {
+          return { q: q.q, options: q.options.slice(), answer: q.answer, why: q.why || "" };
+        });
+        quizState = curQuiz.map(function () { return { correct: false, firstTry: true }; });
+        var box = document.getElementById("lm-quiz");
+        if (box) box.innerHTML = quizHTML();
+        bindQuiz();
+        refreshComplete();
+      });
+    });
   }
 
   function norm(s) { return String(s).trim().toLowerCase(); }
@@ -195,13 +316,40 @@
       '. Enroll in the path to unlock it right away — no need to finish everything before it.</p>' +
       inPaths.map(function (p) { return '<a class="btn btn-sm" href="paths.html#path=' + p.id + '">View ' + esc(p.title) + "</a> "; }).join("") + "</div>"
       : "";
+    // Saved custom paths unlock their lessons when enrolled (the
+    // unlock map in paths-data.js reads skillzify_custom_paths).
+    // paths.js isn't loaded on lesson pages, so the CTA here just
+    // links to the paths page, where the Enroll toggle lives.
+    var customCta = "";
+    try {
+      var saved = JSON.parse(localStorage.getItem("skillzify_custom_paths") || "[]");
+      var inCustom = [];
+      if (Array.isArray(saved)) saved.forEach(function (cp) {
+        // Guard each entry individually: one corrupt entry (non-object
+        // or no steps array) must not throw out of the forEach and drop
+        // the CTA for every other custom path. The outer try/catch
+        // stays as a backstop for a wholly corrupt store.
+        if (!cp || typeof cp !== "object" || !Array.isArray(cp.steps)) return;
+        var has = cp.steps.some(function (s) {
+          return s && typeof s === "object" && (s.lessonId === lesson.id || (s.t === "lesson" && s.id === lesson.id));
+        });
+        if (has) inCustom.push(cp);
+      });
+      if (inCustom.length) {
+        customCta = '<div class="card lesson-path-cta"><h3 style="margin-top:0">💾 In your custom path</h3>' +
+          '<p class="hint">This lesson is in your custom path ' +
+          inCustom.map(function (cp) { return "<strong>" + esc(cp.title || "Custom path") + "</strong>"; }).join(", ") +
+          " — enroll in that path to unlock it right away, no need to finish everything before it.</p>" +
+          '<p><a class="btn btn-sm" href="paths.html">View learning paths</a></p></div>';
+      }
+    } catch (e) {}
     mount.innerHTML =
       '<nav class="lesson-crumb"><a href="learn.html">Learn</a><span>\u203A</span><span>' + esc(track.name) + '</span></nav>' +
       '<div class="lesson-locked"><div class="big">\u{1F512}</div>' +
       "<h2>This lesson is locked</h2>" +
       '<p class="hint">Finish the previous lessons in order to unlock <strong>' + esc(lesson.title) + "</strong>.</p>" +
       '<p><a class="btn" href="learn.html">\u2190 Back to Learn</a> <a class="btn btn-ghost" href="paths.html">Learning paths</a></p></div>' +
-      pathCta;
+      pathCta + customCta;
   }
 
   /* ================= Lesson view ================= */
@@ -232,9 +380,16 @@
       '<button class="btn btn-sm" id="lm-try">\u25B6 Try in compiler</button>' +
       '<button class="btn btn-sm btn-ghost" id="lm-star" aria-label="Star lesson">\u2B50</button>' +
       '<button class="btn btn-sm btn-ghost" id="lm-pin" aria-label="Pin lesson">\u{1F4CC}</button></div>' +
-      '<h3 class="lm-sec">\u{1F9E0} Quick quiz</h3><p class="hint" style="margin-top:0">Answer all correctly to proceed. Questions are picked fresh every time — no two attempts are the same. Wrong answers just cost you bonus XP — keep trying!</p>' +
+      '<h3 class="lm-sec">\u{1F9E0} Quick quiz <button class="btn btn-sm btn-ghost" id="lm-new-quiz" type="button">\u2728 New AI quiz questions</button></h3><p class="hint" style="margin-top:0">Answer all correctly to proceed. Fresh questions are AI-generated on demand. Wrong answers just cost you bonus XP — keep trying!</p>' +
+      '<div class="hint" id="lm-quiz-note" style="margin-top:0"></div>' +
       '<div id="lm-quiz">' + quizHTML() + "</div>" +
       '<h3 class="lm-sec">\u{1F3AF} Mini challenge</h3><div class="challenge" id="lm-challenge">' + challengeHTML(lesson.challenge) + "</div>" +
+      '<h3 class="lm-sec">\u{1F916} Ask AI Tutor</h3><div class="card" id="lm-tutor">' +
+      '<p class="hint" style="margin-top:0">Stuck on something in this lesson? Ask the tutor — it explains with hints and questions, and won\'t just hand you the answer.</p>' +
+      '<span id="tutor-cap-hint">' + capHintHtml() + '</span>' +
+      '<div class="blank-row"><input type="text" id="tutor-q" placeholder="Ask about this lesson\u2026" autocomplete="off" spellcheck="false" aria-label="Ask the AI tutor">' +
+      '<button class="btn btn-sm" id="tutor-ask">Ask</button></div>' +
+      '<div class="hint" id="tutor-answer" style="margin-top:12px">Ask a question and the tutor\u2019s answer will appear here.</div></div>' +
       '<div class="lm-complete" id="lm-complete-wrap">' +
       (isDone(lesson.id)
         ? '<div class="lesson-done-note">\u2705 You\u2019ve completed this lesson — nice work! Redo the quiz any time for practice.</div>'
@@ -268,6 +423,8 @@
     })();
     bindQuiz();
     bindChallenge(lesson);
+    bindTutor(lesson);
+    bindFreshQuiz(lesson);
     var doneBtn = document.getElementById("lm-complete");
     if (doneBtn) doneBtn.addEventListener("click", completeLesson);
     refreshComplete();
@@ -328,5 +485,12 @@
     if (gi < 0) { renderNotFound(); return; }
     if (!isUnlocked(gi)) { renderLocked(LESSONS[gi]); return; }
     renderLesson(gi);
+    // M3: keep the tutor cap hint in step with sign-in/out (e.g. in
+    // another tab). refreshCapHint re-renders the hint line only.
+    try {
+      if (window.SkillzifyAuth && typeof window.SkillzifyAuth.onAuthChange === "function") {
+        window.SkillzifyAuth.onAuthChange(function () { refreshCapHint(); });
+      }
+    } catch (e) {}
   })();
 })();

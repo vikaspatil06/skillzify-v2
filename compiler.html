@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify Code Studio — a VS Code-like Python IDE in your browser. Multi-file workspace, terminal, problems panel, AI assistant.">
   <title>Code Studio — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=9">
+  <link rel="stylesheet" href="assets/css/style.css?v=10">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
@@ -276,6 +276,7 @@
           <button class="ide-btn ghost" id="explain-code-btn">💡 Explain this file</button>
           <button class="ide-btn ghost" id="explain-error-btn">❓ Explain last error</button>
           <button class="ide-btn ghost" id="fix-code-btn">🔧 Fix this file</button>
+          <button class="ide-btn ghost" id="trace-code-btn">🔍 Trace this code</button>
         </div>
         <div class="ai-box-ide" id="ai-output">
           <p style="color:var(--ide-muted)">Ask the AI to write code, explain your file, or fix an error. Runs on the site backend — no setup needed.</p>
@@ -286,6 +287,7 @@
           <input class="ide-input" type="password" id="ai-key" placeholder="AIza..." autocomplete="off">
           <button class="ide-btn ghost" id="ai-save">Save key</button>
           <p style="font-size:11px;color:var(--ide-muted)">Key stays in this browser only. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#9d6bff">Get a free Gemini key →</a></p>
+          <p style="font-size:11px;color:var(--ide-muted)">A saved key is used when the daily AI limit is reached, so you can keep going.</p>
         </div>
       </div>
 
@@ -398,22 +400,23 @@
 
 <div id="site-footer"></div>
 
-<script src="assets/js/nav.js?v=1"></script>
+<script src="assets/js/nav.js?v=2"></script>
 <script src="assets/js/footer.js?v=1"></script>
-<script src="assets/js/app.js?v=1"></script>
+<script src="assets/js/app.js?v=4"></script>
 <script src="assets/js/activity.js?v=2"></script>
 <script src="assets/js/palette.js?v=1"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
-<script src="assets/js/auth.js?v=1"></script>
-<script src="assets/js/sync.js?v=3"></script>
+<script src="assets/js/auth.js?v=3"></script>
+<script src="assets/js/sync.js?v=5"></script>
+<script src="assets/js/ai.js?v=7"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
-<script src="assets/js/compiler.js?v=1"></script>
+<script src="assets/js/compiler.js?v=9"></script>
 </body>
 </html>

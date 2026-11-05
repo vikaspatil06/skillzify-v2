@@ -111,6 +111,25 @@ window.SkillzifyPaths = [
         if (s.t === "lesson" && s.id) map[s.id] = p.id;
       });
     });
+    // Custom paths ("Build my path") live in localStorage only.
+    // An enrolled custom path unlocks its lesson steps the same way.
+    // Corrupt JSON, a missing definition for an enrolled id (e.g. an
+    // enrollment synced from another device — definitions don't sync),
+    // or a missing steps array all degrade to "unlocks nothing".
+    try {
+      var saved = JSON.parse(localStorage.getItem("skillzify_custom_paths") || "[]");
+      if (Array.isArray(saved)) saved.forEach(function (cp) {
+        if (!cp || typeof cp !== "object" || !cp.id || !Array.isArray(cp.steps)) return;
+        if (!(m[cp.id] && m[cp.id].enrolled)) return;
+        cp.steps.forEach(function (s) {
+          if (!s || typeof s !== "object") return;
+          // paths.js saves {lessonId, why}; accept the built-in
+          // {t: "lesson", id} shape too, in case one was saved that way.
+          var lid = s.lessonId || (s.t === "lesson" && s.id) || null;
+          if (lid) map[lid] = cp.id;
+        });
+      });
+    } catch (e) {}
     return map;
   };
 })();

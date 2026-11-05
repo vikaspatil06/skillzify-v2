@@ -72,6 +72,7 @@
       '<a class="brand" href="index.html"><img data-logo src="assets/logo-light.png" alt="Skillzify logo"><span>Skillzify</span></a>' +
       '<div class="nav-links" id="nav-links">' + linksHtml + "</div>" +
       '<div class="nav-actions">' +
+      '<span id="ai-status-pill" class="ai-status-pill" role="status" aria-live="polite"></span>' +
       '<span id="account-link"></span>' +
       '<button class="icon-btn" data-theme-toggle aria-label="Toggle dark/light theme">☀️</button>' +
       '<button class="icon-btn hamburger" id="hamburger" aria-label="Open menu">☰</button>' +
@@ -79,6 +80,25 @@
     mount.dataset.navBuilt = "1";
 
     wireDropdowns(mount);
+    wireAiStatus(mount);
+  }
+
+  /* ---------------- AI status pill ----------------
+     nav.js loads before ai.js on every page, so by the time
+     buildNav runs (DOMContentLoaded, or synchronously once the
+     DOM is ready) window.SkillzifyAI already exists when ai.js
+     loaded. attachStatus paints the current status immediately
+     and subscribes to live updates, so one call covers both.
+     If ai.js failed to load, hide the pill — never crash, never
+     show a stale label. */
+  function wireAiStatus(mount) {
+    var pill = mount.querySelector("#ai-status-pill");
+    if (!pill) return;
+    if (window.SkillzifyAI && typeof window.SkillzifyAI.attachStatus === "function") {
+      window.SkillzifyAI.attachStatus(pill);
+    } else {
+      pill.style.display = "none";
+    }
   }
 
   /* ---------------- Dropdown behaviour ----------------

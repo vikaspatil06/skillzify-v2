@@ -20,38 +20,116 @@
   function $(id) { return document.getElementById(id); }
 
   /* ---------------- Pyodide runtime ---------------- */
-  var pyodide = null, pyLoading = false, pyQueue = [];
+  var pyodide = null, pyLoading = false, pyQueue = [], pyTimeout = null, pyScriptAppended = false;
   function ensurePyodide(cb) {
     if (pyodide) { cb(true); return; }
     pyQueue.push(cb);
-    if (pyLoading) return;
+    // A <script> tag is already appended and unresolved — queue the
+    // callback, do NOT append a second tag. This holds even after the
+    // phase-1 timeout fired: finish(false) resets pyLoading while the
+    // original <script> may still be in flight, so pyLoading alone
+    // cannot tell a fresh call that a load is pending.
+    if (pyLoading || pyScriptAppended) return;
     pyLoading = true;
+    var done = false;
+    function drain(ok) {
+      var q = pyQueue; pyQueue = [];
+      q.forEach(function (c) { try { c(ok); } catch (e) {} });
+    }
+    function finish(ok) {
+      if (done) return; // a late load after the timeout must not double-fire
+      done = true;
+      if (pyTimeout) { clearTimeout(pyTimeout); pyTimeout = null; }
+      pyLoading = false;
+      drain(ok);
+    }
     var script = document.createElement("script");
     script.src = "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js";
     script.onload = function () {
+      pyScriptAppended = false;
+      // Phase 1 done: the script fetched. Phase 2 gives loadPyodide()
+      // its own 45s — cold init takes 30s+ on first visit, so a single
+      // 20s timer over both phases false-fired on normal first loads.
+      // (If phase 1 already timed out, done is true: skip the phase-2
+      // timer but still init, so a late load sets pyodide for later calls.)
+      if (pyTimeout) { clearTimeout(pyTimeout); pyTimeout = null; }
+      if (!done) pyTimeout = setTimeout(function () { finish(false); }, 45000);
       window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/" }).then(function (py) {
-        pyodide = py; pyLoading = false;
-        var q = pyQueue; pyQueue = [];
-        q.forEach(function (c) { try { c(true); } catch (e) {} });
+        pyodide = py;
+        // Phase-1 timeout already fired: finish() is spent, so drain
+        // callbacks queued after it directly (each fires exactly once).
+        if (done) { drain(true); return; }
+        finish(true);
       }).catch(function () {
-        pyLoading = false;
-        var q = pyQueue; pyQueue = [];
-        q.forEach(function (c) { try { c(false); } catch (e) {} });
+        if (done) { drain(false); return; }
+        finish(false);
       });
     };
     script.onerror = function () {
-      pyLoading = false;
-      var q = pyQueue; pyQueue = [];
-      q.forEach(function (c) { try { c(false); } catch (e) {} });
+      pyScriptAppended = false;
+      // Phase-1 timeout already fired: finish() is spent, so drain
+      // callbacks queued after it directly (each fires exactly once).
+      if (done) { drain(false); return; }
+      finish(false);
     };
+    pyScriptAppended = true;
     document.head.appendChild(script);
+    // Phase 1: stalled CDN — neither onload nor onerror may ever fire.
+    // Without this, queued callers (e.g. drill verification) wait forever.
+    pyTimeout = setTimeout(function () { finish(false); }, 20000);
   }
 
   /* ---------------- Attempts + XP ---------------- */
-  function getAttempts() { return S.storeGet(ATT_KEY, {}); }
+  function getAttempts() { var a = S.storeGet(ATT_KEY, {}); return (a && typeof a === "object") ? a : {}; }
   function saveAttempts(a) { S.storeSet(ATT_KEY, a); }
-  function attFor(id) { return getAttempts()[id] || { attempts: 0, solved: false, hintsUsed: 0, revealed: false, bestMs: 0, lastTry: 0, xpEarned: 0 }; }
+
+  /* Drills (AI-generated + AI daily challenge) live in their own store
+     so they never pollute the exercise attempts / sync data. */
+  var DRILL_KEY = "skillzify_drills";
+  function isDrillId(id) { return typeof id === "string" && id.indexOf("drill-") === 0; }
+  function getDrills() { try { var d = JSON.parse(localStorage.getItem(DRILL_KEY) || "{}"); return (d && typeof d === "object") ? d : {}; } catch (e) { return {}; } }
+  function saveDrills(d) { try { localStorage.setItem(DRILL_KEY, JSON.stringify(d)); } catch (e) {} }
+  function drillDefaults() { return { attempts: 0, solved: false, hintsUsed: 0, revealed: false, bestMs: 0, lastTry: 0, xpEarned: 0 }; }
+
+  /* Drill definitions: attempts (skillzify_drills) record solves, but
+     the drill object itself was never stored, so a generated drill
+     vanished on reload and never appeared in any list. Definitions
+     live here, capped at 20 (oldest dropped). */
+  var DRILL_DEF_KEY = "skillzify_drill_defs";
+  var DRILL_DEF_MAX = 20;
+  function getDrillDefs() { try { var d = JSON.parse(localStorage.getItem(DRILL_DEF_KEY) || "{}"); return (d && typeof d === "object") ? d : {}; } catch (e) { return {}; } }
+  function saveDrillDef(drill) {
+    if (!drill || !isDrillId(drill.id)) return;
+    try {
+      var defs = getDrillDefs();
+      // Re-saving an existing id must refresh its insertion-order
+      // position, or a recently re-opened old drill is still evicted
+      // as "oldest" when the 20-cap is hit (and its XP is lost from
+      // the stats line). Delete first, then re-assign → newest.
+      delete defs[drill.id];
+      defs[drill.id] = drill;
+      var keys = Object.keys(defs);
+      while (keys.length > DRILL_DEF_MAX) { delete defs[keys.shift()]; }
+      localStorage.setItem(DRILL_DEF_KEY, JSON.stringify(defs));
+    } catch (e) {}
+  }
+
+  function attFor(id) {
+    if (isDrillId(id)) return getDrills()[id] || drillDefaults();
+    return getAttempts()[id] || { attempts: 0, solved: false, hintsUsed: 0, revealed: false, bestMs: 0, lastTry: 0, xpEarned: 0 };
+  }
   function setAtt(id, patch) {
+    if (isDrillId(id)) {
+      // Drill attempts/solves stay in the drills store — never in ATT_KEY.
+      var drills = getDrills();
+      var dcur = drills[id] || drillDefaults();
+      var wasSolved = dcur.solved;
+      Object.keys(patch).forEach(function (k) { dcur[k] = patch[k]; });
+      dcur.lastTry = Date.now();
+      if (patch.solved && !wasSolved) dcur.at = Date.now();
+      drills[id] = dcur; saveDrills(drills);
+      return dcur;
+    }
     var all = getAttempts();
     var cur = all[id] || { attempts: 0, solved: false, hintsUsed: 0, revealed: false, bestMs: 0, lastTry: 0, xpEarned: 0 };
     Object.keys(patch).forEach(function (k) { cur[k] = patch[k]; });
@@ -63,7 +141,7 @@
 
   /* ---------------- Draft code persistence ---------------- */
   var DRAFT_KEY = "skillzify_exercise_drafts";
-  function getDrafts() { try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "{}"); } catch (e) { return {}; } }
+  function getDrafts() { try { var d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "{}"); return (d && typeof d === "object") ? d : {}; } catch (e) { return {}; } }
   function getDraft(id) { var d = getDrafts(); return d[id] != null ? d[id] : null; }
   function saveDraft(id, code) {
     try { var d = getDrafts(); d[id] = code; localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch (e) {}
@@ -149,43 +227,363 @@
     return n;
   }
 
-  /* ---------------- AI Tutor ---------------- */
-  function askTutor(ex, code, failInfo, box) {
-    box.innerHTML = '<p class="hint">🤖 Waking up the AI Tutor…</p>';
-    var ctrl = null, timer = null, stageTimer = null;
-    try {
-      ctrl = new AbortController();
-      timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 60000);
-      stageTimer = setTimeout(function () {
-        box.innerHTML = '<p class="hint">🤖 Still working — the AI backend is slow to wake on the free tier. Hang on…</p>';
-      }, 9000);
-    } catch (e) {}
-    function clearTimers() {
-      if (timer) clearTimeout(timer);
-      if (stageTimer) clearTimeout(stageTimer);
+  /* ============================================================
+     F2 — ADAPTIVE DRILLS (AI-generated, verified before showing)
+     Drills are shaped like exercises but are NOT added to EX and
+     never touch the exercise attempts store (see setAtt guard).
+     ============================================================ */
+  function weakestTopics() {
+    var atts = getAttempts(), byTopic = {};
+    EX.forEach(function (ex) {
+      var a = atts[ex.id];
+      if (a && a.attempts > 0 && !a.solved) {
+        var t = byTopic[ex.topic] || (byTopic[ex.topic] = { topic: ex.topic, attempts: 0, exercises: [] });
+        t.attempts += a.attempts;
+        t.exercises.push({ title: ex.title, attempts: a.attempts });
+      }
+    });
+    var arr = Object.keys(byTopic).map(function (k) { return byTopic[k]; });
+    arr.sort(function (x, y) { return y.attempts - x.attempts; });
+    return arr;
+  }
+
+  function renderDrillCard() {
+    var host = $("drill-card");
+    if (!host) return;
+    var weak = weakestTopics();
+    var html = '<h2 class="section-title" style="font-size:1.3rem">🎯 Drill my weak spots</h2>' +
+      '<p class="hint">The AI writes a fresh exercise targeting the topics you keep missing — then proves it works before you see it.</p>';
+    if (!weak.length) {
+      html += '<p class="hint">Solve a few exercises first — your weak spots will show up here.</p>' +
+        '<button class="btn" disabled>Generate a drill</button>';
+    } else {
+      html += '<div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">' +
+        weak.slice(0, 3).map(function (w) {
+          return '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+            '<span class="badge" style="color:' + topicColor(w.topic) + ';border-color:' + topicColor(w.topic) + '66">' + esc(TOPIC_LABEL[w.topic] || w.topic) + '</span>' +
+            '<span class="hint" style="flex:1">' + w.attempts + ' unsolved attempt' + (w.attempts > 1 ? 's' : '') +
+            ' across ' + w.exercises.length + ' exercise' + (w.exercises.length > 1 ? 's' : '') + '</span>' +
+            '<button class="btn btn-sm" data-drill-topic="' + esc(w.topic) + '">Generate a drill</button></div>';
+        }).join("") + '</div>';
     }
-    var payload = {
+    html += '<div id="drill-status" style="margin-top:12px"></div>';
+    html += '<div id="my-drills" style="margin-top:16px"></div>';
+    host.innerHTML = html;
+    host.querySelectorAll("[data-drill-topic]").forEach(function (b) {
+      b.addEventListener("click", function () { generateDrill(b.getAttribute("data-drill-topic")); });
+    });
+    renderSavedDrills();
+  }
+
+  /* Saved drills (skillzify_drill_defs) with a Solved badge from the
+     attempts store — re-openable through the existing openDrill path. */
+  function renderSavedDrills() {
+    var host = $("my-drills");
+    if (!host) return;
+    var defs = getDrillDefs();
+    var drills = getDrills();
+    var ids = Object.keys(defs);
+    if (!ids.length) { host.innerHTML = ""; return; }
+    host.innerHTML = '<h3 style="margin:0 0 8px;font-size:1rem">🤖 Your AI drills</h3>' +
+      ids.map(function (id) {
+        var raw = defs[id];
+        var d = (raw && typeof raw === "object") ? raw : {};
+        var solved = !!(drills[id] && drills[id].solved);
+        return '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--border, #e5e7eb)">' +
+          '<span style="flex:1"><strong>' + esc(d.title || id) + '</strong> <span class="hint">' + esc(TOPIC_LABEL[d.topic] || d.topic || "") + '</span></span>' +
+          (solved ? '<span class="badge badge-done">✓ Solved</span>' : "") +
+          '<button class="btn btn-sm btn-ghost" data-open-drill="' + esc(id) + '">Open</button></div>';
+      }).join("");
+    host.querySelectorAll("[data-open-drill]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var raw = getDrillDefs()[b.getAttribute("data-open-drill")];
+        var drill = normalizeDrill(raw, (raw && raw.topic) || "practice", b.getAttribute("data-open-drill"));
+        if (drill) openDrill(drill);
+      });
+    });
+  }
+
+  function setDrillBusy(busy) {
+    var host = $("drill-card");
+    if (!host) return;
+    host.querySelectorAll("button").forEach(function (b) { b.disabled = busy; });
+  }
+
+  /* Shape + validate AI drill JSON into an exercise-like object.
+     Returns null when the shape is unusable. id is supplied by the
+     caller ("drill-<timestamp>" or "drill-daily-<date>"). */
+  function normalizeDrill(data, topic, id) {
+    if (!data || typeof data !== "object") return null;
+    if (typeof data.title !== "string" || !data.title.trim()) return null;
+    if (typeof data.prompt !== "string" || !data.prompt.trim()) return null;
+    if (typeof data.solution !== "string" || !data.solution.trim()) return null;
+    if (typeof data.starter !== "string") return null;
+    if (!Array.isArray(data.tests) || data.tests.length < 1 || data.tests.length > 4) return null;
+    for (var i = 0; i < data.tests.length; i++) {
+      var t = data.tests[i];
+      if (!t || typeof t.run !== "string" || !t.run.trim()) return null;
+      if (typeof t.expect !== "string") return null;
+    }
+    var hints = Array.isArray(data.hints) ? data.hints.filter(function (h) { return typeof h === "string"; }) : [];
+    if (!hints.length) return null;
+    var diff = parseInt(data.difficulty, 10);
+    if (!(diff >= 1 && diff <= 3)) diff = 2;
+    return {
+      id: id,
+      topic: topic,
+      difficulty: diff,
+      kind: "code",
+      title: data.title.trim(),
+      prompt: data.prompt.trim(),
+      starter: data.starter,
+      tests: data.tests,
+      hints: hints,
+      solution: data.solution,
+      walkthrough: typeof data.walkthrough === "string" ? data.walkthrough : "",
+      pythonic: typeof data.pythonic === "string" ? data.pythonic : "",
+      xp: diff * 10
+    };
+  }
+
+  /* Best-effort static guard: an unbounded `while True:` / `while 1:`
+     loop with no loop exit would hang the tab, because runPython has
+     no timeout. Comments and string literals are stripped first, so
+     a `while True:` in a comment/string (or a `break` in one) no
+     longer counts; `break`, `return` or `raise` all count as exits,
+     and `while True` with a trailing condition (e.g. `while True and
+     keep_going:`) is caught too. This is NOT a guarantee — a loop
+     can still hang in other ways — it only rejects the clear pattern,
+     and it gates drill display only, never student code. */
+  function hasUnboundedLoop(code) {
+    var stripped = String(code || "")
+      .replace(/("""[\s\S]*?"""|'''[\s\S]*?''')/g, '""')
+      .replace(/("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')/g, '""')
+      .replace(/#.*/g, "");
+    if (!/while\s+(True|1)\b/.test(stripped)) return false;
+    return !/\b(break|return|raise)\b/.test(stripped);
+  }
+
+  /* Mandatory gate: the drill's own solution must pass ALL of its
+     tests in the real Pyodide runner before the drill is shown.
+     done(ok, reason) — reason is "runtime" when the Python runtime
+     itself failed to load (drill never tested) and "broken" when the
+     drill's own solution failed or was rejected. */
+  function verifyDrill(drill, done) {
+    if (hasUnboundedLoop(drill.solution)) { done(false, "broken"); return; }
+    runCodeTests(drill, drill.solution, function (out) {
+      if (out.error) { done(false, !pyodide ? "runtime" : "broken"); return; }
+      if (!out.results || !out.results.length) { done(false, "broken"); return; }
+      var allPass = out.results.every(function (r) { return r.pass; });
+      done(allPass, allPass ? null : "broken");
+    });
+  }
+
+  /* Render a drill through the EXISTING exercise detail view. */
+  function openDrill(ex) {
+    saveDrillDef(ex); // persist the definition so the drill survives reload
+    cur = ex;
+    stopTimer();
+    $("practice-list").style.display = "none";
+    $("practice-detail").style.display = "";
+    renderDetail();
+    window.scrollTo(0, 0);
+  }
+
+  function generateDrill(topic) {
+    var AI = window.SkillzifyAI;
+    var status = $("drill-status");
+    if (!AI) {
+      if (status) status.innerHTML = '<p class="hint">The AI module didn\'t load. Reload the page and try again.</p>';
+      return;
+    }
+    var entry = null;
+    weakestTopics().forEach(function (w) { if (w.topic === topic) entry = w; });
+    if (!entry) return;
+    setDrillBusy(true);
+    if (status) status.innerHTML = '<p class="hint">🤖 Writing a drill for ' + esc(TOPIC_LABEL[topic] || topic) + '…</p>';
+    var summary = "Topic: " + (TOPIC_LABEL[topic] || topic) +
+      ". The student recently failed these exercises (unsolved after trying): " +
+      entry.exercises.map(function (e) { return e.title + " (" + e.attempts + " tries)"; }).join("; ") +
+      ". Write ONE short drill exercise that targets the same skills and the same common mistakes.";
+    AI.ask({ mode: "drill", json: true, code: summary, extra: { topic: topic } }, function (err, res) {
+      if (err) {
+        setDrillBusy(false);
+        // Sign-in link only when signed out (ai.js capLink returns
+        // "" for signed-in users at the 50/day cap).
+        var drillCap = (err && err.code === "DAILY_CAP" && AI.capLink)
+          ? AI.capLink() : "";
+        if (status) status.innerHTML = '<p class="fail">⚠️ ' + esc(err.message || "The AI drill generator is unreachable right now.") + drillCap + '</p>';
+        return;
+      }
+      var drill = normalizeDrill(res && res.data, topic, "drill-" + Date.now());
+      if (!drill) {
+        setDrillBusy(false);
+        if (status) status.innerHTML = '<p class="fail">⚠️ The AI returned a drill I couldn\'t use — try again.</p>';
+        return;
+      }
+      if (status) status.innerHTML = '<p class="hint">🔍 Checking the drill actually runs…</p>';
+      verifyDrill(drill, function (ok, reason) {
+        setDrillBusy(false);
+        if (!ok) {
+          if (status) status.innerHTML = '<p class="fail">⚠️ ' +
+            (reason === "runtime" ? "Python runtime didn't load — check your connection and try again." : "The AI wrote a broken drill — try again.") + '</p>';
+          return;
+        }
+        openDrill(drill);
+      });
+    });
+  }
+
+  /* ---------------- AI daily challenge intake ----------------
+     Dashboard worker stores {date, challenge} under
+     "skillzify_daily_challenge" and links to practice.html#challenge.
+     Only today's challenge is honoured, and only after the same
+     run-the-solution verification as a drill. Anything else falls
+     back to the normal list view with a small note. */
+  function todayStr() {
+    var d = new Date();
+    function p(n) { return (n < 10 ? "0" : "") + n; }
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+  }
+  function challengeFallback(err) {
+    showList();
+    var n = $("challenge-note");
+    if (!n) return;
+    n.style.display = "";
+    if (err && err.code === "DAILY_CAP") {
+      // Sign-in link only when signed out (ai.js capLink returns ""
+      // for signed-in users at the 50/day cap).
+      n.innerHTML = esc(err.message || "You've used your AI answers for today — they reset tomorrow.") +
+        (window.SkillzifyAI && window.SkillzifyAI.capLink ? window.SkillzifyAI.capLink() : "");
+    } else {
+      n.textContent = "Today's AI challenge wasn't available — pick an exercise below.";
+    }
+  }
+  /* Plain-text weak-spot summary for the AI daily challenge prompt:
+     weakest topic first, unsolved exercises, untried topics.
+     (Dashboard has its own copy; this one reads the same stores.) */
+  function weakSpotsSummary() {
+    var atts = getAttempts();
+    var rows = TOPICS.map(function (t) {
+      var tried = 0, solved = 0;
+      EX.forEach(function (ex) {
+        if (ex.topic !== t) return;
+        var a = atts[ex.id];
+        if (a && a.attempts > 0) { tried++; if (a.solved) solved++; }
+      });
+      return { topic: t, label: TOPIC_LABEL[t] || t, tried: tried, solved: solved,
+               pct: tried ? Math.round(solved / tried * 100) : null };
+    });
+    var triedRows = rows.filter(function (r) { return r.tried > 0; })
+      .sort(function (a, b) { return a.pct - b.pct || b.tried - a.tried; });
+    var untried = rows.filter(function (r) { return r.tried === 0; });
+    var unsolved = EX.filter(function (ex) { var a = atts[ex.id]; return a && a.attempts > 0 && !a.solved; });
+    var parts = [];
+    if (triedRows.length) {
+      parts.push("Weakest topic: " + triedRows[0].label + " (" + triedRows[0].pct + "% of " + triedRows[0].tried + " tried).");
+      if (triedRows.length > 1) parts.push("Strongest topic: " + triedRows[triedRows.length - 1].label + " (" + triedRows[triedRows.length - 1].pct + "%).");
+    }
+    if (unsolved.length) {
+      parts.push("Unsolved exercises (" + unsolved.length + "): " +
+        unsolved.slice(0, 5).map(function (ex) { return ex.title; }).join(", ") + ".");
+    }
+    if (untried.length) parts.push("Topics not tried yet: " + untried.map(function (r) { return r.label; }).join(", ") + ".");
+    if (!parts.length) parts.push("No practice attempts yet — pick a beginner-friendly challenge.");
+    return parts.join(" ");
+  }
+  /* Shared gate: normalize + verify a challenge drill, then open it.
+     onFail runs when the challenge is unusable or fails verification.
+     onVerified (optional) runs only after verification succeeds —
+     callers use it to persist a fetched challenge, so a broken one
+     is never stored. */
+  function verifyAndOpenChallenge(challenge, onFail, onVerified) {
+    showList();
+    var note = $("challenge-note");
+    if (note) { note.style.display = ""; note.textContent = "⏳ Verifying today's AI challenge…"; }
+    var topic = (challenge.topic && typeof challenge.topic === "string") ? challenge.topic : "practice";
+    var drill = normalizeDrill(challenge, topic, "drill-daily-" + todayStr());
+    if (!drill) { onFail(); return; }
+    verifyDrill(drill, function (ok) {
+      if (!ok) { onFail(); return; }
+      if (onVerified) { try { onVerified(); } catch (e) {} }
+      if (note) note.style.display = "none";
+      openDrill(drill);
+    });
+  }
+  /* No valid stored challenge for today — fetch a fresh one from the
+     AI and run it through the same verify gate. The challenge is
+     persisted only inside the verify-success path, never before. */
+  function fetchFreshChallenge() {
+    showList();
+    var note = $("challenge-note");
+    if (note) { note.style.display = ""; note.textContent = "🤖 Picking today's challenge for you…"; }
+    var AI = window.SkillzifyAI;
+    if (!AI) { challengeFallback(); return; }
+    AI.ask({
+      mode: "challenge",
+      json: true,
+      code: weakSpotsSummary(),
+      context: (AI.buildContext ? AI.buildContext({ note: "Daily challenge." }) : undefined)
+    }, function (err, res) {
+      if (err || !res || !res.data) { challengeFallback(err); return; }
+      verifyAndOpenChallenge(res.data, challengeFallback, function () {
+        try { localStorage.setItem("skillzify_daily_challenge", JSON.stringify({ date: todayStr(), challenge: res.data })); } catch (e) {}
+      });
+    });
+  }
+  function openDailyChallenge() {
+    var stored = null;
+    try { stored = JSON.parse(localStorage.getItem("skillzify_daily_challenge") || "null"); } catch (e) { stored = null; }
+    if (stored && stored.date === todayStr() && stored.challenge) {
+      var topic = (stored.challenge.topic && typeof stored.challenge.topic === "string") ? stored.challenge.topic : "practice";
+      if (normalizeDrill(stored.challenge, topic, "drill-daily-" + stored.date)) {
+        // Stored challenge is well-shaped: verify it; if verification
+        // fails, fetch a fresh one instead of dead-ending.
+        verifyAndOpenChallenge(stored.challenge, fetchFreshChallenge);
+        return;
+      }
+    }
+    fetchFreshChallenge();
+  }
+
+  /* ---------------- AI Tutor ---------------- */
+  // Calls go through the shared client (assets/js/ai.js):
+  // backend -> personal key. The Socratic rules live in the
+  // server's tutor mode; the error field carries the exercise.
+  function askTutor(ex, code, failInfo, box) {
+    // Disable while the request is in flight: re-clicks would queue
+    // duplicate cap-consuming requests. Re-enabled on every path below.
+    var askBtn = $("ex-ask");
+    if (askBtn) askBtn.disabled = true;
+    box.innerHTML = '<p class="hint">🤖 Waking up the AI Tutor…</p>';
+    var AI = window.SkillzifyAI;
+    if (!AI) {
+      if (askBtn) askBtn.disabled = false;
+      box.innerHTML = '<h4>🤖 AI Tutor</h4><p class="hint">The AI module didn\'t load. Try a hint above — Hint 3 almost gives it away.</p>';
+      return;
+    }
+    AI.ask({
       mode: "tutor",
       code: "EXERCISE: " + ex.title + "\nPROMPT: " + ex.prompt + "\n\nSTUDENT CODE:\n" + (code || "(empty)"),
       error: "TUTOR MODE — the student's code is not passing. " +
         (failInfo || "No test output yet.") +
         " Act as a Socratic tutor: explain what is likely wrong and give ONE guiding hint toward the fix. " +
-        "Do NOT write the full corrected code. Keep it short and encouraging."
-    };
-    var opts = {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    };
-    if (ctrl) opts.signal = ctrl.signal;
-    fetch("api/explain", opts).then(function (r) { clearTimers(); if (!r.ok) throw 0; return r.json(); })
-    .then(function (data) {
-      if (!data.explanation) throw 0;
-      box.innerHTML = '<h4>🤖 AI Tutor</h4><p>' + esc(data.explanation).replace(/\n/g, "<br>") + "</p>";
-    }).catch(function () {
-      clearTimers();
-      box.innerHTML = '<h4>🤖 AI Tutor</h4><p class="hint">The AI tutor is unreachable right now (backend offline). ' +
-        'Try a hint above — Hint 3 almost gives it away. Your code and failing tests are still visible to you.</p>';
+        "Do NOT write the full corrected code. Keep it short and encouraging.",
+      extra: { exercise: ex.title + " (" + ex.id + ")" }
+    }, function (err, res) {
+      if (askBtn) askBtn.disabled = false;
+      if (err) {
+        // Sign-in link only when signed out (ai.js capLink returns
+        // "" for signed-in users at the 50/day cap).
+        var tutorCap = (err && err.code === "DAILY_CAP" && AI.capLink)
+          ? AI.capLink() : "";
+        box.innerHTML = '<h4>🤖 AI Tutor</h4><p class="hint">' + esc(err.message || "The AI tutor is unreachable right now.") + tutorCap +
+          ' Try a hint above — Hint 3 almost gives it away. Your code and failing tests are still visible to you.</p>';
+        return;
+      }
+      box.innerHTML = '<h4>🤖 AI Tutor' + (res.via === "key" ? " (your key)" : res.via === "offline" ? " (offline)" : "") + (res.cached ? " (cached)" : "") + '</h4>' +
+        (res.offline ? "<p class='hint'>Showing the offline explainer instead — this isn't the AI's answer.</p>" : "") +
+        '<p>' + esc(res.text || "").replace(/\n/g, "<br>") + "</p>";
     });
   }
 
@@ -272,10 +670,21 @@
       var a = atts[ex.id];
       if (a && a.solved) totalXP += a.xpEarned || Math.round(ex.xp * (a.revealed ? 0.5 : 1));
     });
+    // AI drills solved: N · +X XP (from the drills attempts store and
+    // the saved drill definitions — never merged into the 48-exercise counts).
+    var drills = getDrills(), defs = getDrillDefs(), drillSolved = 0, drillXP = 0;
+    Object.keys(drills).forEach(function (id) {
+      if (drills[id] && drills[id].solved) {
+        drillSolved++;
+        var def = defs[id];
+        if (def && typeof def === "object" && typeof def.xp === "number") drillXP += def.xp;
+      }
+    });
     host.innerHTML =
       '<div class="stat"><span class="stat-n">' + solvedCount() + '/' + EX.length + '</span><span class="stat-l">Solved</span></div>' +
       '<div class="stat"><span class="stat-n">' + totalXP + '</span><span class="stat-l">Exercise XP</span></div>' +
-      '<div class="stat"><span class="stat-n">' + revisionQueue().length + '</span><span class="stat-l">To review</span></div>';
+      '<div class="stat"><span class="stat-n">' + revisionQueue().length + '</span><span class="stat-l">To review</span></div>' +
+      '<div class="stat"><span class="stat-n">' + drillSolved + '</span><span class="stat-l">AI drills solved · +' + drillXP + ' XP</span></div>';
   }
 
   /* ---------------- Topic colors, pills, progress ---------------- */
@@ -334,7 +743,7 @@
     });
   }
 
-  function renderAll() { renderDaily(); renderRevision(); renderStats(); renderTopicProgress(); renderPills(); renderList(); }
+  function renderAll() { renderDaily(); renderRevision(); renderStats(); renderTopicProgress(); renderPills(); renderDrillCard(); renderList(); }
 
   /* ============================================================
      DETAIL VIEW
@@ -362,6 +771,33 @@
   }
 
   function editorCode() { var t = $("ex-editor"); return t ? t.value : ""; }
+
+  // Signed-out users get 10 AI answers/day (50 when signed in) —
+  // one plain-text line under the tutor button, only when signed out.
+  function signedOutCapHint() {
+    try {
+      if (window.SkillzifyAuth && typeof window.SkillzifyAuth.currentUser === "function" && !window.SkillzifyAuth.currentUser()) {
+        return '<p class="hint" id="tutor-cap-hint">Signed out? AI answers are 10/day — sign in for 50/day.</p>';
+      }
+    } catch (e) {}
+    return "";
+  }
+
+  // M3: refresh the tutor cap hint when auth state changes (e.g.
+  // sign-in/out in another tab) — re-renders the hint line only,
+  // never the tutor answer or the exercise. The hint element is
+  // created/removed as needed; the tutor box is untouched.
+  function refreshTutorCapHint() {
+    var host = $("tutor-cap-hint");
+    var hint = signedOutCapHint();
+    if (host) {
+      if (hint) host.outerHTML = hint;
+      else if (host.parentNode) host.parentNode.removeChild(host);
+    } else if (hint) {
+      var askBtn = $("ex-ask");
+      if (askBtn && askBtn.parentNode) askBtn.insertAdjacentHTML("afterend", hint);
+    }
+  }
 
   function renderDetail() {
     var ex = cur, a = attFor(ex.id);
@@ -404,7 +840,7 @@
 
     html += '<div class="card"><h3>🤖 AI Tutor</h3>' +
       '<p class="hint">Stuck? The tutor explains and nudges — it won\'t just hand you the answer.</p>' +
-      '<button class="btn btn-sm" id="ex-ask">Ask AI Tutor</button><div id="tutor-box" style="margin-top:12px"></div></div>';
+      '<button class="btn btn-sm" id="ex-ask">Ask AI Tutor</button>' + signedOutCapHint() + '<div id="tutor-box" style="margin-top:12px"></div></div>';
 
     html += '<div class="card"><div class="btn-row">' +
       '<button class="btn btn-sm btn-ghost" id="ex-reveal">👁 Reveal solution</button>' +
@@ -617,6 +1053,8 @@
   function route() {
     var m = (location.hash || "").match(/^#ex=([\w-]+)/);
     if (m) { openExercise(m[1]); return; }
+    // AI daily challenge intake: practice.html#challenge (see openDailyChallenge)
+    if (/^#challenge($|[?&])/.test(location.hash || "")) { openDailyChallenge(); return; }
     // Deep link from dashboard weak spots: practice.html#topic=loops
     var tm = (location.hash || "").match(/^#topic=([\w-]+)/);
     if (tm && TOPICS.indexOf(tm[1]) >= 0) filters.topic = tm[1];
@@ -635,10 +1073,22 @@
   document.addEventListener("DOMContentLoaded", function () {
     if (!$("practice-list")) return; // not on practice page
     // Warm the AI backend now, so the tutor is fast when asked.
-    try { fetch("api/health", { method: "GET", cache: "no-store" }).catch(function () {}); } catch (e) {}
+    // Route through the shared AI client when it loaded; direct
+    // fetch is only the fallback if ai.js failed to load.
+    try {
+      if (window.SkillzifyAI && typeof window.SkillzifyAI.warmup === "function") window.SkillzifyAI.warmup();
+      else fetch("api/health", { method: "GET", cache: "no-store" }).catch(function () {});
+    } catch (e) {}
     initFilters();
     window.addEventListener("hashchange", route);
     route();
+    // M3: keep the tutor cap hint in step with sign-in/out (e.g. in
+    // another tab). refreshTutorCapHint re-renders the hint line only.
+    try {
+      if (window.SkillzifyAuth && typeof window.SkillzifyAuth.onAuthChange === "function") {
+        window.SkillzifyAuth.onAuthChange(function () { refreshTutorCapHint(); });
+      }
+    } catch (e) {}
     if (A && A.checkAchievements) { try { A.checkAchievements(); } catch (e) {} }
   });
 

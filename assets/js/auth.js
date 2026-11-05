@@ -21,8 +21,24 @@
 
   var auth = null, fbUser = null, ready = false;
   var readyCbs = [];
+  var authChangeCbs = [];
 
   function onReady(cb) { if (ready) { try { cb(); } catch (e) {} } else readyCbs.push(cb); }
+
+  // M3: subscribe to auth-state changes. The callback receives the
+  // current user (or null) — immediately if auth is already ready,
+  // otherwise on first ready — and again on EVERY later sign-in or
+  // sign-out. Safe when Firebase failed to load: ready is true and
+  // the user is null, so subscribers get cb(null) at once.
+  function onAuthChange(cb) {
+    if (typeof cb !== "function") return;
+    authChangeCbs.push(cb);
+    if (ready) { try { cb(currentUser()); } catch (e) {} }
+  }
+  function notifyAuthChange() {
+    var u = currentUser();
+    authChangeCbs.slice().forEach(function (cb) { try { cb(u); } catch (e) {} });
+  }
 
   try {
     if (window.firebase) {
@@ -36,6 +52,7 @@
           cbs.forEach(function (cb) { try { cb(); } catch (e) {} });
         }
         refreshAccountUI();
+        notifyAuthChange();
         // Cross-device sync: start Firestore sync once auth state is known.
         // Guarded — sync.js is a no-op if the SDK failed to load.
         try { if (window.SkillzifySync && window.SkillzifySync.init) window.SkillzifySync.init(); } catch (e) {}
@@ -212,6 +229,7 @@
     logoutUser: logoutUser,
     currentUser: currentUser,
     onReady: onReady,
+    onAuthChange: onAuthChange,
     refreshAccountUI: refreshAccountUI,
     firebaseUser: function () { return fbUser; }
   };

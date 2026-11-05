@@ -720,84 +720,74 @@
   }
 
   /* ================= AI ================= */
-  var HEURISTICS = [
-    { re: /SyntaxError/, title: "🔧 SyntaxError — Python can't parse your code",
-      tips: ["Check for missing colons (:) at the end of if/for/while/def lines.", "Match every opening bracket ( [ { with its closing partner.", "The real mistake is often on the line just above the reported one."] },
-    { re: /IndentationError|unexpected indent/, title: "📐 IndentationError — spacing problem",
-      tips: ["Use 4 spaces per indent level — never mix tabs and spaces.", "Every block after if/for/def/while must be indented one level deeper."] },
-    { re: /NameError: name '(\w+)'/, title: "🏷️ NameError — unknown name",
-      tips: ["You used a variable or function that was never defined.", "Check for typos — Python is case-sensitive.", "Make sure it's assigned BEFORE the line that uses it."] },
-    { re: /TypeError/, title: "🧩 TypeError — wrong type of value",
-      tips: ["You're mixing incompatible types, e.g. \"5\" + 3.", "Convert explicitly: int(\"5\") + 3."] },
-    { re: /ZeroDivisionError/, title: "➗ ZeroDivisionError — divided by zero",
-      tips: ["Guard it: if b != 0: ...", "Or: try: x = a/b except ZeroDivisionError: ..."] },
-    { re: /IndexError/, title: "📋 IndexError — list index out of range",
-      tips: ["Valid indexes are 0 to len(list)-1.", "An empty list has no index 0!"] },
-    { re: /KeyError: (.+)/, title: "🔑 KeyError — missing dictionary key",
-      tips: ["The key doesn't exist in the dict.", "Use dict.get(key, default) to avoid crashes."] },
-    { re: /ValueError/, title: "⚠️ ValueError — right type, wrong value",
-      tips: ["Common cause: int(input()) when the user typed text.", "Wrap in try/except ValueError."] },
-    { re: /AttributeError/, title: "🧲 AttributeError — no such method",
-      tips: ["The object doesn't have that method — check the type.", "Typos in method names are the #1 cause."] },
-    { re: /ImportError|ModuleNotFoundError/, title: "📦 ImportError — module not found",
-      tips: ["Only the Python standard library works in this browser runtime.", "Check the module name spelling."] },
-    { re: /EOFError/, title: "⌨️ EOFError — input() ran out of data",
-      tips: ["Your program called input() more times than you gave it lines.", "Add more lines in the stdin box under the terminal."] },
-    { re: /RecursionError/, title: "🔁 RecursionError — infinite recursion",
-      tips: ["Your function calls itself forever.", "Every recursive function needs a base case."] }
-  ];
-  function heuristicExplain(err) {
-    for (var i = 0; i < HEURISTICS.length; i++) {
-      var h = HEURISTICS[i], m = err.match(h.re);
-      if (m) {
-        var html = "<h4>" + h.title + "</h4><ul>";
-        h.tips.forEach(function (t) { html += "<li>" + t + "</li>"; });
-        return html + "</ul>" + (m[1] ? '<p style="color:var(--ide-muted)">Offending name: <b>' + String(m[1]).replace(/[<>&]/g, function (c) { return { "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]; }) + "</b></p>" : "");
-      }
-    }
-    return "<h4>🤔 Unrecognized error</h4><p>The offline explainer has no rule for this one — read the last traceback line.</p>";
-  }
+  /* AI calls go through the shared client (assets/js/ai.js):
+     backend -> personal key -> offline heuristic. The heuristic
+     table now lives in ai.js (SkillzifyAI.explainErrorHTML). */
   function renderAi(html) { document.getElementById("ai-output").innerHTML = html; switchView("ai"); }
+  // The buttons that trigger aiCall — disabled while an AI answer is in
+  // flight so impatient re-clicks can't queue duplicate cap-consuming
+  // requests. (Five buttons, four actions: Explain has two entry points.)
+  var AI_BTN_IDS = ["ai-generate-btn", "explain-code-btn", "explain-error-btn", "fix-code-btn", "trace-code-btn"];
+  function setAiButtons(disabled) {
+    AI_BTN_IDS.forEach(function (id) {
+      var b = document.getElementById(id);
+      if (b) b.disabled = disabled;
+    });
+  }
   function aiCall(opts, label, onCode) {
+    var AI = window.SkillzifyAI;
+    if (!AI) {
+      setAiButtons(false);
+      renderAi("<h4>⚠️ AI unavailable</h4><p>The AI module didn't load. Your code is still runnable.</p>");
+      return;
+    }
+    setAiButtons(true);
     renderAi('<p style="color:var(--ide-muted)">🤖 Working…</p>');
-    var ctrl = null, timer = null;
-    try { ctrl = new AbortController(); timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 60000); } catch (e) {}
-    var fo = { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(opts) };
-    if (ctrl) fo.signal = ctrl.signal;
-    fetch("api/explain", fo).then(function (r) {
-      if (timer) clearTimeout(timer);
-      if (!r.ok) throw 0;
-      return r.json();
-    }).then(function (d) {
-      var text = d.explanation || "";
-      if (!text) throw 0;
+    // The backend can take ~2 min on a cold start (60s timeout + retry):
+    // say so after 12s instead of leaving "Working…" frozen.
+    var stageTimer = setTimeout(function () {
+      // Update the waiting text without yanking the user into the AI
+      // panel: refresh the stored text always, but only switch views
+      // if the AI panel is already the one on screen.
+      document.getElementById("ai-output").innerHTML = '<p style="color:var(--ide-muted)">🤖 Still working — the AI backend is slow to wake on the free tier. Hang on…</p>';
+      var aiView = document.getElementById("view-ai");
+      if (aiView && aiView.classList.contains("active")) switchView("ai");
+    }, 12000);
+    AI.ask({
+      mode: opts.mode || "",
+      code: opts.code || "",
+      error: opts.error || "",
+      extra: { note: "From Code Studio." }
+    }, function (err, res) {
+      clearTimeout(stageTimer);
+      setAiButtons(false);
+      if (err) {
+        // DAILY_CAP: sign-in link only when signed out (ai.js capLink
+        // returns "" for signed-in users at the 50/day cap).
+        var capLink = (err.code === "DAILY_CAP" && AI.capLink) ? AI.capLink() : "";
+        if (opts.error) {
+          renderAi("<h4>⚠️ AI unavailable</h4><p>" + esc(err.message || "The backend didn't answer.") + capLink + "</p>" +
+            "<p class='hint'>Showing the offline explainer instead — this isn't the AI's answer.</p>" +
+            AI.explainErrorHTML(opts.error));
+        } else {
+          renderAi("<h4>⚠️ AI unavailable</h4><p>" + esc(err.message || "The backend didn't answer.") + capLink + "</p>");
+        }
+        return;
+      }
+      var text = (res && res.text) || "";
+      if (!text) {
+        renderAi(opts.error ? AI.explainErrorHTML(opts.error)
+          : "<h4>⚠️ AI unavailable</h4><p>Empty answer.</p>");
+        return;
+      }
       var m = text.match(/```(?:python)?\n?([\s\S]*?)```/i);
       var code = m ? m[1].trim() : ((opts.mode === "generate" || opts.mode === "fix") ? text.trim() : null);
       if (code && onCode) onCode(code);
-      renderAi("<h4>🤖 " + label + "</h4><p>" + esc(text).replace(/\n/g, "<br>") + "</p>");
-    }).catch(function () {
-      if (timer) clearTimeout(timer);
-      var key = "";
-      try { key = window.Skillzify.storeGet(AI_KEY, ""); } catch (e) {}
-      if (!key || !(opts.mode === "generate" || opts.mode === "fix")) {
-        renderAi(opts.error ? heuristicExplain(opts.error) : "<h4>⚠️ AI unavailable</h4><p>The backend didn't answer and no API key is set.</p>");
-        return;
-      }
-      renderAi('<p style="color:var(--ide-muted)">🤖 Backend unreachable — trying your key…</p>');
-      fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
-        body: JSON.stringify({
-          model: "gemini-3.8-flash",
-          messages: [{ role: "user", content: (opts.mode === "generate" ? "Write Python code for: " : "Fix this Python code. Error: ") + (opts.error || "") + "\n\n" + opts.code }],
-          max_tokens: 800
-        })
-      }).then(function (r) { return r.json(); }).then(function (d) {
-        var t = (d.choices && d.choices[0] && d.choices[0].message) ? d.choices[0].message.content : "";
-        var m2 = t.match(/```(?:python)?\n?([\s\S]*?)```/i);
-        if (m2 && onCode) onCode(m2[1].trim());
-        renderAi("<h4>🤖 " + label + " (your key)</h4><p>" + esc(t).replace(/\n/g, "<br>") + "</p>");
-      }).catch(function () { renderAi(heuristicExplain(opts.error || "")); });
+      var via = res.via === "key" ? " (your key)" : res.via === "offline" ? " (offline)" : "";
+      // Item 8a (round 4): repeat question served from cache — small
+      // "(cached)" note beside the heading, like the "via" notes.
+      if (res.cached) via += " (cached)";
+      renderAi("<h4>🤖 " + label + via + "</h4><p>" + esc(text).replace(/\n/g, "<br>") + "</p>");
     });
   }
 
@@ -983,6 +973,11 @@
         toast("Fixed code loaded 🔧 — press Run to verify", "success");
       });
     });
+    document.getElementById("trace-code-btn").addEventListener("click", function () {
+      if (!ws.active || !(ws.files[ws.active] || "").trim()) { renderAi('<p style="color:var(--ide-muted)">Write or load some code first — then I\'ll walk through it.</p>'); switchView("ai"); return; }
+      persistActiveFile();
+      aiCall({ mode: "trace", code: ws.files[ws.active], error: lastError || "" }, "trace", null);
+    });
     document.getElementById("ai-save").addEventListener("click", function () {
       try {
         var v = document.getElementById("ai-key").value.trim();
@@ -1027,8 +1022,11 @@
       else if (e.key === "Escape") { closeFind(); }
     });
 
-    /* warm the AI backend + load runtime */
-    try { fetch("api/health", { method: "GET", cache: "no-store" }).catch(function () {}); } catch (e) {}
+    /* warm the AI backend + load runtime (via the shared client) */
+    try {
+      if (window.SkillzifyAI && window.SkillzifyAI.warmup) window.SkillzifyAI.warmup();
+      else fetch("api/health", { method: "GET", cache: "no-store" }).catch(function () {});
+    } catch (e) {}
     loadPyodideRuntime();
   });
 })();

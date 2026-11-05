@@ -140,6 +140,145 @@
   }
   function pathColor(p) { return p.color || "#6c7bff"; }
 
+  /* ---------- custom paths: "Build my path" (F5) ---------- */
+  var CUSTOM_KEY = "skillzify_custom_paths";
+  function allLessons() { return (window.SkillzifyLearn && window.SkillzifyLearn.LESSONS) || []; }
+  function projectNames() {
+    return (window.SkillzifyProjects || []).map(function (p) { return p.title; });
+  }
+  // Corrupt stored JSON must never break the page.
+  function loadCustomPaths() {
+    try {
+      var v = JSON.parse(localStorage.getItem(CUSTOM_KEY) || "[]");
+      return Array.isArray(v) ? v : [];
+    } catch (e) { return []; }
+  }
+  // Every save/delete stamps the definitions' updatedAt (used by the
+  // sync merge's last-write-wins) and schedules a debounced push, so
+  // definitions — and a delete-all — propagate to other devices.
+  // The localStorage format itself is unchanged (array of
+  // {id, title, steps, ...}).
+  var CUSTOM_TS_KEY = "skillzify_custom_paths_ts";
+  function saveCustomPaths(list) {
+    try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(list || [])); } catch (e) {}
+    try { localStorage.setItem(CUSTOM_TS_KEY, String(Date.now())); } catch (e) {}
+    try { if (window.SkillzifySync) window.SkillzifySync.markDirty("customPaths"); } catch (e) {}
+  }
+
+  function buildMyPathCard() {
+    return '<div class="card" style="margin:16px 0">' +
+      '<h2 class="section-title" style="font-size:1.2rem">✨ Build my path</h2>' +
+      '<p class="hint">Tell the AI what you want to build — it picks the lessons and the closest project for you.</p>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<input type="text" id="bmp-goal" placeholder="What do you want to build?" style="flex:1;min-width:220px" maxlength="200">' +
+      '<button class="btn" id="bmp-btn">Build my path →</button></div>' +
+      '<div id="bmp-result" style="margin-top:12px"></div></div>';
+  }
+
+  function customPathStepsHtml(steps) {
+    return (steps || []).map(function (s) {
+      var l = lessonById(s.lessonId);
+      return '<li><a href="lesson.html?id=' + encodeURIComponent(s.lessonId) + '">' + esc(l ? l.title : s.lessonId) + "</a>" +
+        (s.why ? ' <span class="hint">— ' + esc(s.why) + "</span>" : "") + "</li>";
+    }).join("");
+  }
+
+  function customPathsHtml() {
+    var saved = loadCustomPaths();
+    if (!saved.length) return "";
+    var items = saved.map(function (cp, i) {
+      var enrolled = cp && cp.id ? isEnrolled({ id: cp.id }) : false;
+      var enrollUi = !cp || !cp.id ? "" : enrolled
+        ? '<span class="badge badge-enrolled">✓ Enrolled</span> <button class="linklike" data-leave="' + esc(cp.id) + '">Leave</button>'
+        : '<button class="btn btn-sm" data-enroll="' + esc(cp.id) + '">🔓 Enroll</button>';
+      return '<div class="card" style="margin:12px 0"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">' +
+        "<h3 style='margin:0'>" + esc(cp.title || "Custom path") + "</h3>" +
+        '<span style="white-space:nowrap">' + enrollUi +
+        ' <button class="btn btn-sm btn-ghost" data-custom-del="' + i + '">Delete</button></span></div>' +
+        '<ol class="proj-steps">' + customPathStepsHtml(cp.steps) + "</ol>" +
+        (cp.project ? '<p class="hint">🎯 Suggested project: <strong>' + esc(cp.project) + "</strong></p>" : "") + "</div>";
+    }).join("");
+    return '<div id="custom-paths" style="margin:16px 0"><h2 class="section-title" style="font-size:1.2rem">💾 Your custom paths</h2>' +
+      '<p class="hint">Enrolling in a custom path unlocks its lessons — even ones still locked in the lesson sequence.</p>' + items + "</div>";
+  }
+
+  function generatedPathHtml(d, validSteps) {
+    var proj = (typeof d.project === "string" && d.project && d.project.toLowerCase() !== "none") ? d.project : "";
+    return '<div class="card" style="margin-top:4px"><h3 style="margin:0 0 8px">🗺️ ' + esc(d.title || "Your custom path") + "</h3>" +
+      '<ol class="proj-steps">' + customPathStepsHtml(validSteps) + "</ol>" +
+      (proj ? '<p class="hint">🎯 Suggested project: <strong>' + esc(proj) + "</strong></p>" : "") +
+      '<button class="btn btn-sm" id="bmp-save">💾 Save this path</button></div>';
+  }
+
+  function bindBuildMyPath() {
+    var btn = $("bmp-btn"), input = $("bmp-goal"), out = $("bmp-result");
+    if (!btn || !input || !out) return;
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); btn.click(); }
+    });
+    btn.addEventListener("click", function () {
+      var goal = (input.value || "").trim();
+      if (!goal) { out.innerHTML = '<p class="hint">Tell me what you want to build first.</p>'; return; }
+      if (!window.SkillzifyAI || typeof window.SkillzifyAI.ask !== "function") {
+        out.innerHTML = '<p class="hint">The AI is unavailable on this page right now.</p>'; return;
+      }
+      var L = allLessons();
+      var code = "GOAL: " + goal + "\n\nLESSONS:\n" +
+        L.map(function (l) { return l.id + " — " + l.title; }).join("\n") +
+        "\n\nPROJECTS:\n" + projectNames().join("\n");
+      btn.disabled = true;
+      btn.textContent = "Building…";
+      out.innerHTML = '<p class="hint">🤖 Building your path… this can take a few seconds while the AI wakes up.</p>';
+      window.SkillzifyAI.ask({
+        mode: "path", json: true, code: code,
+        context: window.SkillzifyAI.buildContext({ note: "Building a custom path for: " + goal })
+      }, function (err, res) {
+        btn.disabled = false;
+        btn.textContent = "Build my path →";
+        if (err) {
+          // Sign-in link only when signed out (ai.js capLink returns
+          // "" for signed-in users at the 50/day cap).
+          var bmpCap = (err && err.code === "DAILY_CAP" && window.SkillzifyAI && window.SkillzifyAI.capLink)
+            ? window.SkillzifyAI.capLink() : "";
+          out.innerHTML = '<p class="hint">⚠️ ' + esc(err.message || "Couldn't build a path.") + bmpCap + "</p>"; return;
+        }
+        var d = res && res.data;
+        if (!d || !Array.isArray(d.steps)) {
+          out.innerHTML = '<p class="hint">The AI couldn\'t build a path from your goal — try rephrasing it.</p>'; return;
+        }
+        // Title must be a string; fall back to "Custom path" (generatedPathHtml
+        // has the same fallback, this just makes it explicit and safe).
+        if (typeof d.title !== "string" || !d.title) d.title = "Custom path";
+        // Validate every step against real lesson IDs; drop the rest.
+        var valid = [];
+        d.steps.forEach(function (s) {
+          if (!s || typeof s.lessonId !== "string") return;
+          if (lessonById(s.lessonId)) valid.push({ lessonId: s.lessonId, why: typeof s.why === "string" ? s.why : "" });
+        });
+        valid = valid.slice(0, 15); // server cap: at most 15 steps
+        if (!valid.length) {
+          // Steps came back but every one had an invalid lesson ID —
+          // that's a matching failure, not an unusable goal.
+          out.innerHTML = '<p class="hint">' + (d.steps.length
+            ? "The AI returned steps I couldn't match to real lessons — try again."
+            : "The AI couldn't build a path from your goal — try rephrasing it.") + "</p>"; return;
+        }
+        var proj = (typeof d.project === "string" && d.project && d.project.toLowerCase() !== "none") ? d.project : "";
+        out.innerHTML = generatedPathHtml(d, valid);
+        var saveBtn = $("bmp-save");
+        if (saveBtn) saveBtn.addEventListener("click", function () {
+          var saved = loadCustomPaths();
+          saved.push({ id: "custom-" + Date.now() + "-" + Math.floor(Math.random() * 1000000), title: d.title || "Custom path", steps: valid, project: proj, at: Date.now() });
+          saveCustomPaths(saved);
+          renderList();
+          if (S && typeof S.toast === "function") S.toast("Custom path saved ✓", "success");
+          var sec = $("custom-paths");
+          if (sec && sec.scrollIntoView) sec.scrollIntoView();
+        });
+      });
+    });
+  }
+
   /* ---------------- LIST VIEW ---------------- */
   function levelPills(paths) {
     var levels = ["Beginner", "Intermediate", "Advanced"];
@@ -203,13 +342,22 @@
       return filter === "all" || (p.level || "").toLowerCase() === filter;
     });
     var all = window.SkillzifyPaths || [];
-    host.innerHTML = continueHero(all) + levelPills(all) +
+    host.innerHTML = continueHero(all) + levelPills(all) + buildMyPathCard() + customPathsHtml() +
       '<div class="grid-3" id="paths-grid">' + paths.map(pathCard).join("") + "</div>";
     var pills = $("path-pills");
     if (pills) pills.querySelectorAll(".pill").forEach(function (b) {
       b.addEventListener("click", function () { filter = b.getAttribute("data-level"); renderList(); });
     });
     bindEnrollBtns(host, renderList);
+    bindBuildMyPath();
+    host.querySelectorAll("[data-custom-del]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var saved = loadCustomPaths();
+        saved.splice(parseInt(b.getAttribute("data-custom-del"), 10), 1);
+        saveCustomPaths(saved);
+        renderList();
+      });
+    });
   }
 
   /* ---------------- DETAIL VIEW ---------------- */
@@ -278,16 +426,20 @@
   document.addEventListener("DOMContentLoaded", function () {
     route();
     lastEnrollJson = enrollJson();
+    lastCustomJson = customJson();
     window.addEventListener("hashchange", route);
   });
-  // Live refresh when another device changes enrollments (keeps scroll pos)
+  // Live refresh when another device changes enrollments or custom-path
+  // definitions (keeps scroll pos)
   var lastEnrollJson = "";
   function enrollJson() { try { return JSON.stringify(readEnrollMap()); } catch (e) { return ""; } }
+  var lastCustomJson = "";
+  function customJson() { try { return JSON.stringify(loadCustomPaths()); } catch (e) { return ""; } }
   window.addEventListener("skillzify-sync", function () {
     try {
-      var cur = enrollJson();
-      if (cur === lastEnrollJson) return;
-      lastEnrollJson = cur;
+      var cur = enrollJson(), curCustom = customJson();
+      if (cur === lastEnrollJson && curCustom === lastCustomJson) return;
+      lastEnrollJson = cur; lastCustomJson = curCustom;
       var y = window.scrollY || 0;
       route();
       window.scrollTo(0, y);

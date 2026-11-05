@@ -838,6 +838,20 @@
         if (!(m[p.id] && m[p.id].enrolled)) return;
         (p.steps || []).forEach(function (s) { if (s.t === "lesson" && s.id) map[s.id] = p.id; });
       });
+      // Same for enrolled custom paths (localStorage-only definitions;
+      // a synced enrollment with no local definition unlocks nothing).
+      try {
+        var saved = JSON.parse(localStorage.getItem("skillzify_custom_paths") || "[]");
+        if (Array.isArray(saved)) saved.forEach(function (cp) {
+          if (!cp || typeof cp !== "object" || !cp.id || !Array.isArray(cp.steps)) return;
+          if (!(m[cp.id] && m[cp.id].enrolled)) return;
+          cp.steps.forEach(function (s) {
+            if (!s || typeof s !== "object") return;
+            var lid = s.lessonId || (s.t === "lesson" && s.id) || null;
+            if (lid) map[lid] = cp.id;
+          });
+        });
+      } catch (e2) {}
       return map;
     } catch (e) { return {}; }
   }
