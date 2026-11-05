@@ -1093,6 +1093,13 @@
     document.getElementById("run-btn").addEventListener("click", runCode);
     document.getElementById("st-run").addEventListener("click", runCode);
     document.getElementById("stop-btn").addEventListener("click", stopRun);
+    var stuckBtn = document.getElementById("stuck-btn");
+    if (stuckBtn) stuckBtn.addEventListener("click", function () {
+      var code = "";
+      try { code = (ws.files && ws.active && ws.files[ws.active]) || ""; } catch (e) {}
+      try { localStorage.setItem("skillzify_community_draft", JSON.stringify({ code: code, error: lastError || "" })); } catch (e) {}
+      location.href = "community.html?ask=1";
+    });
     /* files */
     document.getElementById("new-file-btn").addEventListener("click", newFile);
     document.getElementById("welcome-new").addEventListener("click", newFile);

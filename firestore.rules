@@ -1,10 +1,73 @@
 rules_version = '2';
 // Skillzify v2 — one document per user at users/{uid} holding
 // { profile, progress, exercises }. Each user can only read/write their own.
+//
+// Community collections (Phase 1): questions, answers, showcase,
+// publicProfiles, xpGrants. Reads are public; writes need a signed-in user.
+// Deploy from the Firebase console: Firestore Database > Rules > paste > Publish.
+// Publishing REPLACES the console rules — this file is the complete set.
+// Server-side collections (aiDailyCaps) are written by the Admin SDK, which
+// bypasses rules, so they need no rule here.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Questions: anyone can read; signed-in users create their own.
+    match /questions/{id} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 5
+        && request.resource.data.title.size() <= 140;
+      allow update: if request.auth != null && (
+        // the asker marks a best answer (status / bestAnswerId only)
+        (resource.data.authorUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'bestAnswerId', 'updatedAt']))
+        // anyone signed in may bump the answer counter when answering
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answerCount', 'updatedAt']));
+      allow delete: if request.auth != null && resource.data.authorUid == request.auth.uid;
+    }
+
+    // Answers: anyone can read; signed-in users create their own; only isBest may change.
+    match /answers/{id} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.questionId is string;
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isBest']);
+      allow delete: if request.auth != null && resource.data.authorUid == request.auth.uid;
+    }
+
+    // Showcase: anyone can read; signed-in users create their own; only stars may change.
+    match /showcase/{id} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.authorUid == request.auth.uid;
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stars', 'starCount']);
+      allow delete: if request.auth != null && resource.data.authorUid == request.auth.uid;
+    }
+
+    // Public profiles: anyone can read; only the owner writes their own.
+    match /publicProfiles/{uid} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // XP grants: created by anyone signed in (max 10 XP, never to yourself);
+    // only the recipient reads them and marks them claimed.
+    match /xpGrants/{id} {
+      allow read: if request.auth != null && resource.data.toUid == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0 && request.resource.data.amount <= 10
+        && request.resource.data.toUid != request.auth.uid;
+      allow update: if request.auth != null && resource.data.toUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['claimed']);
     }
   }
 }

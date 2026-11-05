@@ -839,14 +839,7 @@ button, a, .quiz-opt, .quiz-opt *, .node, .track-tab, .auth-tabs button {
   .footer-brand img { height: 38px; }
 }
 
-/* ============ GitHub-style upgrades: heatmap, profile, palette ============ */
-.heatmap { display: flex; gap: 3px; padding: 4px 2px; min-width: 720px; }
-.hm-week { display: flex; flex-direction: column; gap: 3px; }
-.hm-day { width: 11px; height: 11px; border-radius: 2.5px; background: var(--bg-soft); display: inline-block; }
-.hm-future { opacity: 0; }
-.hm-legend { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin-top: 8px; font-size: 0.75rem; color: var(--muted); }
-.hm-legend .hm-day { width: 10px; height: 10px; }
-
+/* ============ GitHub-style upgrades: profile, palette ============ */
 .profile-head { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
 .profile-head #profile-avatar svg { box-shadow: 0 4px 18px rgba(108,123,255,.35); }
 .dash-card.stat { display: flex; gap: 12px; align-items: center; }

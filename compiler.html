@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify Code Studio — a VS Code-like Python IDE in your browser. Multi-file workspace, terminal, problems panel, AI assistant.">
   <title>Code Studio — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=12">
+  <link rel="stylesheet" href="assets/css/style.css?v=13">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
@@ -338,6 +338,7 @@
         <div class="tab-actions">
           <button id="find-btn" title="Find (Ctrl+F)">🔍</button>
           <button class="run" id="run-btn" disabled title="Run (Ctrl+Enter)">▶ Run</button>
+          <button id="stuck-btn" title="Stuck? Ask the community">🆘 Stuck?</button>
           <button id="stop-btn" disabled title="Stop">⏹</button>
         </div>
       </div>
@@ -408,10 +409,10 @@
 
 <div id="site-footer"></div>
 
-<script src="assets/js/nav.js?v=2"></script>
+<script src="assets/js/nav.js?v=4"></script>
 <script src="assets/js/footer.js?v=1"></script>
 <script src="assets/js/app.js?v=4"></script>
-<script src="assets/js/activity.js?v=2"></script>
+<script src="assets/js/activity.js?v=3"></script>
 <script src="assets/js/palette.js?v=1"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
@@ -425,6 +426,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
-<script src="assets/js/compiler.js?v=11"></script>
+<script src="assets/js/compiler.js?v=12"></script>
 </body>
 </html>

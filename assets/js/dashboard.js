@@ -75,10 +75,6 @@
     var A = window.SkillzifyActivity; if (!A) return;
     A.checkAchievements();
 
-    // Mini heatmap (this week's activity — full year lives on the profile)
-    var hm = document.getElementById("dash-heatmap");
-    if (hm) A.renderHeatmap(hm);
-
     // Achievements preview (compact — full grid lives on the profile)
     var ach = A.achievements().filter(function (a) { return a.unlocked; }).slice(0, 3);
     document.getElementById("dash-achievements").innerHTML = ach.length ? ach.map(function (a) {

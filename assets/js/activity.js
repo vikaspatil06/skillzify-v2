@@ -1,4 +1,4 @@
-/* Skillzify Activity — GitHub-style contribution tracking, heatmap, streaks,
+/* Skillzify Activity — GitHub-style contribution tracking, streaks,
    achievements, pins, stars, and identicons. All localStorage-backed. */
 (function () {
   "use strict";
@@ -144,53 +144,6 @@
     });
   }
 
-  /* ---------------- heatmap (GitHub-style) ---------------- */
-  var LEVELS = ["#161b22", "#0e4429", "#006d32", "#26a641", "#39d353"];
-  function levelFor(n) {
-    if (!n) return 0;
-    if (n < 2) return 1;
-    if (n < 4) return 2;
-    if (n < 7) return 3;
-    return 4;
-  }
-  function renderHeatmap(el, opts) {
-    opts = opts || {};
-    var days = dayCounts();
-    var weeks = [], today = new Date(); today.setHours(0, 0, 0, 0);
-    // Start on the Sunday 52 weeks before this Sunday, so the last column is the current week.
-    var start = new Date(today);
-    start.setDate(start.getDate() - start.getDay() - 52 * 7);
-    var total = 0;
-    for (var w = 0; w < 53; w++) {
-      var col = [];
-      for (var d = 0; d < 7; d++) {
-        var dt = new Date(start); dt.setDate(start.getDate() + w * 7 + d);
-        var n = dt > today ? -1 : (days[todayStr(dt)] || 0);
-        if (n > 0) total += n;
-        col.push({ date: todayStr(dt), count: n, future: n < 0 });
-      }
-      weeks.push(col);
-    }
-    var html = '<div class="heatmap" role="img" aria-label="Activity heatmap, ' + total + ' contributions in the last year">';
-    weeks.forEach(function (col) {
-      html += '<div class="hm-week">';
-      col.forEach(function (cell) {
-        if (cell.future) { html += '<span class="hm-day hm-future"></span>'; return; }
-        var lv = levelFor(cell.count);
-        html += '<span class="hm-day" data-lv="' + lv + '" title="' + cell.count + ' contributions on ' + cell.date + '" style="background:' + LEVELS[lv] + '"></span>';
-      });
-      html += '</div>';
-    });
-    html += '</div>';
-    if (!opts.noLegend) {
-      html += '<div class="hm-legend"><span>Less</span>' +
-        LEVELS.map(function (c) { return '<span class="hm-day" style="background:' + c + '"></span>'; }).join("") +
-        '<span>More</span></div>';
-    }
-    el.innerHTML = html;
-    return total;
-  }
-
   /* ---------------- identicon (GitHub-style default avatar) ---------------- */
   function hash(str) {
     var h = 0;
@@ -256,7 +209,6 @@
   window.SkillzifyActivity = {
     log: log, feed: feed, dayCounts: dayCounts, runCount: runCount,
     streak: streak, achievements: achievements, unlocked: unlocked,
-    renderHeatmap: renderHeatmap,
     identicon: identicon,
     pins: pins, togglePin: togglePin, isPinned: isPinned,
     stars: stars, toggleStar: toggleStar, isStarred: isStarred,

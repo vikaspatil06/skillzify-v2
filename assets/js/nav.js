@@ -20,12 +20,15 @@
     ]},
     { label: "Code Studio", href: "compiler.html" },
     { label: "Reference", href: "reference.html" },
+    { label: "Community", href: "community.html" },
     { label: "You", children: [
       { label: "Dashboard", href: "dashboard.html", icon: "📊" },
       { label: "Profile", href: "profile.html", icon: "👤" }
     ]},
-    { label: "About", href: "about.html" },
-    { label: "Contact", href: "contact.html" }
+    { label: "More", children: [
+      { label: "About", href: "about.html", icon: "ℹ️" },
+      { label: "Contact", href: "contact.html", icon: "✉️" }
+    ]}
   ];
 
   function esc(s) {

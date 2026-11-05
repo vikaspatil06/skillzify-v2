@@ -54,9 +54,6 @@
       return '<div class="dash-card stat"><div class="stat-ico">' + s[0] + '</div><div><div class="big">' + s[1] + '</div><div class="muted small">' + s[2] + '</div></div></div>';
     }).join("");
 
-    var total = A.renderHeatmap(document.getElementById("profile-heatmap"));
-    document.getElementById("activity-total").textContent = total + " contributions in the last year";
-
     var pins = A.pins();
     document.getElementById("profile-pins").innerHTML = pins.length ? pins.map(function (p) {
       var href = p.kind === "lesson" ? "learn.html#lesson-" + p.id : "compiler.html#snippet-" + p.id;
@@ -173,9 +170,61 @@
     } catch (e) {}
   }
 
+  function hideCard(el) {
+    while (el && !(el.className && String(el.className).indexOf("dash-card") >= 0)) el = el.parentNode;
+    if (el) el.style.display = "none";
+  }
+  function renderPublic(uid) {
+    var C = window.SkillzifyCommunity;
+    ["edit-profile-btn", "profile-sync"].forEach(function (id) {
+      var el = document.getElementById(id); if (el) el.style.display = "none";
+    });
+    ["profile-certs", "profile-mastery-bar", "profile-pins", "profile-achievements", "profile-feed-card"].forEach(function (id) {
+      var el = document.getElementById(id); if (el) hideCard(el);
+    });
+    document.getElementById("profile-name").textContent = "Loading…";
+    document.getElementById("profile-bio").textContent = "";
+    document.getElementById("profile-meta").textContent = "";
+    if (!C) {
+      document.getElementById("profile-name").textContent = "Community unavailable";
+      document.getElementById("profile-bio").textContent = "The community module did not load — check your connection and try again.";
+      return;
+    }
+    C.getPublicProfile(uid).then(function (p) {
+      if (!p) {
+        document.getElementById("profile-name").textContent = "Learner not found";
+        document.getElementById("profile-bio").textContent = "This learner hasn't shared a public profile yet — they need to open their own profile once to publish it.";
+        return;
+      }
+      document.getElementById("profile-avatar").innerHTML = A.identicon(p.displayName || "Learner", 96);
+      document.getElementById("profile-name").textContent = p.displayName || "Learner";
+      document.getElementById("profile-bio").textContent = "Community learner";
+      document.getElementById("profile-level").textContent = "⚡ " + (p.xp || 0).toLocaleString() + " XP";
+      document.getElementById("profile-meta").textContent = "🔥 " + (p.streak || 0) + "d streak · 🏆 " + (p.achievements || []).length + " badges";
+      var stats = [
+        ["⚡", (p.xp || 0).toLocaleString(), "Total XP"],
+        ["📚", (p.lessonsDone || 0) + "/" + (p.lessonsTotal || 95), "Lessons done"],
+        ["🔥", (p.streak || 0) + "d", "Day streak"],
+        ["🏆", String((p.achievements || []).length), "Badges unlocked"]
+      ];
+      document.getElementById("profile-stats").innerHTML = stats.map(function (s) {
+        return '<div class="dash-card stat"><div class="stat-ico">' + s[0] + '</div><div><div class="big">' + esc(s[1]) + '</div><div class="muted small">' + esc(s[2]) + "</div></div></div>";
+      }).join("");
+    }).catch(function () {
+      document.getElementById("profile-name").textContent = "Couldn't load this profile";
+      document.getElementById("profile-bio").textContent = "Check your connection and try again.";
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
+    var me = null;
+    try { me = window.SkillzifyAuth && window.SkillzifyAuth.currentUser(); } catch (e) {}
+    var wantUid = null;
+    try { wantUid = new URLSearchParams(location.search).get("uid"); } catch (e) {}
+    if (wantUid && (!me || me.uid !== wantUid)) { renderPublic(wantUid); return; }
     A.checkAchievements();
     render();
+    try { if (window.SkillzifyCommunity) window.SkillzifyCommunity.publishPublicProfile(); } catch (e) {}
     var drawer = document.getElementById("profile-modal");
     function openDrawer() {
       var p = A.profile();

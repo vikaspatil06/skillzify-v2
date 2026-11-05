@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YYR4JD16G8"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-YYR4JD16G8');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Skillzify Circle — ask questions, get answers, and share what you built with fellow Python learners.">
+  <title>Community — Skillzify</title>
+  <link rel="icon" href="assets/logo-light.png">
+  <link rel="stylesheet" href="assets/css/style.css?v=13">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+  <style>
+    .comm-tabs { display: flex; gap: 8px; margin-bottom: 18px; border-bottom: 1px solid var(--card-border); padding-bottom: 0; }
+    .comm-tab { background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); font: inherit; font-weight: 700; font-size: 1rem; padding: 10px 14px; cursor: pointer; margin-bottom: -1px; }
+    .comm-tab:hover { color: var(--text); }
+    .comm-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+    .comm-error { background: rgba(231,76,60,.12); border: 1px solid rgba(231,76,60,.45); color: #e74c3c; border-radius: 10px; padding: 12px 14px; margin: 0 0 16px; font-size: .92rem; }
+    .comm-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .comm-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+    .comm-q { margin-bottom: 12px; padding: 16px; }
+    .comm-q h3 { margin: 0 0 6px; font-size: 1.05rem; }
+    .comm-q h3 a { color: var(--text); text-decoration: none; }
+    .comm-q h3 a:hover { text-decoration: underline; }
+    .comm-meta { font-size: .82rem; color: var(--muted); margin: 0 0 6px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .comm-tag { background: rgba(108,123,255,.14); color: #8b98ff; border-radius: 6px; padding: 1px 8px; font-size: .78rem; font-weight: 600; }
+    .comm-status { font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; }
+    .comm-status-open { background: rgba(46,204,113,.15); color: #2ecc71; }
+    .comm-status-answered { background: rgba(52,152,219,.15); color: #5dade2; }
+    .comm-excerpt { margin: 6px 0 0; color: var(--muted); font-size: .92rem; }
+    .comm-form { margin-bottom: 16px; padding: 18px; }
+    .comm-form h3 { margin: 0 0 12px; }
+    .comm-form label { display: block; font-weight: 600; font-size: .9rem; margin-bottom: 12px; }
+    .comm-form input[type="text"], .comm-form textarea { width: 100%; box-sizing: border-box; margin-top: 5px; }
+    .comm-form-error { color: #e74c3c; font-size: .88rem; margin: 0 0 10px; }
+    .comm-code { margin-top: 12px; }
+    .comm-code pre { margin: 0; }
+    .comm-code pre.hidden { display: none; }
+    .comm-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .comm-best { background: rgba(46,204,113,.15); color: #2ecc71; font-size: .75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+    .comm-ans { margin-bottom: 12px; padding: 16px; }
+    .comm-ans.comm-ans-best { border-color: rgba(46,204,113,.55); }
+    .comm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 14px; }
+    .comm-card { padding: 16px; }
+    .comm-card h3 { margin: 0 0 6px; font-size: 1.02rem; }
+    .comm-featured { border: 1px solid rgba(245,179,1,.55); background: linear-gradient(180deg, rgba(245,179,1,.08), transparent); padding: 18px; margin-bottom: 16px; }
+    .comm-featured-label { font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #f5b301; margin-bottom: 8px; }
+    .comm-star { background: none; border: 1px solid var(--card-border); border-radius: 8px; color: var(--text); font: inherit; font-size: .9rem; padding: 6px 10px; cursor: pointer; }
+    .comm-star.on { color: #f5b301; border-color: rgba(245,179,1,.55); }
+    .comm-gate { text-align: center; padding: 22px; margin-bottom: 16px; }
+    .comm-gate h3 { margin: 0 0 8px; }
+    .comm-back { display: inline-block; margin-bottom: 12px; color: var(--muted); text-decoration: none; font-size: .9rem; }
+    .comm-back:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<div id="site-nav"></div>
+<div class="toast" id="toast" role="status"></div>
+
+<main>
+  <section class="page-hero">
+    <div class="container">
+      <h1 class="section-title">🤝 Skillzify Circle</h1>
+      <p class="section-sub">Ask questions, get answers, and show what you built — with real, runnable code.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:24px">
+    <div class="container">
+      <div class="comm-tabs" role="tablist">
+        <button class="comm-tab active" id="tab-questions" data-tab="questions" type="button">Questions</button>
+        <button class="comm-tab" id="tab-showcase" data-tab="showcase" type="button">Showcase</button>
+      </div>
+
+      <p class="comm-error" id="comm-error" hidden></p>
+
+      <!-- ============ Questions tab ============ -->
+      <div id="comm-questions">
+        <div class="comm-toolbar">
+          <div class="comm-filters pill-row" id="comm-q-filters">
+            <button class="pill active" data-filter="all" type="button">All</button>
+            <button class="pill" data-filter="unanswered" type="button">Unanswered</button>
+            <button class="pill" data-filter="mine" type="button">My questions</button>
+          </div>
+          <button class="btn btn-primary" id="comm-ask-btn" type="button">Ask a question</button>
+        </div>
+
+        <div id="comm-ask-gate" hidden></div>
+
+        <div id="comm-ask-wrap" hidden>
+          <div class="card comm-form">
+            <h3>Ask a question</h3>
+            <form id="comm-ask-form">
+              <label>Title
+                <input type="text" id="ask-title" maxlength="140" placeholder="What's the problem, in one line?" autocomplete="off">
+              </label>
+              <label>Details
+                <textarea id="ask-body" rows="4" placeholder="What have you tried? What did you expect to happen?"></textarea>
+              </label>
+              <label>Code
+                <textarea id="ask-code" rows="6" class="code-editor" placeholder="Paste the code that's misbehaving (optional)"></textarea>
+              </label>
+              <label>Lesson (optional)
+                <input type="text" id="ask-lesson" placeholder="e.g. b12" autocomplete="off">
+              </label>
+              <p class="comm-form-error" id="ask-error" hidden></p>
+              <div class="comm-actions">
+                <button class="btn btn-primary" type="submit">Post question</button>
+                <button class="btn btn-ghost" type="button" id="ask-cancel">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div id="comm-q-list"></div>
+        <div id="comm-q-detail" hidden></div>
+      </div>
+
+      <!-- ============ Showcase tab ============ -->
+      <div id="comm-showcase" hidden>
+        <div class="comm-toolbar">
+          <p class="hint" style="margin:0">Things learners built. Run them, star the ones you like, fork the code into your own workspace.</p>
+          <button class="btn btn-primary" id="comm-share-btn" type="button">Share your project</button>
+        </div>
+
+        <div id="comm-share-gate" hidden></div>
+
+        <div id="comm-share-wrap" hidden>
+          <div class="card comm-form">
+            <h3>Share your project</h3>
+            <form id="comm-share-form">
+              <label>Title
+                <input type="text" id="share-title" maxlength="140" placeholder="What did you build?" autocomplete="off">
+              </label>
+              <label>Description
+                <textarea id="share-desc" rows="3" placeholder="What does it do? What did you learn building it?"></textarea>
+              </label>
+              <label>Code
+                <textarea id="share-code" rows="8" class="code-editor" placeholder="Paste the code others can run and fork"></textarea>
+              </label>
+              <label>Project id (optional)
+                <input type="text" id="share-project" placeholder="e.g. the project id from the Projects page" autocomplete="off">
+              </label>
+              <p class="comm-form-error" id="share-error" hidden></p>
+              <div class="comm-actions">
+                <button class="btn btn-primary" type="submit">Share project</button>
+                <button class="btn btn-ghost" type="button" id="share-cancel">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div id="comm-featured"></div>
+        <div class="comm-grid" id="comm-showcase-grid"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="assets/js/nav.js?v=4"></script>
+<script src="assets/js/footer.js?v=1"></script>
+<script src="assets/js/app.js?v=4"></script>
+<script src="assets/js/activity.js?v=3"></script>
+<script src="assets/js/palette.js?v=1"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
+<script src="assets/js/auth.js?v=3"></script>
+<script src="assets/js/sync.js?v=6"></script>
+<script src="assets/js/ai.js?v=8"></script>
+<script src="assets/js/community.js?v=1"></script>
+<script src="assets/js/community-page.js?v=1"></script>
+</body>
+</html>
