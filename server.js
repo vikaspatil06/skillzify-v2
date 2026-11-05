@@ -42,7 +42,35 @@ const path = require("path");
 
 const PORT = process.env.PORT || 8080;
 const GEMINI_API_KEY = (process.env || {})["GEMINI_API_KEY"] || "";
-const MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+// Testing-phase model + key failover (plan §14). gemini-3.8-flash free tier
+// is 5 RPM / 20 RPD on this project, so one model alone cannot cover
+// testing. Limits are per model per project, so trying models in order
+// multiplies the daily budget; a second API key (second Google Cloud
+// project) multiplies it again. Order is preference order: the primary
+// first, then the biggest published daily pools, then the highest
+// per-minute headroom. Models with 0 quota on this project
+// (gemini-2.0-flash, gemini-2.5-pro, ...) are NOT listed. 2.5-flash is
+// deprecated: from 1 Dec 2026 Google auto-routes it to 3.5-flash-lite,
+// which is already in this list, so nothing breaks then.
+// Override the list with GEMINI_MODELS="model-a,model-b"; GEMINI_MODEL
+// still overrides just the primary.
+const MODELS = (process.env.GEMINI_MODELS ||
+  "gemini-3.8-flash,gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.5-flash-lite,gemini-3.6-flash,gemini-3.1-flash-lite")
+  .split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+if (process.env.GEMINI_MODEL) MODELS[0] = process.env.GEMINI_MODEL;
+const MODEL = MODELS[0];
+// Keys to rotate across (one per Google Cloud project; limits are per
+// project). Default is the single GEMINI_API_KEY. For a second project,
+// set GEMINI_API_KEYS="key1,key2" — keys are never logged, only key#.
+const GEMINI_KEYS = (process.env.GEMINI_API_KEYS || "")
+  .split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+if (!GEMINI_KEYS.length && GEMINI_API_KEY) GEMINI_KEYS.push(GEMINI_API_KEY);
+// Per-attempt ceiling (12s) + total failover budget (40s): the client
+// gives up at 60s, so the server must answer first. No same-model
+// retry: with failover the next model IS the retry, and re-hitting an
+// overloaded model only burns the client's 60s.
+const ATTEMPT_TIMEOUT_MS = 12000;
+const FAILOVER_BUDGET_MS = 40000;
 const DAILY_CAP_USER = 50;
 const DAILY_CAP_ANON = 10;
 
@@ -197,11 +225,11 @@ async function dailyCount(uid, ip) {
 
 app.get("/api/health", (req, res) => {
   initCapStore(); // local-only; reports which cap store is active
-  res.json({ ok: true, ai: !!GEMINI_API_KEY, model: MODEL, capStore: capStore, uptimeSec: Math.floor(process.uptime()) });
+  res.json({ ok: true, ai: GEMINI_KEYS.length > 0, model: MODEL, models: MODELS, capStore: capStore, uptimeSec: Math.floor(process.uptime()) });
 });
 app.get("/api/warmup", (req, res) => {
   initCapStore(); // local-only; reports which cap store is active
-  res.json({ ok: true, ai: !!GEMINI_API_KEY, model: MODEL, capStore: capStore, uptimeSec: Math.floor(process.uptime()) });
+  res.json({ ok: true, ai: GEMINI_KEYS.length > 0, model: MODEL, models: MODELS, capStore: capStore, uptimeSec: Math.floor(process.uptime()) });
 });
 
 /* ---------------- mode definitions ---------------- */
@@ -327,7 +355,7 @@ function geminiError(status) {
 
 app.post("/api/explain", async (req, res) => {
   const started = Date.now();
-  if (!GEMINI_API_KEY) return res.status(503).json({ error: "AI backend not configured.", code: "NOT_CONFIGURED" });
+  if (!GEMINI_KEYS.length) return res.status(503).json({ error: "AI backend not configured.", code: "NOT_CONFIGURED" });
   const code = String((req.body && req.body.code) || "").slice(0, 8000);
   const errText = String((req.body && req.body.error) || "").slice(0, 2000);
   const context = String((req.body && req.body.context) || "").slice(0, 2000);
@@ -343,66 +371,91 @@ app.post("/api/explain", async (req, res) => {
   const style = spec.style;
   const prompt = buildPrompt(mode, code, errText, context, stage);
 
-  async function callGemini(promptText, attempt, maxTokens) {
-    // Fail fast: never let one slow Google response hang the request for minutes.
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 25000);
-    try {
-      const r = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(MODEL) + ":generateContent",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: style }] },
-            contents: [{ parts: [{ text: promptText }] }],
-            generationConfig: Object.assign(
-              { maxOutputTokens: maxTokens, temperature: 0.4 },
-              spec.json ? { responseMimeType: "application/json" } : {}
-            ),
-          }),
-          signal: ctrl.signal,
+  // Try keys x models in order. Returns { r, model, keyIdx } on the first
+  // HTTP response (ok, or fatal), or { r: null, model, keyIdx, error }
+  // when every combination failed. Retryable: 429 (quota), 503
+  // (overloaded), 404 (model unavailable on this project), timeout /
+  // network errors — move to the next combination. Fatal: 401/403 (the
+  // key is bad for every model) and anything else — answer at once.
+  async function callGemini(promptText, maxTokens, onlyModel, timeoutMs) {
+    var models = onlyModel ? [onlyModel] : MODELS;
+    var attemptTimeout = timeoutMs || ATTEMPT_TIMEOUT_MS;
+    var lastErr = { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
+    var lastModel = models[0], lastKeyIdx = 0;
+    for (var ki = 0; ki < GEMINI_KEYS.length; ki++) {
+      for (var mi = 0; mi < models.length; mi++) {
+        var model = models[mi];
+        if (Date.now() - started > FAILOVER_BUDGET_MS) {
+          console.log("[ai] failover budget spent — answering with last error " + lastErr.code);
+          return { r: null, model: lastModel, keyIdx: lastKeyIdx, error: lastErr };
         }
-      );
-      clearTimeout(timer);
-      // Google sometimes 503s under load ("try again later") — one retry helps.
-      if ((r.status === 503 || r.status === 429) && attempt < 1) {
-        await new Promise((ok) => setTimeout(ok, 2500));
-        return callGemini(promptText, attempt + 1, maxTokens);
+        lastModel = model; lastKeyIdx = ki;
+        var ctrl = new AbortController();
+        var timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, attemptTimeout);
+        var r;
+        try {
+          r = await fetch(
+            "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_KEYS[ki] },
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: style }] },
+                contents: [{ parts: [{ text: promptText }] }],
+                generationConfig: Object.assign(
+                  { maxOutputTokens: maxTokens, temperature: 0.4 },
+                  spec.json ? { responseMimeType: "application/json" } : {}
+                ),
+              }),
+              signal: ctrl.signal,
+            }
+          );
+        } catch (e) {
+          clearTimeout(timer);
+          console.log("[ai] model " + model + " key#" + (ki + 1) + " attempt failed (" + (e.name || "error") + ") — trying next");
+          lastErr = { status: 502, code: "TIMEOUT", error: "Could not reach the AI provider." };
+          continue;
+        }
+        clearTimeout(timer);
+        if (r.ok) return { r: r, model: model, keyIdx: ki };
+        var g = geminiError(r.status);
+        if (r.status === 429 || r.status === 503 || r.status === 404) {
+          console.log("[ai] model " + model + " key#" + (ki + 1) + " fail " + g.code + " — trying next");
+          lastErr = g;
+          continue;
+        }
+        console.log("[ai] model " + model + " key#" + (ki + 1) + " fail " + g.code + " — not retryable");
+        return { r: r, model: model, keyIdx: ki, error: g };
       }
-      return r;
-    } catch (e) {
-      clearTimeout(timer);
-      // Timeout / network blip — one retry with a fresh clock.
-      if (attempt < 1) {
-        console.log("[explain] attempt failed (" + (e.name || "error") + ") — retrying once");
-        await new Promise((ok) => setTimeout(ok, 1500));
-        return callGemini(promptText, attempt + 1, maxTokens);
-      }
-      throw e;
     }
+    return { r: null, model: lastModel, keyIdx: lastKeyIdx, error: lastErr };
   }
 
   try {
-    let r = await callGemini(prompt, 0, spec.maxTokens || 1000);
-    if (!r.ok) {
-      const g = geminiError(r.status);
+    let got = await callGemini(prompt, spec.maxTokens || 1000);
+    if (!got.r || !got.r.ok) {
+      const g = got.error || { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
       console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "fail", g.code, Date.now() - started + "ms");
       return res.status(g.status).json({ error: g.error, code: g.code });
     }
+    let r = got.r;
+    let usedModel = got.model;
     let data = await r.json();
     let cand = data.candidates && data.candidates[0];
     let finishReason = cand && cand.finishReason;
     console.log("[explain] finishReason:", finishReason || "(none)");
-    // If the model stopped because it ran out of output budget, retry once with more room.
+    // If the model stopped because it ran out of output budget, retry once
+    // with more room — same model (it just proved healthy), longer clock.
     if (finishReason === "MAX_TOKENS") {
       console.log("[explain] hit token budget — retrying with a larger one");
-      r = await callGemini(prompt, 0, 4000);
-      if (!r.ok) {
-        const g = geminiError(r.status);
+      got = await callGemini(prompt, 4000, usedModel, 25000);
+      if (!got.r || !got.r.ok) {
+        const g = got.error || { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
         console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "fail", g.code, Date.now() - started + "ms");
         return res.status(g.status).json({ error: g.error, code: g.code });
       }
+      r = got.r;
+      usedModel = got.model;
       data = await r.json();
       cand = data.candidates && data.candidates[0];
       finishReason = cand && cand.finishReason;
@@ -414,7 +467,7 @@ app.post("/api/explain", async (req, res) => {
       console.log("[explain] empty model text; finishReason was:", finishReason || "(none)");
       return res.status(502).json({ error: "AI returned an empty explanation (finish: " + (finishReason || "unknown") + ").", code: "EMPTY_REPLY" });
     }
-    let out = { explanation: text, model: MODEL };
+    let out = { explanation: text, model: usedModel };
     if (spec.json) {
       try {
         const validate = mode === "viva" ? (stage === "judge" ? isVivaJudge : isVivaAsk) : spec.validate;
@@ -424,7 +477,7 @@ app.post("/api/explain", async (req, res) => {
         return res.status(502).json({ error: "AI returned an unusable answer — try again.", code: "BAD_JSON" });
       }
     }
-    console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "ok", Date.now() - started + "ms");
+    console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "ok", usedModel, "key#" + (got.keyIdx + 1), Date.now() - started + "ms");
     // Success only — every error return above leaves the cap untouched.
     // A MAX_TOKENS retry is still one request, so it counts once here.
     // Awaited: the count must be durable (Firestore) before answering.
@@ -441,6 +494,6 @@ app.use(express.static(path.join(__dirname)));
 
 app.listen(PORT, () => {
   console.log(
-    "Skillzify v2 on http://localhost:" + PORT + " | AI backend: " + (GEMINI_API_KEY ? "ON (" + MODEL + ")" : "OFF (set GEMINI_API_KEY)")
+    "Skillzify v2 on http://localhost:" + PORT + " | AI backend: " + (GEMINI_KEYS.length ? "ON (" + MODELS.join(", ") + ")" : "OFF (set GEMINI_API_KEY)")
   );
 });
