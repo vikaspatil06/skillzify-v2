@@ -24,7 +24,8 @@
     "        <h4>Platform</h4>\n" +
     '        <a href="compiler.html">Code Studio</a>\n' +
     '        <a href="dashboard.html">Dashboard</a>\n' +
-    '        <a href="auth.html">Login / Register</a>\n' +
+    '        <a href="community.html">Community</a>\n' +
+    '        <a href="reference.html">Reference</a>\n' +
     "      </div>\n" +
     "      <div>\n" +
     "        <h4>Company</h4>\n" +
