@@ -190,7 +190,6 @@ fun CompilerTab(vm: AppViewModel) {
         running = true
         result = null
         showExplainer = false
-        inputLine = ""
         bridge.reset()
         persistActive()
         val filesSnap = vm.workspaceFiles.toMutableMap()
@@ -695,6 +694,11 @@ private fun BottomPanel(
 private fun TerminalInputRow(bridge: com.skillzify.app.data.TerminalBridge, running: Boolean) {
     val waitingPrompt by bridge.waitingPrompt.collectAsState()
     var inputLine by remember { mutableStateOf("") }
+    // Fresh prompt = fresh field (clears text left over if a previous run
+    // was stopped mid-typing).
+    androidx.compose.runtime.LaunchedEffect(waitingPrompt) {
+        if (waitingPrompt != null) inputLine = ""
+    }
     if (running && waitingPrompt != null) {
         Row(
             Modifier.fillMaxWidth(),
