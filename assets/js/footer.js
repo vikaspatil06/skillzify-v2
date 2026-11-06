@@ -22,14 +22,20 @@
     "      <div>\n" +
     "        <h4>Learn</h4>\n" +
     '        <a href="learn.html">All lessons</a>\n' +
+    '        <a href="paths.html">Learning Paths</a>\n' +
+    '        <a href="practice.html">Practice</a>\n' +
+    "      </div>\n" +
+    "      <div>\n" +
+    "        <h4>Build</h4>\n" +
+    '        <a href="compiler.html">Code Studio</a>\n' +
+    '        <a href="flowchart.html">Flowchart Lab</a>\n' +
+    '        <a href="projects.html">Projects</a>\n' +
     "      </div>\n" +
     "      <div>\n" +
     "        <h4>Platform</h4>\n" +
-    '        <a href="compiler.html">Code Studio</a>\n' +
     '        <a href="dashboard.html">Dashboard</a>\n' +
     '        <a href="community.html">Community</a>\n' +
     '        <a href="reference.html">Reference</a>\n' +
-    '        <a href="flowchart.html">Flowchart Lab</a>\n' +
     "      </div>\n" +
     "      <div>\n" +
     "        <h4>Company</h4>\n" +
