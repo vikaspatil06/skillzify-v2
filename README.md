@@ -16,7 +16,7 @@ An advanced, browser-first Python learning platform for students — a modern mu
   - Offline heuristic explainer covering 12 common Python error patterns
   - Backend AI via the Render API (developer's Gemini key) → visitor's own optional key → offline fallback
   - A "🆘 Stuck?" button that drafts your code and error into a community question
-- **Flowchart Lab** (`flowchart-test.html`) — draw a program's flow as a diagram, explain it with AI, or turn a flowchart into code (sandbox page)
+- **Flowchart Lab** (`flowchart.html`) — draw a program's flow as a diagram, explain it with AI, or turn a flowchart into code
 - **Skillzify Circle** (`community.html`) — the learner community: public profiles (verified progress), anchored Q&A (ask from a lesson, exercise, or error, with code attached; best answers earn XP), and a project showcase (share a build, star others, fork into the compiler). An "✨ Ask AI" button gives a Socratic hint on any question.
 - **Dashboard** (`dashboard.html`) — overall % ring, per-section progress bars, day streak 🔥, recent run history, next-lesson hint, **exercise accuracy by topic with weak-spot flags**, today's challenge, review queue, and downloadable **section-completion certificates** (canvas-rendered PNG)
 - **Profile** (`profile.html`) — GitHub-style identity: identicon avatar, editable name/bio (syncs to Firebase), pinned items, achievements, activity feed, and a shareable public profile (`profile.html?uid=`)
@@ -92,7 +92,7 @@ skillzify-v2/
 ├── paths.html          # Guided learning paths (6)
 ├── projects.html       # Real-world guided projects (14)
 ├── compiler.html       # AI Python compiler + workspace
-├── flowchart-test.html # Flowchart Lab (sandbox)
+├── flowchart.html          # Flowchart Lab
 ├── community.html      # Skillzify Circle (community)
 ├── dashboard.html      # Progress dashboard + analytics + certificates
 ├── profile.html        # GitHub-style profile + public view

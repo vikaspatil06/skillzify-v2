@@ -17,7 +17,7 @@
       { label: "Practice", href: "practice.html", icon: "✍️" },
       { label: "Learning Paths", href: "paths.html", icon: "🗺️" },
       { label: "Projects", href: "projects.html", icon: "🛠️" },
-      { label: "Flowchart Lab", href: "flowchart-test.html", icon: "🔀" }
+      { label: "Flowchart Lab", href: "flowchart.html", icon: "🔀" }
     ]},
     { label: "Code Studio", href: "compiler.html" },
     { label: "Reference", href: "reference.html" },

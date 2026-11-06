@@ -29,7 +29,7 @@
     '        <a href="dashboard.html">Dashboard</a>\n' +
     '        <a href="community.html">Community</a>\n' +
     '        <a href="reference.html">Reference</a>\n' +
-    '        <a href="flowchart-test.html">Flowchart Lab</a>\n' +
+    '        <a href="flowchart.html">Flowchart Lab</a>\n' +
     "      </div>\n" +
     "      <div>\n" +
     "        <h4>Company</h4>\n" +

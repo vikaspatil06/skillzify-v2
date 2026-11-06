@@ -11,7 +11,7 @@
    - No API key ever leaves the browser except the user's OWN
      key, sent directly to Google, only when the backend fails.
    Requires nothing; degrades gracefully when app.js / auth.js
-   are absent (flowchart-test.html). Exposes window.SkillzifyAI.
+   are absent (flowchart.html). Exposes window.SkillzifyAI.
    ============================================================ */
 (function () {
   "use strict";
