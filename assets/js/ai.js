@@ -131,8 +131,12 @@
       if (solved) lines.push("Exercises solved: " + solved + "/" + exerciseTotal() + ".");
     } catch (e) {}
     try {
-      var st = storeGet("skillzify_streak", {}) || {};
-      if (st.count) lines.push("Day streak: " + st.count + ".");
+      // Single source of truth: the shared streak counter via
+      // SkillzifyActivity (lapse-aware — a lapsed streak reads 0).
+      var stA = window.SkillzifyActivity && typeof window.SkillzifyActivity.streak === "function"
+        ? window.SkillzifyActivity.streak() : null;
+      var stN = stA ? stA.current : ((storeGet("skillzify_streak", {}) || {}).count || 0);
+      if (stN) lines.push("Day streak: " + stN + ".");
     } catch (e) {}
     if (extra) {
       if (extra.lesson) lines.push("Current lesson: " + extra.lesson + ".");
@@ -169,7 +173,7 @@
     { re: /ImportError|ModuleNotFoundError/, title: "📦 ImportError — module not found",
       tips: ["Only the Python standard library works in this browser runtime.", "Check the module name spelling."] },
     { re: /EOFError/, title: "⌨️ EOFError — input() ran out of data",
-      tips: ["Your program called input() more times than you gave it lines.", "Add more lines in the stdin box under the terminal."] },
+      tips: ["Each input() pauses your program and shows a prompt line right in the terminal — type your answer there and press Enter.", "This error means the program was still waiting for input when it got end-of-input instead — e.g. you clicked the EOF button (or pressed Ctrl+D) on that terminal prompt.", "Make sure every input() call gets a matching answer typed in the terminal, or guard it: try: x = input('...') except EOFError: x = ''"] },
     { re: /RecursionError/, title: "🔁 RecursionError — infinite recursion",
       tips: ["Your function calls itself forever.", "Every recursive function needs a base case."] }
   ];

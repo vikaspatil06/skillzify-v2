@@ -31,9 +31,13 @@
     });
     document.getElementById("dash-tracks").innerHTML = tracksHtml;
 
-    // Streak
-    var s = window.Skillzify.storeGet("skillzify_streak", { last: null, count: 0 });
-    document.getElementById("dash-streak").textContent = (s.count || 0) + " 🔥";
+    // Streak — single source of truth: SkillzifyActivity.streak()
+    // (counter bumped by A.log() on any activity day). The profile and
+    // the achievements read the same number, so they can never disagree.
+    var st = null;
+    try { st = window.SkillzifyActivity ? window.SkillzifyActivity.streak() : null; } catch (e) {}
+    var streakN = st ? st.current : (window.Skillzify.storeGet("skillzify_streak", { last: null, count: 0 }).count || 0);
+    document.getElementById("dash-streak").textContent = streakN + " 🔥";
 
     // Level
     try {
@@ -98,7 +102,7 @@
         if (a.solved) topics[ex.topic].solved++;
       }
     });
-    var labels = { variables: "Variables", strings: "Strings", collections: "Collections", loops: "Loops", functions: "Functions", oop: "OOP", exceptions: "Exceptions", dsa: "Algorithms" };
+    var labels = { variables: "Variables", strings: "Strings", collections: "Collections", loops: "Loops", functions: "Functions", oop: "OOP", exceptions: "Exceptions", dsa: "Algorithms", recursion: "Recursion", sorting: "Sorting", "trees-graphs": "Trees & Graphs", "dynamic-programming": "Dynamic Programming", "data-science": "Data Science", web: "Web", files: "Files", testing: "Testing", async: "Async" };
     return order.map(function (t) {
       var s = topics[t];
       return { topic: t, label: labels[t] || t, solved: s.solved, tried: s.tried,
@@ -341,13 +345,26 @@
       } catch (e) {}
     }
 
-    // Weak spots — weakest first, untried topics separated, each one tap from practice
+    // Weak spots — weakest first. Compact by design: only the TOP 3
+    // weakest tried topics render as full rows (matching the practice
+    // page's "Drill my weak spots" cap); the rest hide behind a toggle,
+    // and untried topics render as chips in one wrapped line.
     var ta = document.getElementById("dash-topic-acc");
     if (ta) {
       var rows = topicRows(EX, atts);
       var tried = rows.filter(function (r) { return r.tried > 0; })
                       .sort(function (a, b) { return a.pct - b.pct || b.tried - a.tried; });
       var untried = rows.filter(function (r) { return r.tried === 0; });
+      var weakRowHtml = function (r) {
+        var weak = r.tried >= 2 && r.pct < 60;
+        return '<div class="weak-row' + (weak ? " is-weak" : "") + '">' +
+          '<div class="weak-top"><span class="lbl">' + esc(r.label) +
+          (weak ? ' <span class="badge badge-try">weak spot</span>' : "") + "</span>" +
+          '<span class="pct">' + r.solved + "/" + r.tried + " · " + r.pct + "%</span></div>" +
+          '<div class="bar"><span style="width:' + r.pct + '%"></span></div>' +
+          '<a class="weak-link" href="practice.html#topic=' + r.topic + '">Practice ' + esc(r.label) + " →</a>" +
+          "</div>";
+      };
       var html = "";
       if (!tried.length) {
         html = '<p class="hint">No attempts yet — solve a few exercises and your weak spots will surface here, weakest first.</p>' +
@@ -356,22 +373,27 @@
         var weakest = tried[0];
         html += '<p class="weak-summary">🎯 Focus next: <strong>' + esc(weakest.label) + "</strong> (" + weakest.pct + "% of " + weakest.tried + " tried)" +
           (tried.length > 1 ? ' · 💪 Strongest: <strong>' + esc(tried[tried.length - 1].label) + "</strong> (" + tried[tried.length - 1].pct + "%)" : "") + "</p>";
-        html += tried.map(function (r) {
-          var weak = r.tried >= 2 && r.pct < 60;
-          return '<div class="weak-row' + (weak ? " is-weak" : "") + '">' +
-            '<div class="weak-top"><span class="lbl">' + esc(r.label) +
-            (weak ? ' <span class="badge badge-try">weak spot</span>' : "") + "</span>" +
-            '<span class="pct">' + r.solved + "/" + r.tried + " · " + r.pct + "%</span></div>" +
-            '<div class="bar"><span style="width:' + r.pct + '%"></span></div>' +
-            '<a class="weak-link" href="practice.html#topic=' + r.topic + '">Practice ' + esc(r.label) + " →</a>" +
-            "</div>";
-        }).join("");
+        var top3 = tried.slice(0, 3), rest = tried.slice(3);
+        html += '<div id="dash-weak-top">' + top3.map(weakRowHtml).join("") + "</div>";
+        if (rest.length) {
+          html += '<div id="dash-weak-rest" hidden>' + rest.map(weakRowHtml).join("") + "</div>" +
+            '<p style="margin:10px 0 0"><button type="button" class="btn btn-sm btn-ghost" id="dash-weak-toggle">Show all ' + tried.length + ' topics ↓</button></p>';
+        }
       }
       if (untried.length) {
-        html += '<p class="hint" style="margin-top:10px">Not tried yet: ' +
-          untried.map(function (r) { return esc(r.label); }).join(", ") + "</p>";
+        var chips = untried.slice(0, 8).map(function (r) { return '<span class="weak-chip">' + esc(r.label) + "</span>"; }).join(" ");
+        html += '<p class="hint" style="margin-top:10px">Not tried yet: ' + chips +
+          (untried.length > 8 ? ' <span class="hint">+' + (untried.length - 8) + " more</span>" : "") + "</p>";
       }
       ta.innerHTML = html;
+      var tg = document.getElementById("dash-weak-toggle");
+      if (tg) tg.addEventListener("click", function () {
+        var restEl = document.getElementById("dash-weak-rest");
+        if (!restEl) return;
+        var isHidden = restEl.hidden !== false; // attribute present initially
+        restEl.hidden = !isHidden;
+        tg.textContent = isHidden ? "Show less ↑" : "Show all " + tried.length + " topics ↓";
+      });
     }
 
     // (Certificates + downloadCert moved to profile.js — showcase lives on the profile)

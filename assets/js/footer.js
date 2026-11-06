@@ -16,9 +16,13 @@
     "      </div>\n" +
     "      <div>\n" +
     "        <h4>Learn</h4>\n" +
-    '        <a href="learn.html">Beginner track</a>\n' +
-    '        <a href="learn.html">Intermediate track</a>\n' +
-    '        <a href="learn.html">Advanced track</a>\n' +
+    '        <a href="learn.html">Base Camp</a>\n' +
+    '        <a href="learn.html">Tool Shed</a>\n' +
+    '        <a href="learn.html">Object Castle</a>\n' +
+    '        <a href="learn.html">Algorithm Arena</a>\n' +
+    '        <a href="learn.html">Power Lab</a>\n' +
+    '        <a href="learn.html">Data Lab</a>\n' +
+    '        <a href="learn.html">Launch Pad</a>\n' +
     "      </div>\n" +
     "      <div>\n" +
     "        <h4>Platform</h4>\n" +

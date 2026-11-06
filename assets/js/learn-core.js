@@ -746,11 +746,16 @@
 
   var LEVELS = [
     { xp: 0, name: "🌱 Novice" },
-    { xp: 80, name: "🔍 Explorer" },
-    { xp: 180, name: "💻 Coder" },
-    { xp: 300, name: "🛠️ Builder" },
-    { xp: 450, name: "🐍 Pythonista" },
-    { xp: 600, name: "🏆 Python Master" }
+    { xp: 150, name: "🔍 Explorer" },
+    { xp: 400, name: "💻 Coder" },
+    { xp: 800, name: "🛠️ Builder" },
+    { xp: 1400, name: "🐍 Pythonista" },
+    { xp: 2200, name: "🎯 Solver" },
+    { xp: 3200, name: "🧠 Algorithm Ace" },
+    { xp: 4500, name: "📊 Data Wrangler" },
+    { xp: 6500, name: "🚀 Full-Stack Builder" },
+    { xp: 9000, name: "🏆 Python Master" },
+    { xp: 11000, name: "👑 Grandmaster" }
   ];
 
   /* ================= Storage ================= */
@@ -774,6 +779,13 @@
     return null;
   }
   function bumpStreak() {
+    // Thin wrapper for compatibility: the counter now lives in
+    // SkillzifyActivity and is bumped by A.log() on any activity day.
+    // Delegating keeps the old call shape working on every page.
+    try {
+      if (window.SkillzifyActivity && typeof window.SkillzifyActivity.bumpStreak === "function")
+        return window.SkillzifyActivity.bumpStreak();
+    } catch (e) {}
     var s = window.Skillzify.storeGet("skillzify_streak", { last: null, count: 0 });
     // Accept both legacy toDateString() and synced yyyy-MM-dd formats.
     function isoDay(d) { var m = d.getMonth() + 1, dy = d.getDate(); return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (dy < 10 ? "0" + dy : dy); }
@@ -791,6 +803,57 @@
     s.last = todayIso;
     window.Skillzify.storeSet("skillzify_streak", s);
     return s;
+  }
+
+  /* ============ One-time completion bonuses ============
+     Section completion +100 XP, path completion +150 XP. Each fires
+     exactly once (flags in localStorage); re-doing a lesson or step
+     never re-awards. Called from lesson completion (lesson.js) and as
+     a backfill on the Learn / Paths pages (learn.js, paths.js), so a
+     section or path finished before this shipped still pays out once.
+     A path finished by an exercise solve on practice.html (which does
+     not load the lesson catalog) pays out on the next Learn/Paths/
+     lesson visit instead. */
+  var SECTION_BONUS_KEY = "skillzify_section_bonus"; // {sectionId: true}
+  var PATH_BONUS_KEY = "skillzify_path_bonus";       // {pathId: true}
+  function bonusAwarded(key, id) {
+    try { var m = window.Skillzify.storeGet(key, {}); return !!(m && m[id]); } catch (e) { return false; }
+  }
+  function markBonusAwarded(key, id) {
+    try { var m = window.Skillzify.storeGet(key, {}) || {}; m[id] = true; window.Skillzify.storeSet(key, m); } catch (e) {}
+  }
+  function awardBonus(n, label) {
+    var xp = addXP(n);
+    try { if (window.Skillzify && typeof window.Skillzify.toast === "function") window.Skillzify.toast(label + " +" + n + " XP", "success"); } catch (e) {}
+    return xp;
+  }
+  function checkSectionBonuses() {
+    var progress = getProgress();
+    SECTIONS.forEach(function (sec) {
+      var lessons = sectionLessons(sec.id);
+      if (!lessons.length) return;
+      if (!lessons.every(function (l) { return progress[l.id]; })) return;
+      if (bonusAwarded(SECTION_BONUS_KEY, sec.id)) return;
+      markBonusAwarded(SECTION_BONUS_KEY, sec.id);
+      awardBonus(100, "🎓 " + sec.name + " section complete!");
+    });
+  }
+  function checkPathBonuses() {
+    var paths = window.SkillzifyPaths || [];
+    if (!paths.length) return;
+    var progress = getProgress();
+    var atts = {};
+    try { atts = window.Skillzify.storeGet("skillzify_exercise_attempts", {}) || {}; } catch (e) {}
+    paths.forEach(function (p) {
+      if (!p.steps || !p.steps.length) return;
+      var allDone = p.steps.every(function (s) {
+        return s.t === "lesson" ? !!progress[s.id] : !!(atts[s.id] && atts[s.id].solved);
+      });
+      if (!allDone) return;
+      if (bonusAwarded(PATH_BONUS_KEY, p.id)) return;
+      markBonusAwarded(PATH_BONUS_KEY, p.id);
+      awardBonus(150, "🗺️ Path complete: " + p.title + "!");
+    });
   }
 
   /* ============ Extended catalog (250 lessons) ============
@@ -1003,6 +1066,7 @@
     getState: getState, saveState: saveState,
     getXP: getXP, addXP: addXP,
     levelFor: levelFor, nextLevel: nextLevel, bumpStreak: bumpStreak,
+    checkSectionBonuses: checkSectionBonuses, checkPathBonuses: checkPathBonuses,
     idxOf: idxOf, lessonById: lessonById, trackLessons: trackLessons,
     isDone: isDone, isUnlocked: isUnlocked,
     isPathOnlyUnlocked: isPathOnlyUnlocked, pathUnlockMap: pathUnlockMap,

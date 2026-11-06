@@ -13,6 +13,9 @@
    - xp: MAX(local, cloud)
    - streak: later streakLast wins (ISO compare); tie -> larger
      streakCount. Both fields copied from the winner.
+     Known limitation (not redesigned): two devices active on
+     different days can clobber each other's count — the winner's
+     count survives whole, the loser's day is lost.
    - exercises.attempts: per-exercise merge — solved/revealed OR,
      attempts/hintsUsed/lastTry MAX, bestMs MIN of non-zero (else 0)
    - profile: last-write-wins by updatedAt (whole document)
@@ -424,7 +427,17 @@
     WORKSPACE: "skillzify_ws",
     WORKSPACE_TS: "skillzify_ws_ts",
     REVIEWS: "skillzify_review",
-    REVIEWS_TS: "skillzify_review_ts"
+    REVIEWS_TS: "skillzify_review_ts",
+    // activity keys (activity.js) — also per-user, wiped on logout so the
+    // next sign-in's syncCycle() cannot merge the previous user's data
+    ACTIVITY_DAYS: "skillzify_activity_days",
+    ACTIVITY_FEED: "skillzify_activity_feed",
+    ACHIEVEMENTS: "skillzify_achievements",
+    PINS: "skillzify_pins",
+    STARS: "skillzify_stars",
+    SNIPPETS: "skillzify_snippets",
+    RUN_COUNT: "skillzify_run_count",
+    STREAK_BONUS: "skillzify_streak_bonus" // claimed 7/30-day bonus flags (activity.js)
   };
 
   function lsGet(key) {
@@ -768,7 +781,9 @@
      Called BEFORE signOut so nothing is lost. The auth-state listener below
      also wipes as a safety net if logout happens another way. */
   function clearLocalUserData() {
-    [LS.PROGRESS, LS.XP, LS.STREAK, LS.ATTEMPTS, LS.PROFILE, LS.PROFILE_TS, LS.PATHS, LS.CUSTOM_PATHS, LS.CUSTOM_PATHS_TS].forEach(function (k) {
+    [LS.PROGRESS, LS.XP, LS.STREAK, LS.ATTEMPTS, LS.PROFILE, LS.PROFILE_TS, LS.PATHS, LS.CUSTOM_PATHS, LS.CUSTOM_PATHS_TS,
+     LS.WORKSPACE, LS.WORKSPACE_TS, LS.REVIEWS, LS.REVIEWS_TS,
+     LS.ACTIVITY_DAYS, LS.ACTIVITY_FEED, LS.ACHIEVEMENTS, LS.PINS, LS.STARS, LS.SNIPPETS, LS.RUN_COUNT, LS.STREAK_BONUS].forEach(function (k) {
       try { localStorage.removeItem(k); } catch (e) {}
     });
   }

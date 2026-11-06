@@ -529,7 +529,11 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
   .nav-drop.open .nav-menu { display: block; }
   .nav-menu a { padding: 10px 14px; font-size: 0.95rem; }
   .hamburger { display: inline-flex; }
-  #account-link { display: none; }
+  /* P1-5: #account-link is the site's ONLY login/logout UI (auth.js
+     renders the Login link / 👋 name + Logout button into it). It used
+     to be display:none here, so mobile users could neither sign in nor
+     sign out. Keep it in the bar when the nav collapses; the greeting
+     name is hidden at ≤720px (see below) so the Logout button fits. */
 }
 @media (max-width: 960px) {
   .hero-grid { grid-template-columns: 1fr; }
@@ -544,6 +548,9 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 }
 @media (max-width: 720px) {
   .grid-4, .grid-3, .grid-2, .testimonials, .dash-grid { grid-template-columns: 1fr; }
+  /* P1-5: on phones hide only the "👋 Name" greeting inside #account-link
+     so the bar still fits — the Login link / Logout button stay visible. */
+  #account-link > span { display: none; }
   .dash-grid-2 { grid-template-columns: 1fr; }
   /* Dashboard mobile polish */
   .dash-card .big { font-size: 2rem; }
@@ -615,6 +622,7 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 .weak-row .bar { margin: 0 0 6px; }
 .weak-row.is-weak .bar span { background: linear-gradient(90deg, #f87171, #fb923c); }
 .weak-link { font-size: 0.85rem; font-weight: 700; }
+.weak-chip { display: inline-block; padding: 3px 10px; border: 1px solid var(--card-border); border-radius: 999px; font-size: 0.82rem; color: var(--muted); white-space: nowrap; }
 /* ---------- Practice page ---------- */
 .pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .pill {

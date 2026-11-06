@@ -285,6 +285,95 @@
     saveWS(); renderExplorer(); renderTabs(); updateStatusBar();
   }
 
+  /* ================= editor fallback (P1-7) =================
+     Plain <textarea> editor with the CodeMirror-shaped API the rest
+     of compiler.js uses, so code can still be typed, searched and run
+     when the CodeMirror CDN fails (editor == null otherwise leaves a
+     silently empty editor area). No syntax highlighting — everything
+     else (get/set value, cursor, find/replace, Ctrl+Enter to run)
+     keeps working. */
+  function makeFallbackEditor(host, initialValue) {
+    var note = document.createElement("div");
+    note.id = "cm-fallback-note";
+    note.className = "cm-fallback-note";
+    note.textContent = "⚠ Code editor failed to load — using a plain-text editor (no syntax highlighting). Your code still runs.";
+    host.appendChild(note);
+    var ta = document.createElement("textarea");
+    ta.id = "editor-fallback";
+    ta.value = initialValue || "";
+    ta.setAttribute("spellcheck", "false");
+    ta.setAttribute("aria-label", "Code editor (plain-text fallback)");
+    try { ta.style.fontSize = curFont() + "px"; } catch (e) {}
+    host.appendChild(ta);
+    var opts = { theme: "dracula", lineWrapping: false };
+    var handlers = {};
+    function fire(ev) { (handlers[ev] || []).forEach(function (fn) { try { fn(); } catch (e) {} }); }
+    function posToOffset(pos) {
+      var lines = ta.value.split("\n"), off = 0, ln = Math.max(0, Math.min(pos.line || 0, lines.length - 1));
+      for (var i = 0; i < ln; i++) off += lines[i].length + 1;
+      return off + Math.min(pos.ch || 0, (lines[ln] || "").length);
+    }
+    function offsetToPos(off) {
+      var up = ta.value.slice(0, Math.max(0, off)).split("\n");
+      return { line: up.length - 1, ch: up[up.length - 1].length };
+    }
+    function makeSearchCursor(q, fromPos, opts2) {
+      var fold = !!(opts2 && opts2.caseFold);
+      var hay = fold ? ta.value.toLowerCase() : ta.value;
+      var needle = fold ? String(q).toLowerCase() : String(q);
+      var at = fromPos ? posToOffset(fromPos) : 0;
+      var cur = { fromOff: -1, toOff: -1 };
+      function findNext() {
+        var i = hay.indexOf(needle, at);
+        if (i < 0) return false;
+        cur.fromOff = i; cur.toOff = i + needle.length; at = cur.toOff;
+        return true;
+      }
+      function findPrevious() {
+        var i = hay.lastIndexOf(needle, Math.max(0, at - needle.length - 1));
+        if (i < 0) return false;
+        cur.fromOff = i; cur.toOff = i + needle.length; at = i;
+        return true;
+      }
+      return {
+        findNext: findNext, findPrevious: findPrevious,
+        from: function () { return offsetToPos(cur.fromOff); },
+        to: function () { return offsetToPos(cur.toOff); },
+        replace: function (rep) {
+          if (cur.fromOff < 0) return;
+          ta.value = ta.value.slice(0, cur.fromOff) + rep + ta.value.slice(cur.toOff);
+          at = cur.fromOff + String(rep).length;
+          cur.toOff = at;
+          fire("change");
+        }
+      };
+    }
+    ta.addEventListener("input", function () { fire("change"); fire("cursorActivity"); });
+    ta.addEventListener("keyup", function () { fire("cursorActivity"); });
+    ta.addEventListener("click", function () { fire("cursorActivity"); });
+    ta.addEventListener("keydown", function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "enter") { e.preventDefault(); runCode(); }
+    });
+    return {
+      getValue: function () { return ta.value; },
+      setValue: function (v) { ta.value = String(v == null ? "" : v); fire("change"); },
+      getCursor: function () { return offsetToPos(ta.selectionStart || 0); },
+      setCursor: function (pos) { var off = posToOffset(pos || { line: 0, ch: 0 }); try { ta.selectionStart = off; ta.selectionEnd = off; } catch (e) {} },
+      focus: function () { try { ta.focus(); } catch (e) {} },
+      getSelection: function () { return ta.value.substring(ta.selectionStart || 0, ta.selectionEnd || 0); },
+      setSelection: function (from, to) { try { ta.selectionStart = posToOffset(from); ta.selectionEnd = posToOffset(to); } catch (e) {} },
+      scrollIntoView: function () {},
+      getSearchCursor: makeSearchCursor,
+      lastLine: function () { return ta.value.split("\n").length - 1; },
+      operation: function (fn) { fn(); },
+      setOption: function (k, v) { opts[k] = v; if (k === "lineWrapping") { try { ta.style.whiteSpace = v ? "pre-wrap" : "pre"; } catch (e) {} } },
+      getOption: function (k) { return opts[k]; },
+      refresh: function () {},
+      on: function (ev, fn) { (handlers[ev] = handlers[ev] || []).push(fn); },
+      addKeyMap: function () {}
+    };
+  }
+
   /* ================= helpers ================= */
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   function toast(m, k) { if (window.Skillzify) window.Skillzify.toast(m, k); }
@@ -294,6 +383,13 @@
   function setRunUI(running) {
     document.getElementById("run-btn").disabled = running || !pyodide;
     document.getElementById("stop-btn").disabled = !running;
+    // P1-9: the Check button must not be usable before the runtime
+    // exists — and its label must not claim "0 problems" meanwhile.
+    var chk = document.getElementById("st-check");
+    if (chk) {
+      chk.disabled = !pyodide;
+      if (!pyodide) chk.textContent = "✓ Check";
+    }
     var sr = document.getElementById("st-run");
     if (sr) sr.innerHTML = running ? "⏹" : "▶";
   }
@@ -561,19 +657,9 @@
       window.Skillzify.storeSet(RUNS_KEY, runs.slice(0, 30));
       if (window.SkillzifyActivity) window.SkillzifyActivity.log("run", "Ran " + (ws.active || "code"));
     } catch (e) {}
-    bumpStreak();
-  }
-  function bumpStreak() {
-    try {
-      var s = window.Skillzify.storeGet("skillzify_streak", { last: null, count: 0 });
-      function iso(d) { var m = d.getMonth() + 1, dy = d.getDate(); return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (dy < 10 ? "0" + dy : dy); }
-      var t = iso(new Date()), y = iso(new Date(Date.now() - 864e5));
-      if (s.last === t) return;
-      s.count = (s.last === y) ? s.count + 1 : 1;
-      s.last = t;
-      window.Skillzify.storeSet("skillzify_streak", s);
-      if (window.SkillzifySync) window.SkillzifySync.markDirty();
-    } catch (e) {}
+    // No local streak bump here: A.log() above bumps the shared
+    // counter (any activity day counts) — the old duplicate
+    // bumpStreak() is gone on purpose.
   }
 
   /* ================= output history tab ================= */
@@ -598,7 +684,18 @@
   /* ================= problems tab ================= */
   function checkProblems(silent) {
     problems = [];
-    if (pyodide && ws.active) {
+    // P1-9: without the runtime the compile check below cannot run, so
+    // reporting "no problems" would be a false pass. Say the runtime is
+    // still loading instead — never a pass.
+    if (!pyodide) {
+      var host = document.getElementById("problems-list");
+      if (host) host.innerHTML = '<div class="empty-note">⏳ Python runtime still loading — try again in a moment.</div>';
+      var badge = document.getElementById("prob-badge");
+      if (badge) badge.style.display = "none";
+      if (!silent) switchPtab("problems");
+      return problems;
+    }
+    if (ws.active) {
       var code = ws.files[ws.active];
       try {
         pyodide.runPython("compile(" + JSON.stringify(code) + ", '<editor>', 'exec')");
@@ -666,7 +763,7 @@
     if (editor) editor.focus();
   }
   function doFind(dir) {
-    if (!editor || !window.CodeMirror) return;
+    if (!editor) return; // fallback editor implements getSearchCursor too
     var q = document.getElementById("find-input").value;
     if (!q) { document.getElementById("find-count").textContent = ""; return; }
     if (q !== findState.query || !findState.cursor) {
@@ -755,7 +852,11 @@
     host.querySelectorAll("[data-rh]").forEach(function (b) {
       b.addEventListener("click", function () {
         var v = window.Skillzify.storeGet(HIST_KEY, [])[+b.getAttribute("data-rh")];
-        if (v && ws.files.hasOwnProperty(v.file)) { openFile(v.file); editor.setValue(v.code); persistActiveFile(); saveWS(); renderTabs(); toast("Version restored 🕘", "success"); }
+        if (v && ws.files.hasOwnProperty(v.file)) {
+          openFile(v.file);
+          if (!editor) { toast("Editor unavailable — version not restored", "error"); return; }
+          editor.setValue(v.code); persistActiveFile(); saveWS(); renderTabs(); toast("Version restored 🕘", "success");
+        }
       });
     });
     host.querySelectorAll("[data-dh]").forEach(function (b) {
@@ -825,6 +926,37 @@
     try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
   }
   function loadSharedWS() {
+    // P1-3: pinned-snippet deep link (compiler.html#snippet-<id>) — open
+    // a saved snippet (SkillzifyActivity) as its own file in the
+    // workspace, keeping the user's existing files. This runs before
+    // the editor exists, so it works through ws (the editor initialises
+    // from ws.files[ws.active]); the hash is cleared once used, like
+    // the #ws= / #code= links below. Unknown ids fall through to a
+    // normal load.
+    var m3 = (location.hash || "").match(/^#snippet-(.+)$/);
+    if (m3) {
+      try {
+        var A = window.SkillzifyActivity;
+        var list = (A && A.snippets) ? A.snippets() : [];
+        var snip = null;
+        list.forEach(function (s) { if (s.id === m3[1]) snip = s; });
+        if (snip && snip.code) {
+          var base = validName((snip.title || "snippet").replace(/[^A-Za-z0-9_\- ]/g, "").trim().replace(/\s+/g, "-").toLowerCase()) || "snippet.py";
+          var fname = base, fi = 2;
+          while (ws.files.hasOwnProperty(fname)) fname = base.replace(/\.py$/, "") + "-" + (fi++) + ".py";
+          ws.files[fname] = snip.code;
+          if (!ws.mtimes) ws.mtimes = {};
+          ws.mtimes[fname] = Date.now();
+          if (ws.deleted) delete ws.deleted[fname];
+          if (ws.tabs.indexOf(fname) < 0) ws.tabs.push(fname);
+          ws.active = fname;
+          saveWS();
+          clearShareHash();
+          toast("Snippet loaded 📝", "success");
+          return true;
+        }
+      } catch (e) {}
+    }
     var m = (location.hash || "").match(/^#ws=(.+)$/);
     if (!m) return false;
     try {
@@ -971,12 +1103,22 @@
       }
       var m = text.match(/```(?:python)?\n?([\s\S]*?)```/i);
       var code = m ? m[1].trim() : ((opts.mode === "generate" || opts.mode === "fix") ? text.trim() : null);
-      if (code && onCode) onCode(code);
+      // P1-8: a throwing onCode (e.g. editor.setValue with no editor)
+      // used to be swallowed by ai.js safeCb BEFORE the answer rendered,
+      // leaving the panel stuck on "Working…" forever. Catch it here so
+      // the panel always leaves "Working…" and shows the error.
+      var codeErr = null;
+      if (code && onCode) {
+        try { onCode(code); }
+        catch (e) { codeErr = (e && e.message) || "The editor isn't available."; }
+      }
       var via = res.via === "key" ? " (your key)" : res.via === "offline" ? " (offline)" : "";
       // Item 8a (round 4): repeat question served from cache — small
       // "(cached)" note beside the heading, like the "via" notes.
       if (res.cached) via += " (cached)";
-      renderAi("<h4>🤖 " + label + via + "</h4><p>" + esc(text).replace(/\n/g, "<br>") + "</p>");
+      var html = "<h4>🤖 " + label + via + "</h4><p>" + esc(text).replace(/\n/g, "<br>") + "</p>";
+      if (codeErr) html += "<p>⚠️ Couldn't load the code into the editor: " + esc(codeErr) + " — the code is shown above; copy it from there.</p>";
+      renderAi(html);
     });
   }
 
@@ -1076,6 +1218,19 @@
         clearTimeout(saveT);
         saveT = setTimeout(function () { persistActiveFile(); saveWS(); }, 800);
       });
+    } else {
+      // P1-7: CodeMirror CDN failed — say so LOUDLY and fall back to a
+      // plain <textarea> editor so code can still be typed and run.
+      editor = makeFallbackEditor(document.getElementById("editor-host"), ws.active ? ws.files[ws.active] : "");
+      editor.on("cursorActivity", updateStatusBar);
+      editor.on("change", function () { updateStatusBar(); markUnsaved(); });
+      var saveT = null;
+      editor.on("change", function () {
+        clearTimeout(saveT);
+        saveT = setTimeout(function () { persistActiveFile(); saveWS(); }, 800);
+      });
+      printLine("⚠ Code editor failed to load (CodeMirror CDN unreachable) — plain-text editor active. Code still runs.", "err");
+      try { toast("Code editor failed to load — using plain-text editor", "error"); } catch (e) {}
     }
 
     renderExplorer(); renderTabs(); renderHistory(); updateStatusBar();
@@ -1165,6 +1320,7 @@
       if (d == null || !d.trim()) return;
       aiCall({ mode: "generate", code: d.trim() }, "generated", function (code) {
         if (!ws.active) return;
+        if (!editor) throw new Error("The code editor didn't load, so the generated code couldn't be placed in the editor.");
         editor.setValue(code); persistActiveFile(); saveWS(); renderTabs(); updateStatusBar();
         toast("Code generated ✨ — review it, then Run", "success");
       });
@@ -1183,6 +1339,7 @@
       if (!lastError || !ws.active) { renderAi('<p style="color:var(--ide-muted)">Run some code first — when it errors, I\'ll fix it here.</p>'); switchView("ai"); return; }
       persistActiveFile();
       aiCall({ mode: "fix", code: ws.files[ws.active], error: lastError }, "fix", function (code) {
+        if (!editor) throw new Error("The code editor didn't load, so the fixed code couldn't be placed in the editor.");
         editor.setValue(code); persistActiveFile(); saveWS(); renderTabs(); updateStatusBar();
         toast("Fixed code loaded 🔧 — press Run to verify", "success");
       });
@@ -1257,6 +1414,7 @@
       if (window.SkillzifyAI && window.SkillzifyAI.warmup) window.SkillzifyAI.warmup();
       else fetch("api/health", { method: "GET", cache: "no-store" }).catch(function () {});
     } catch (e) {}
+    setRunUI(false); // P1-9: Run + Check start disabled until Pyodide is ready
     loadPyodideRuntime();
   });
 })();

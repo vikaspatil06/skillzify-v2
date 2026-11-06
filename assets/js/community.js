@@ -308,8 +308,9 @@
     try { xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0; } catch (e) {}
     try {
       var prog = JSON.parse(localStorage.getItem("skillzify_progress") || "{}");
-      var lessons = prog.lessons || {};
-      lessonsDone = Object.keys(lessons).filter(function (k) { return !!lessons[k]; }).length;
+      // skillzify_progress is a FLAT map {b1: true, ...} (learn-core.js
+      // getProgress) — count its truthy keys, not a nested .lessons object.
+      lessonsDone = Object.keys(prog).filter(function (k) { return !!prog[k]; }).length;
     } catch (e) {}
     try {
       var st = window.SkillzifyActivity ? window.SkillzifyActivity.streak() : null;

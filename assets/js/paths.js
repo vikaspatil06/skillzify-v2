@@ -418,6 +418,12 @@
 
   /* ---------------- ROUTER ---------------- */
   function route() {
+    // Backfill: a section or path finished before the +100/+150 bonuses
+    // shipped still pays out once (flags in learn-core.js).
+    try {
+      var LC = window.SkillzifyLearnCore;
+      if (LC) { if (LC.checkSectionBonuses) LC.checkSectionBonuses(); if (LC.checkPathBonuses) LC.checkPathBonuses(); }
+    } catch (e) {}
     var m = (location.hash || "").match(/^#path=([\w-]+)/);
     if (m) renderDetail(m[1]); else renderList();
     window.scrollTo(0, 0);

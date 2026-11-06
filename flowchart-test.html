@@ -303,10 +303,23 @@ END</textarea>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="assets/js/auth.js?v=3"></script>
-<script src="assets/js/ai.js?v=10"></script>
+<script src="assets/js/ai.js?v=12"></script>
 <script>
 let pyodide = null, currentGraph = null, currentSVG = null, currentMermaid = null, currentZoom = 1, currentSource = null;
-mermaid.initialize({ startOnLoad: false, theme: 'default', flowchart: { useMaxWidth: true } });
+/* Mermaid loads from the jsdelivr CDN (line 10): if it fails, the bare
+   mermaid.initialize() below used to throw and abort this whole script —
+   mode tabs never wired, init() never ran, no error shown. Guard it so
+   the rest of the page still works and the failure is visible in the
+   status line. (setStatus/esc are hoisted function declarations, so
+   calling setStatus here is safe; #status exists above this script.) */
+var mermaidReady = false;
+var MERMAID_FAIL_MSG = '✗ Flowchart diagrams unavailable — the Mermaid library failed to load. Check your connection and reload the page.';
+if (window.mermaid) {
+  mermaid.initialize({ startOnLoad: false, theme: 'default', flowchart: { useMaxWidth: true } });
+  mermaidReady = true;
+} else {
+  setStatus(MERMAID_FAIL_MSG, 'err');
+}
 
 /* ---------- tabs ---------- */
 document.querySelectorAll('.mode-card').forEach(c => {
@@ -348,6 +361,10 @@ async function init() {
     } else {
       setStatus('✓ Ready — pick a mode and hit Generate', 'ok');
     }
+    // Mermaid failed to load: the guard above already showed the error,
+    // but init() overwrites the status line while loading — re-assert it
+    // so the failure stays visible instead of a misleading "✓ Ready".
+    if (!mermaidReady) setStatus(MERMAID_FAIL_MSG, 'err');
   } catch(e) { setStatus('✗ ' + e.message, 'err'); }
 }
 

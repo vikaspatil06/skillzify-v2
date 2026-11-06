@@ -19,7 +19,8 @@
       trackUnlocked = LC.trackUnlocked, trackPct = LC.trackPct,
       sectionLessons = LC.sectionLessons, sectionUnlocked = LC.sectionUnlocked,
       sectionPct = LC.sectionPct,
-      currentIdx = LC.currentIdx;
+      currentIdx = LC.currentIdx,
+      reducedMotion = LC.reducedMotion;
 
   function renderHero() {
     var card = document.getElementById("xp-card");
@@ -243,8 +244,36 @@
     }
   }
 
+  /* P1-3: pinned / palette deep links (learn.html#lesson-<id>). Same as
+     clicking the lesson node: an unlocked lesson opens on lesson.html;
+     a locked one is revealed in place (its section expands and scrolls
+     into view); unknown ids are ignored. */
+  function openHashLesson() {
+    var m = (location.hash || "").match(/^#lesson-(.+)$/);
+    if (!m) return;
+    var lesson = null;
+    LESSONS.forEach(function (l) { if (l.id === m[1]) lesson = l; });
+    if (!lesson) return;
+    if (isUnlocked(idxOf(lesson.id))) {
+      location.href = "lesson.html?id=" + encodeURIComponent(lesson.id);
+      return;
+    }
+    try {
+      var sec = document.querySelector('[data-section="' + lesson.section + '"]');
+      if (sec) {
+        sec.classList.remove("collapsed");
+        var head = sec.querySelector(".track-head");
+        if (head) head.setAttribute("aria-expanded", "true");
+        sec.scrollIntoView({ block: "start", behavior: reducedMotion() ? "auto" : "smooth" });
+      }
+    } catch (e) {}
+  }
+
   function renderAll() {
     renderHero(); renderProgress(); renderContinue(); renderTracks(); initSearch();
+    // Backfill: a section or path finished before the +100/+150 bonuses
+    // shipped still pays out once (flags in learn-core.js).
+    try { if (LC.checkSectionBonuses) LC.checkSectionBonuses(); if (LC.checkPathBonuses) LC.checkPathBonuses(); } catch (e) {}
     requestAnimationFrame(function () { drawPaths(); scrollToCurrent(); });
   }
   var resizeT = null;
@@ -256,6 +285,7 @@
   document.addEventListener("DOMContentLoaded", function () {
     if (!document.getElementById("tracks")) return;
     renderAll();
+    openHashLesson();
     lastUnlockJson = unlockJson();
   });
 

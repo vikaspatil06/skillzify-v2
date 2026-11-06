@@ -24,6 +24,11 @@
 
   /* ---------------- event logging ---------------- */
   function log(type, text) {
+    // Every logged event is an activity day: bump the streak counter
+    // here so ANY activity (lesson, exercise, code run, review...)
+    // counts — the counter is the single source of truth read by the
+    // dashboard, the profile and the achievements.
+    bumpStreakCounter();
     var days = get(DAYS_KEY, {});
     var t = todayStr();
     days[t] = (days[t] || 0) + 1;
@@ -47,12 +52,48 @@
   function runCount() { return get(RUN_COUNT_KEY, 0) || 0; }
 
   /* ---------------- streaks ---------------- */
+  // Single source of truth: the counter in localStorage
+  // `skillzify_streak` {last: "yyyy-MM-dd", count: n}. It is bumped by
+  // log() on ANY activity day, so the dashboard, the profile and the
+  // achievements all read the same number. The counter syncs
+  // cross-device (later-date-wins in sync.js); the days log below is
+  // local-only and is kept only for the `longest` computation.
+  // Known limitation (not redesigned): later-date-wins means two
+  // devices active on different days can clobber each other's count.
+  var STREAK_KEY = "skillzify_streak";
+  var STREAK_BONUS_KEY = "skillzify_streak_bonus"; // {d7: true, d30: true}
+  function isoDay(d) { var m = d.getMonth() + 1, dy = d.getDate(); return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (dy < 10 ? "0" + dy : dy); }
+  // Accept both yyyy-MM-dd and legacy toDateString() formats.
+  function normDay(v) {
+    if (!v) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    var t = new Date(v);
+    return isNaN(t.getTime()) ? null : isoDay(t);
+  }
+  // {last, count, current} — current is 0 when the streak has lapsed
+  // (last activity was neither today nor yesterday); count keeps the
+  // last completed length so `longest` stays correct.
+  function streakCounter() {
+    var s = get(STREAK_KEY, { last: null, count: 0 });
+    var last = normDay(s.last);
+    var today = isoDay(new Date()), yest = isoDay(new Date(Date.now() - 864e5));
+    var current = (last === today || last === yest) ? (s.count || 0) : 0;
+    return { last: last, count: s.count || 0, current: current };
+  }
+  function bumpStreakCounter() {
+    var s = get(STREAK_KEY, { last: null, count: 0 });
+    var today = isoDay(new Date()), yest = isoDay(new Date(Date.now() - 864e5));
+    var last = normDay(s.last);
+    if (last === today) return s; // already counted today
+    s.count = (last === yest) ? (s.count || 0) + 1 : 1;
+    s.last = today;
+    set(STREAK_KEY, s);
+    try { if (window.SkillzifySync && typeof window.SkillzifySync.markDirty === "function") window.SkillzifySync.markDirty(); } catch (e) {}
+    return s;
+  }
   function streak() {
-    var days = dayCounts(), cur = 0, longest = 0, run = 0;
-    var d = new Date();
-    // current streak: count back from today (allow today to be empty if not yet active)
-    if (!days[todayStr(d)]) d.setDate(d.getDate() - 1);
-    while (days[todayStr(d)]) { cur++; d.setDate(d.getDate() - 1); }
+    var c = streakCounter();
+    var days = dayCounts(), longest = 0, run = 0;
     // longest: scan all keys sorted
     var keys = Object.keys(days).sort();
     var prev = null;
@@ -64,7 +105,10 @@
       if (run > longest) longest = run;
       prev = k;
     });
-    return { current: cur, longest: longest };
+    // The counter may know of a longer streak (e.g. synced from
+    // another device) than this device's local days log.
+    if (c.count > longest) longest = c.count;
+    return { current: c.current, longest: longest };
   }
 
   /* ---------------- achievements ---------------- */
@@ -75,6 +119,7 @@
     { id: "xp_500",       icon: "⚡", name: "Charged",       desc: "Earn 500 XP" },
     { id: "xp_1000",      icon: "🚀", name: "Rocket",        desc: "Earn 1,000 XP" },
     { id: "xp_5000",      icon: "🌟", name: "Superstar",     desc: "Earn 5,000 XP" },
+    { id: "xp_10000",     icon: "🌟", name: "Legend",        desc: "Earn 10,000 XP" },
     { id: "streak_3",     icon: "🔥", name: "Warming Up",    desc: "3-day learning streak" },
     { id: "streak_7",     icon: "🔥", name: "On Fire",       desc: "7-day learning streak" },
     { id: "streak_30",    icon: "🔥", name: "Unstoppable",   desc: "30-day learning streak" },
@@ -103,6 +148,23 @@
     try { xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0; } catch (e) {}
     try { var p = JSON.parse(localStorage.getItem("skillzify_progress") || "{}"); done = Object.keys(p).length; } catch (e) {}
     var s = streak(), runs = runCount(), snips = get(SNIP_KEY, []).length;
+    // Streak-milestone XP: +50 the first time the streak reaches 7 days,
+    // +150 at 30 days. Flags make each fire exactly once per device
+    // (XP itself syncs by MAX, so a second device can't double-count
+    // the synced total). No A.log() here — this already runs inside log().
+    try {
+      var bonus = get(STREAK_BONUS_KEY, {});
+      if (s.current >= 7 && !bonus.d7) {
+        bonus.d7 = true; set(STREAK_BONUS_KEY, bonus);
+        xp += 50; try { localStorage.setItem("skillzify_xp", String(xp)); } catch (e2) {}
+        if (window.Skillzify && typeof window.Skillzify.toast === "function") window.Skillzify.toast("🔥 7-day streak! +50 XP", "success");
+      }
+      if (s.current >= 30 && !bonus.d30) {
+        bonus.d30 = true; set(STREAK_BONUS_KEY, bonus);
+        xp += 150; try { localStorage.setItem("skillzify_xp", String(xp)); } catch (e2) {}
+        if (window.Skillzify && typeof window.Skillzify.toast === "function") window.Skillzify.toast("🔥 30-day streak! +150 XP", "success");
+      }
+    } catch (e) {}
     if (done >= 1) unlock("first_steps");
     var totalLessons = (window.SkillzifyLearn && window.SkillzifyLearn.totalLessons) || 250;
     if (done >= totalLessons) unlock("scholar");
@@ -130,6 +192,7 @@
     if (xp >= 500) unlock("xp_500");
     if (xp >= 1000) unlock("xp_1000");
     if (xp >= 5000) unlock("xp_5000");
+    if (xp >= 10000) unlock("xp_10000");
     if (s.current >= 3 || s.longest >= 3) unlock("streak_3");
     if (s.current >= 7 || s.longest >= 7) unlock("streak_7");
     if (s.current >= 30 || s.longest >= 30) unlock("streak_30");
@@ -208,7 +271,7 @@
 
   window.SkillzifyActivity = {
     log: log, feed: feed, dayCounts: dayCounts, runCount: runCount,
-    streak: streak, achievements: achievements, unlocked: unlocked,
+    streak: streak, bumpStreak: bumpStreakCounter, achievements: achievements, unlocked: unlocked,
     identicon: identicon,
     pins: pins, togglePin: togglePin, isPinned: isPinned,
     stars: stars, toggleStar: toggleStar, isStarred: isStarred,

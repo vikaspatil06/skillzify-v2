@@ -1,4 +1,4 @@
-/* Skillzify Python Reference — dynamic lookup engine v2.
+/* Skillzify Python Reference — dynamic lookup engine v3.
    Sidebar: search (name/sig/desc/example) + keyboard nav + recent /
    favourites + collapsible groups with counts.
    Content: overview (group cards) or a detail card — signature,
@@ -161,7 +161,11 @@
   }
   function openKbd() {
     var links = navLinks();
-    if (navActive >= 0 && links[navActive]) show(links[navActive].getAttribute("data-name"));
+    if (!links.length) return;
+    // No selection yet (navActive is -1 until an arrow key is pressed):
+    // fall back to the first visible link, like the command palette does.
+    var idx = navActive >= 0 ? navActive : 0;
+    if (links[idx]) show(links[idx].getAttribute("data-name"));
   }
 
   /* ---------------- Inline runner (lazy Pyodide) ---------------- */

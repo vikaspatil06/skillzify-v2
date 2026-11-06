@@ -176,6 +176,19 @@
     while (el && !(el.className && String(el.className).indexOf("dash-card") >= 0)) el = el.parentNode;
     if (el) el.style.display = "none";
   }
+  // Undo what renderPublic() hid, so switching from a public view back
+  // to the own view (e.g. signing in while on ?uid=<own-uid>) restores
+  // the edit/certs/pins/achievements UI instead of leaving it hidden.
+  function showOwnCards() {
+    ["edit-profile-btn", "profile-sync"].forEach(function (id) {
+      var el = document.getElementById(id); if (el) el.style.display = "";
+    });
+    ["profile-certs", "profile-mastery-bar", "profile-pins", "profile-achievements", "profile-feed-card"].forEach(function (id) {
+      var el = document.getElementById(id);
+      while (el && !(el.className && String(el.className).indexOf("dash-card") >= 0)) el = el.parentNode;
+      if (el) el.style.display = "";
+    });
+  }
   function renderPublic(uid) {
     var C = window.SkillzifyCommunity;
     ["edit-profile-btn", "profile-sync"].forEach(function (id) {
@@ -221,14 +234,30 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    var me = null;
-    try { me = window.SkillzifyAuth && window.SkillzifyAuth.currentUser(); } catch (e) {}
     var wantUid = null;
     try { wantUid = new URLSearchParams(location.search).get("uid"); } catch (e) {}
-    if (wantUid && (!me || me.uid !== wantUid)) { renderPublic(wantUid); return; }
-    A.checkAchievements();
-    render();
-    try { if (window.SkillzifyCommunity) window.SkillzifyCommunity.publishPublicProfile(); } catch (e) {}
+
+    // P1-2: decide own-vs-public only once the auth state is known, and
+    // re-decide on every later sign-in/out. Deciding synchronously here
+    // reads currentUser() before Firebase has resolved, so the owner
+    // opening their own ?uid= link is shown the public view (edit /
+    // certs / mastery / pins / achievements hidden) until a reload.
+    // onAuthChange fires immediately if auth is already ready, on first
+    // ready otherwise, and again on every later auth change.
+    function decideView() {
+      var me = null;
+      try { me = window.SkillzifyAuth && window.SkillzifyAuth.currentUser(); } catch (e) {}
+      if (wantUid && (!me || me.uid !== wantUid)) { renderPublic(wantUid); return; }
+      showOwnCards();
+      A.checkAchievements();
+      render();
+      try { if (window.SkillzifyCommunity) window.SkillzifyCommunity.publishPublicProfile(); } catch (e) {}
+    }
+    if (window.SkillzifyAuth && typeof window.SkillzifyAuth.onAuthChange === "function") {
+      window.SkillzifyAuth.onAuthChange(decideView);
+    } else {
+      decideView();
+    }
     var drawer = document.getElementById("profile-modal");
     function openDrawer() {
       var p = A.profile();

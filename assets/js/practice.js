@@ -896,6 +896,10 @@
     var ex = cur;
     document.querySelectorAll("#predict-opts button").forEach(function (b) {
       b.addEventListener("click", function () {
+        // Solved exercises ignore further option clicks: a wrong click
+        // after "✓ Correct!" must not overwrite the success message
+        // (or inflate the attempt count).
+        if (attFor(ex.id).solved) return;
         var i = parseInt(b.getAttribute("data-opt"), 10);
         var msg = $("predict-msg");
         var a = setAtt(ex.id, { attempts: attFor(ex.id).attempts + 1 });

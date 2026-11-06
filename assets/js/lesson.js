@@ -22,8 +22,7 @@
   var highlightPython = LC.highlight, copyCode = LC.copyCode, tryInCompiler = LC.tryInCompiler;
   var getProgress = LC.getProgress, saveProgress = LC.saveProgress,
       getState = LC.getState, saveState = LC.saveState,
-      getXP = LC.getXP, addXP = LC.addXP, levelFor = LC.levelFor,
-      bumpStreak = LC.bumpStreak;
+      getXP = LC.getXP, addXP = LC.addXP, levelFor = LC.levelFor;
   var idxOf = LC.idxOf, lessonById = LC.lessonById, isDone = LC.isDone,
       isUnlocked = LC.isUnlocked, isPathOnlyUnlocked = LC.isPathOnlyUnlocked;
 
@@ -110,6 +109,14 @@
   }
 
   /* ================= AI tutor (F1) ================= */
+  // Section name for a lesson — the same lookup renderLesson() and
+  // renderLocked() use. (P0-1/P0-2 fix: bindTutor/bindFreshQuiz used
+  // `track.name`, but `track` is only a local var inside those two
+  // render functions, so the AI call threw ReferenceError.)
+  function sectionName(lesson) {
+    var s = (SECTIONS.filter(function (t) { return t.id === lesson.section; })[0]) || { name: "Python" };
+    return s.name;
+  }
   // Signed-out users get 10 AI answers/day (50/day signed in) — the
   // tutor card says so, and only there. Guarded: no auth module, no hint.
   function capHintHtml() {
@@ -141,7 +148,7 @@
       AI.ask({
         mode: "tutor-lesson",
         code: code,
-        context: AI.buildContext({ lesson: lesson.title, section: track.name })
+        context: AI.buildContext({ lesson: lesson.title, section: sectionName(lesson) })
       }, function (err, res) {
         askBtn.disabled = false; input.disabled = false;
         if (err) {
@@ -193,7 +200,7 @@
         mode: "quiz",
         json: true,
         code: JSON.stringify(payload),
-        context: AI.buildContext({ lesson: lesson.title, section: track.name })
+        context: AI.buildContext({ lesson: lesson.title, section: sectionName(lesson) })
       }, function (err, res) {
         btn.disabled = false;
         btn.textContent = label;
@@ -442,8 +449,13 @@
     var p = getProgress(); p[lesson.id] = true; saveProgress(p);
     if (window.SkillzifyReview && typeof window.SkillzifyReview.scheduleFor === "function") window.SkillzifyReview.scheduleFor(lesson.id);
     var st = getState(); delete st[lesson.id]; saveState(st);
-    bumpStreak();
+    // One-time completion bonuses (section +100, path +150) — flags in
+    // learn-core.js make them fire exactly once.
+    try { if (LC.checkSectionBonuses) LC.checkSectionBonuses(); } catch (e) {}
+    try { if (LC.checkPathBonuses) LC.checkPathBonuses(); } catch (e) {}
     if (window.SkillzifySync) window.SkillzifySync.markDirty();
+    // A.log() bumps the streak counter (any activity day counts) —
+    // the old direct bumpStreak() call here is gone on purpose.
     if (window.SkillzifyActivity) window.SkillzifyActivity.log("lesson", "Completed lesson: " + lesson.title);
     confetti();
     xpPop(gain);

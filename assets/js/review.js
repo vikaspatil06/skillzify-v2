@@ -1,4 +1,4 @@
-/* Skillzify spaced repetition (SM-2-lite) — review.js v1.
+/* Skillzify spaced repetition (SM-2-lite) — review.js v3.
    Completing a lesson schedules its first review due in 1 day.
    Intervals on a correct recall: 1 -> 3 -> 7 -> 14 -> 30 -> 60 days.
    A missed recall resets the interval to 1 day.
@@ -75,6 +75,31 @@
     }
     m[id] = { interval: next, due: t + next * DAY, updatedAt: t };
     writeMap(m);
+    // Correct recall earns +5 XP. This runs once per lesson reviewed in
+    // a session — and a correct review pushes the next due date at
+    // least 3 days out, so the same lesson can't pay twice in a day.
+    if (correct) {
+      var awarded = false;
+      try {
+        if (window.SkillzifyLearnCore && typeof window.SkillzifyLearnCore.addXP === "function") {
+          window.SkillzifyLearnCore.addXP(5); awarded = true;
+        }
+      } catch (e) {}
+      if (!awarded) {
+        try {
+          var xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0;
+          localStorage.setItem("skillzify_xp", String(xp + 5));
+        } catch (e2) {}
+      }
+    }
+    // Any review is an activity day, so it logs to the streak counter
+    // via A.log() (correct or not).
+    try {
+      if (window.SkillzifyActivity && typeof window.SkillzifyActivity.log === "function") {
+        var l = lessonById(id);
+        window.SkillzifyActivity.log("review", "Reviewed: " + (l ? l.title : id) + (correct ? " (+5 XP)" : ""));
+      }
+    } catch (e) {}
     return m[id];
   }
   function dueList() {
@@ -103,7 +128,9 @@
   function renderSection(mount) {
     if (!mount || session) return;
     var due = dueList().filter(function (id) { return !!lessonById(id); });
-    var total = Object.keys(readMap()).length;
+    // Count only lessons that exist in the catalog, exactly like the
+    // due list above — stale/unknown scheduled ids must not inflate it.
+    var total = Object.keys(readMap()).filter(function (id) { return !!lessonById(id); }).length;
     var html = '<h3 style="margin:0 0 4px">🔁 Review</h3>' +
       '<p class="hint" style="margin:0 0 10px">Spaced repetition — completed lessons come back just before you forget them.</p>';
     if (!due.length) {
