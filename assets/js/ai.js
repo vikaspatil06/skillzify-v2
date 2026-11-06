@@ -275,7 +275,9 @@
     if (!key) return Promise.reject(new Error("no-key"));
     var prompt = opts.mode === "generate" ? "Write Python code for: " + (opts.code || "")
       : opts.mode === "fix" ? "Fix this Python code. Error: " + (opts.error || "") + "\n\n" + (opts.code || "")
-      : opts.mode === "flowchart" ? "Write ONLY clean, simple Python code that solves this problem. Output raw code only:\n\n" + (opts.code || "")
+      : opts.mode === "flowchart" ? "Write ONLY clean, simple Python code that solves this problem. Use only beginner Python (input/print, if/elif/else, for/while loops, functions, lists) — no classes, decorators, or match statements. Output raw code only:\n\n" + (opts.code || "")
+      : opts.mode === "flowchart-code" ? "Write ONLY clean, simple Python code that implements these flowchart steps. Use input() for INPUT steps and print() for PRINT/OUTPUT steps. Output raw code only:\n\n" + (opts.code || "")
+      : opts.mode === "flowchart-explain" ? "Explain this flowchart / algorithm in plain words, step by step, as if teaching a beginner what the program does and why each step exists. No code, just the explanation.\n\nFLOWCHART / ALGORITHM:\n" + (opts.code || "")
       : "Explain this Python code for a beginner. Code:\n" + (opts.code || "") + (opts.error ? "\nError:\n" + opts.error : "");
     if (opts.json) {
       prompt += "\n\nReturn ONLY valid JSON, no markdown fences, no explanation.";

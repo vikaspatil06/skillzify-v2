@@ -5,10 +5,31 @@ Converts Python source code into a flowchart graph (nodes + edges as JSON).
 Runs inside Pyodide in the browser. Entry point: flowchart_json(code) -> str.
 
 Node types: start, end, process, decision, io, subroutine
-Edge: {from, to, label} — label is "" or "Yes"/"No".
+Edge: {from, to, label} — label is "" or "Yes"/"No" (or an exception
+name on a try-handler edge, or "no error" on a try-orelse edge).
 
 Deterministic AST-based generation (no AI hallucination). A node budget
 keeps huge programs readable.
+
+Design notes (rewritten 6 Nov 2026 after a deep check found the old
+walker charted every statement once per incoming tail, duplicating
+whole branches after any if-without-else):
+- walk_body/walk_stmt take a LIST of entry tails and walk each statement
+  exactly once, connecting every entry to the statement's first node.
+  A tail is either a node id, or a (node_id, edge_label) tuple meaning
+  "when connecting onward, label the edge" (the No-exit of an if/loop).
+- break/continue/return terminate the path they are on: break routes to
+  the statement after the innermost loop, continue jumps back to the
+  loop condition, return routes straight to End. They never chain onward.
+- A function definition is a subroutine node only: its body is NOT
+  charted in the main flow (a def does not execute its body). The body
+  can be charted separately by pasting it on its own.
+- try/except/else/finally: handler edges are labelled with the exception
+  type, the orelse edge with "no error", and finally is walked once with
+  every path as its entries (never duplicated per path).
+- match/case is charted as a decision chain (subject node, then one
+  decision per case, No chaining to the next case).
+- The End node always gets a reserved slot, even for truncated programs.
 """
 
 import ast
@@ -16,27 +37,33 @@ import json
 
 
 MAX_LABEL = 42
+MAX_DECISION_LABEL = 60
 NODE_BUDGET = 60
 
 
-def _short(node):
+def _cap(s, cap=MAX_LABEL):
+    s = " ".join(str(s).split())
+    if len(s) > cap:
+        s = s[: cap - 1] + "\u2026"
+    return s
+
+
+def _short(node, cap=MAX_LABEL):
     try:
         s = ast.unparse(node).replace("\n", " ").strip()
     except Exception:
         s = type(node).__name__
-    s = " ".join(s.split())
-    if len(s) > MAX_LABEL:
-        s = s[: MAX_LABEL - 1] + "\u2026"
-    return s
+    return _cap(s, cap)
 
 
-def _is_io_call(node):
-    return (
-        isinstance(node, ast.Expr)
-        and isinstance(node.value, ast.Call)
-        and isinstance(node.value.func, ast.Name)
-        and node.value.func.id in ("print", "input")
-    )
+def _has_io_call(node):
+    """True when the statement (sub)tree calls print() or input()."""
+    for sub in ast.walk(node):
+        if (isinstance(sub, ast.Call)
+                and isinstance(sub.func, ast.Name)
+                and sub.func.id in ("print", "input")):
+            return True
+    return False
 
 
 class FlowchartBuilder:
@@ -46,6 +73,10 @@ class FlowchartBuilder:
         self._n = 0
         self.budget = budget
         self.truncated = False
+        # Stack of innermost-loop frames: {"cond": id, "breaks": [ids]}.
+        self._loops = []
+        # Return nodes: they route straight to End, never onward.
+        self._exits = []
 
     def _next_id(self):
         return "n%d" % (self._n + 1)
@@ -69,142 +100,207 @@ class FlowchartBuilder:
                 e["label"] = label
                 return
 
-    # ---- core: walk a statement list, return list of tail ids ----
-    # A tail is either a node id, or a (node_id, edge_label) tuple meaning
-    # "when connecting onward, label the edge".
-
-    def walk_body(self, stmts, entry):
-        """Chain statements after `entry`. Returns list of tails."""
-        tails = [entry]
-        for s in stmts:
-            new_tails = []
-            for t in tails:
-                if isinstance(t, tuple):
-                    base, pending_label = t
-                else:
-                    base, pending_label = t, ""
-                if base is None:
-                    continue
-                # The first edge from base into this statement carries
-                # any pending label (e.g. "No" from a loop exit).
-                first_id = self._next_id()
-                stmt_tails = self.walk_stmt(s, base)
-                if pending_label and self._next_id() != first_id:
-                    self.label_edge(base, first_id, pending_label)
-                new_tails.extend(stmt_tails)
-            tails = new_tails
-            if not tails:
-                break
-        return tails
-
-    def _connect(self, tails, nxt):
-        for t in tails:
+    def _connect(self, entries, nxt):
+        """Connect every entry tail to nxt, honouring tuple labels."""
+        for t in entries:
             if isinstance(t, tuple):
                 self.add_edge(t[0], nxt, t[1])
             else:
                 self.add_edge(t, nxt)
 
-    def walk_stmt(self, s, prev):
-        """Walk one statement after `prev`. Returns list of tails."""
+    # ---- core: walk a statement list, return list of tail ids ----
+    # A tail is either a node id, or a (node_id, edge_label) tuple meaning
+    # "when connecting onward, label the edge".
+
+    def walk_body(self, stmts, entries):
+        """Walk statements once, chaining after `entries`. Returns tails."""
+        tails = list(entries)
+        for s in stmts:
+            if not tails:
+                break
+            tails = self.walk_stmt(s, tails)
+        return tails
+
+    def walk_stmt(self, s, entries):
+        """Walk one statement after `entries` (list of tails). Returns tails."""
         # ---- simple statements ----
         if isinstance(s, (ast.Assign, ast.AugAssign, ast.AnnAssign,
                           ast.Import, ast.ImportFrom, ast.Assert,
                           ast.Delete, ast.Global, ast.Nonlocal)):
-            nid = self.add_node("process", _short(s))
-            self.add_edge(prev, nid)
-            return [nid] if nid else []
+            ntype = "io" if _has_io_call(s) else "process"
+            nid = self.add_node(ntype, _short(s))
+            if not nid:
+                return []
+            self._connect(entries, nid)
+            return [nid]
 
         if isinstance(s, ast.Expr):
-            ntype = "io" if _is_io_call(s) else "process"
+            ntype = "io" if _has_io_call(s) else "process"
             nid = self.add_node(ntype, _short(s))
-            self.add_edge(prev, nid)
-            return [nid] if nid else []
+            if not nid:
+                return []
+            self._connect(entries, nid)
+            return [nid]
 
-        if isinstance(s, (ast.Break, ast.Continue, ast.Pass)):
-            nid = self.add_node("process", type(s).__name__.lower())
-            self.add_edge(prev, nid)
-            return [nid] if nid else []
+        if isinstance(s, ast.Pass):
+            nid = self.add_node("process", "pass")
+            if not nid:
+                return []
+            self._connect(entries, nid)
+            return [nid]
+
+        if isinstance(s, ast.Break):
+            nid = self.add_node("process", "break")
+            if not nid:
+                return []
+            self._connect(entries, nid)
+            if self._loops:
+                # Exit the innermost loop: route to the statement after it.
+                self._loops[-1]["breaks"].append(nid)
+                return []
+            return [nid]
+
+        if isinstance(s, ast.Continue):
+            nid = self.add_node("process", "continue")
+            if not nid:
+                return []
+            self._connect(entries, nid)
+            if self._loops:
+                # Skip the rest of the body: jump back to the condition.
+                self.add_edge(nid, self._loops[-1]["cond"])
+                return []
+            return [nid]
 
         if isinstance(s, ast.Return):
             nid = self.add_node(
-                "io", "return " + (_short(s.value) if s.value else ""))
-            self.add_edge(prev, nid)
-            return [nid] if nid else []
+                "io", "return " + (_short(s.value, MAX_DECISION_LABEL - 7)
+                                   if s.value else ""))
+            if not nid:
+                return []
+            self._connect(entries, nid)
+            # A return ends the path: it routes to End, never onward.
+            self._exits.append(nid)
+            return []
 
         # ---- if ----
         if isinstance(s, ast.If):
-            cond = self.add_node("decision", _short(s.test) + " ?")
+            cond = self.add_node("decision", _short(s.test, MAX_DECISION_LABEL - 2) + " ?")
             if not cond:
-                return []
-            self.add_edge(prev, cond)
+                return list(entries)
+            self._connect(entries, cond)
             then_first = self._next_id()
-            then_tails = self.walk_body(s.body, cond)
-            self.label_edge(cond, then_first, "Yes")
+            then_tails = self.walk_body(s.body, [cond])
+            if then_first != self._next_id():
+                self.label_edge(cond, then_first, "Yes")
             if s.orelse:
                 else_first = self._next_id()
-                else_tails = self.walk_body(s.orelse, cond)
-                self.label_edge(cond, else_first, "No")
+                else_tails = self.walk_body(s.orelse, [cond])
+                if else_first != self._next_id():
+                    self.label_edge(cond, else_first, "No")
                 return then_tails + else_tails
             return then_tails + [(cond, "No")]
 
         # ---- while / for ----
         if isinstance(s, (ast.While, ast.For)):
             if isinstance(s, ast.While):
-                label = _short(s.test) + " ?"
+                label = _cap(_short(s.test, MAX_DECISION_LABEL - 2) + " ?", MAX_DECISION_LABEL)
             else:
-                label = ("for " + _short(s.target) + " in "
-                         + _short(s.iter) + " ?")
+                label = _cap("for " + _short(s.target) + " in "
+                             + _short(s.iter) + " ?", MAX_DECISION_LABEL)
             cond = self.add_node("decision", label)
             if not cond:
-                return []
-            self.add_edge(prev, cond)
+                return list(entries)
+            self._connect(entries, cond)
+            self._loops.append({"cond": cond, "breaks": []})
             body_first = self._next_id()
-            body_tails = self.walk_body(s.body, cond)
+            body_tails = self.walk_body(s.body, [cond])
             if body_first != self._next_id():
                 self.label_edge(cond, body_first, "Yes")
-            # loop back
+            frame = self._loops.pop()
+            # loop back: every body tail returns to the condition
             for t in body_tails:
                 if isinstance(t, tuple):
                     self.add_edge(t[0], cond, t[1])
                 else:
                     self.add_edge(t, cond)
-            return [(cond, "No")]
+            if s.orelse:
+                # loop-else runs when the loop finishes WITHOUT a break
+                else_first = self._next_id()
+                else_tails = self.walk_body(s.orelse, [cond])
+                if else_first != self._next_id():
+                    self.label_edge(cond, else_first, "No")
+                return frame["breaks"] + else_tails
+            return frame["breaks"] + [(cond, "No")]
 
-        # ---- function def ----
-        if isinstance(s, ast.FunctionDef):
+        # ---- function def: subroutine node only, body NOT charted ----
+        # A def does not execute its body; charting it inline made the
+        # diagram claim the body runs at definition time.
+        if isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            try:
+                sig = ast.unparse(s.args)
+            except Exception:
+                sig = ", ".join(a.arg for a in s.args.args)
             nid = self.add_node(
                 "subroutine",
-                "define %s(%s)" % (s.name, ", ".join(
-                    a.arg for a in s.args.args)))
+                _cap("define %s(%s)" % (s.name, sig), MAX_DECISION_LABEL))
             if not nid:
                 return []
-            self.add_edge(prev, nid)
-            self.walk_body(s.body, nid)  # detached sub-flow
+            self._connect(entries, nid)
             return [nid]
 
-        if isinstance(s, (ast.AsyncFunctionDef,)):
-            return self.walk_stmt(
-                ast.FunctionDef(name=s.name, args=s.args, body=s.body,
-                                decorator_list=[], returns=None), prev)
+        # ---- match / case: decision chain ----
+        if isinstance(s, ast.Match):
+            subj = self.add_node(
+                "process", _cap("match " + _short(s.subject), MAX_DECISION_LABEL))
+            if not subj:
+                return list(entries)
+            self._connect(entries, subj)
+            tails = []
+            cur = subj
+            for case in s.cases:
+                pat = _short(case.pattern, 40)
+                if case.guard is not None:
+                    pat += " if " + _short(case.guard, 20)
+                cdec = self.add_node(
+                    "decision", _cap("case " + pat, MAX_DECISION_LABEL) + " ?")
+                if not cdec:
+                    return tails + [(cur, "No")]
+                self.add_edge(cur, cdec, "No" if cur is not subj else "")
+                first = self._next_id()
+                body_tails = self.walk_body(case.body, [cdec])
+                if first != self._next_id():
+                    self.label_edge(cdec, first, "Yes")
+                tails.extend(body_tails)
+                cur = cdec
+            tails.append((cur, "No"))
+            return tails
 
         # ---- try ----
         if isinstance(s, ast.Try):
             nid = self.add_node("process", "try")
             if not nid:
-                return []
-            self.add_edge(prev, nid)
-            tails = self.walk_body(s.body, nid)
+                return list(entries)
+            self._connect(entries, nid)
+            tails = self.walk_body(s.body, [nid])
             for h in s.handlers:
-                tails += self.walk_body(h.body, nid)
+                hname = _short(h.type) if h.type is not None else "except"
+                h_first = self._next_id()
+                h_tails = self.walk_body(h.body, [nid])
+                if h_first != self._next_id():
+                    self.label_edge(nid, h_first, hname)
+                tails += h_tails
             if s.orelse:
-                tails += self.walk_body(s.orelse, nid)
+                o_first = self._next_id()
+                o_tails = self.walk_body(s.orelse, [nid])
+                if o_first != self._next_id():
+                    self.label_edge(nid, o_first, "no error")
+                tails += o_tails
             if s.finalbody:
-                # finally always runs: chain it after all tails
-                fin_tails = []
-                for t in tails:
-                    base = t[0] if isinstance(t, tuple) else t
-                    if base:
-                        fin_tails.extend(self.walk_body(s.finalbody, base))
+                # finally runs after every path: walk it ONCE with all
+                # tails as entries (never once per path — that duplicated
+                # the finally block). Known limit: paths that ended in
+                # return skip finally here (they route straight to End).
+                fin_tails = self.walk_body(s.finalbody, tails)
                 return fin_tails or tails
             return tails
 
@@ -213,14 +309,16 @@ class FlowchartBuilder:
             nid = self.add_node("process", _short(s.items[0].context_expr)
                                 if s.items else "with")
             if not nid:
-                return []
-            self.add_edge(prev, nid)
-            return self.walk_body(s.body, nid) or [nid]
+                return list(entries)
+            self._connect(entries, nid)
+            return self.walk_body(s.body, [nid]) or [nid]
 
         # ---- fallback ----
         nid = self.add_node("process", _short(s))
-        self.add_edge(prev, nid)
-        return [nid] if nid else []
+        if not nid:
+            return []
+        self._connect(entries, nid)
+        return [nid]
 
 
 def flowchart_json(code, budget=NODE_BUDGET):
@@ -232,15 +330,35 @@ def flowchart_json(code, budget=NODE_BUDGET):
             "nodes": [], "edges": [], "truncated": False,
             "error": "Syntax error on line %d: %s" % (e.lineno or 0, e.msg),
         })
-    b = FlowchartBuilder(budget=budget)
-    start = b.add_node("start", "Start")
-    tails = b.walk_body(tree.body, start) if start else []
-    end = b.add_node("end", "End")
-    if end:
-        b._connect(tails, end)
-    return json.dumps({
-        "nodes": b.nodes,
-        "edges": b.edges,
-        "truncated": b.truncated,
-        "error": None,
-    })
+    except Exception as e:
+        # Deeply nested input can raise RecursionError at parse time, etc.
+        return json.dumps({
+            "nodes": [], "edges": [], "truncated": False,
+            "error": "Could not read this code: %s" % type(e).__name__,
+        })
+    try:
+        b = FlowchartBuilder(budget=budget)
+        start = b.add_node("start", "Start")
+        tails = b.walk_body(tree.body, [start]) if start else []
+        # Reserve the End slot: the body walk may have consumed the budget.
+        b.budget += 1
+        end = b.add_node("end", "End")
+        if end:
+            b._connect(tails + b._exits, end)
+            if not tails and not b._exits and b.nodes:
+                # Every path died inside the walk (budget cut): end the
+                # diagram at the last charted node instead of an orphan End.
+                last = b.nodes[-1]
+                if last["id"] != end:
+                    b.add_edge(last["id"], end)
+        return json.dumps({
+            "nodes": b.nodes,
+            "edges": b.edges,
+            "truncated": b.truncated,
+            "error": None,
+        })
+    except Exception as e:
+        return json.dumps({
+            "nodes": [], "edges": [], "truncated": False,
+            "error": "Could not chart this code: %s" % type(e).__name__,
+        })

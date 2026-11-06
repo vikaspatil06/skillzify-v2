@@ -300,9 +300,9 @@ const MODES = {
 function buildPrompt(mode, code, errText, context, stage) {
   switch (mode) {
     case "flowchart":
-      return "Write ONLY clean, simple Python code that solves this problem. Output raw code only — no markdown fences, no explanation, no comments beyond one line:\n\n" + code;
+      return "Write ONLY clean, simple Python code that solves this problem. Use only beginner Python (input/print, if/elif/else, for/while loops, functions, lists) — no classes, decorators, or match statements. Output raw code only — no markdown fences, no explanation, no comments beyond one line:\n\n" + code;
     case "flowchart-code":
-      return "Write ONLY clean, simple Python code that implements these flowchart steps. Output raw code only — no markdown fences, no explanation, no comments beyond one line:\n\n" + code;
+      return "Write ONLY clean, simple Python code that implements these flowchart steps. Use input() for INPUT steps and print() for PRINT/OUTPUT steps. Use only beginner Python (no classes, decorators, or match statements). Output raw code only — no markdown fences, no explanation, no comments beyond one line:\n\n" + code;
     case "flowchart-explain":
       return "Explain this flowchart / algorithm in plain words, step by step, as if teaching a beginner what the program does and why each step exists. No code, just the explanation.\n\nFLOWCHART / ALGORITHM:\n" + code;
     case "generate":

@@ -75,7 +75,12 @@
   #flowchart-output { padding: 28px; min-height: 100%; display: flex; align-items: flex-start; justify-content: center; }
   #flowchart-output svg { max-width: 100%; height: auto; }
   #flowchart-output .node { cursor: pointer; }
-  #flowchart-output .node:hover filter, #flowchart-output .node:hover { filter: brightness(1.08) drop-shadow(0 2px 6px rgba(108,123,255,.4)); }
+  /* Hover highlight via stroke only — the old brightness/drop-shadow
+     filter here forced the SVG group to re-rasterize on every mouse
+     move, so the node flickered/shattered continuously in Chrome.
+     A stroke change repaints nothing. (.fc-active keeps its own
+     drop-shadow: it is set once during trace, not on hover.) */
+  #flowchart-output .node:hover .node-shape, #flowchart-output .node:hover rect, #flowchart-output .node:hover polygon, #flowchart-output .node:hover ellipse, #flowchart-output .node:hover path.node-shape { stroke: #6c7bff; stroke-width: 2.5px; }
   .fc-active .node-shape, .fc-active rect, .fc-active polygon, .fc-active ellipse, .fc-active path.node-shape {
     stroke: #6c7bff !important; stroke-width: 3px !important;
     filter: drop-shadow(0 0 10px rgba(108,123,255,.55)) !important; }
@@ -311,7 +316,7 @@ END</textarea>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js?v=5"></script>
 <script src="assets/js/sync.js?v=10"></script>
-<script src="assets/js/ai.js?v=14"></script>
+<script src="assets/js/ai.js?v=15"></script>
 <script>
 let pyodide = null, currentGraph = null, currentSVG = null, currentMermaid = null, currentZoom = 1, currentSource = null;
 let engineFailed = false; // set when the Pyodide engine itself fails to load (P2-25)
@@ -364,8 +369,8 @@ async function init() {
     /* Fetch both generator scripts independently: one 404 must not
        silently lose the other, and the failure must name its file (P2-26). */
     const results = await Promise.allSettled([
-      fetch('assets/js/flowchart-gen.py').then(r => { if (!r.ok) throw new Error('flowchart-gen.py: HTTP ' + r.status); return r.text(); }),
-      fetch('assets/js/flowchart-algo.py').then(r => { if (!r.ok) throw new Error('flowchart-algo.py: HTTP ' + r.status); return r.text(); })
+      fetch('assets/js/flowchart-gen.py?v=1').then(r => { if (!r.ok) throw new Error('flowchart-gen.py: HTTP ' + r.status); return r.text(); }),
+      fetch('assets/js/flowchart-algo.py?v=1').then(r => { if (!r.ok) throw new Error('flowchart-algo.py: HTTP ' + r.status); return r.text(); })
     ]);
     const failed = results.find(r => r.status === 'rejected');
     if (failed) throw failed.reason;
@@ -395,8 +400,15 @@ function setDir(d) {
   if (currentGraph) renderGraph(JSON.stringify(currentGraph), true);
 }
 function mermaidEsc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'#lt;').replace(/>/g,'#gt;')
-    .replace(/"/g,'#quot;').replace(/#/g,'#35;').replace(/\n/g,' ').trim();
+  // Single-pass replacement: sequential .replace() calls clobbered each
+  // other (escaping "#" after "<" turned "#lt;" into "#35;lt;", which
+  // renders as literal "#lt;" text). One pass replaces each source char
+  // atomically, so introduced "#xx;" entities are never re-escaped.
+  // Escaped chars: & < > " # ; { } / \ — all of these can break Mermaid
+  // node syntax or be read as structure inside a quoted label.
+  const ESC = { '&':'&amp;', '#':'#35;', '<':'#lt;', '>':'#gt;', '"':'#quot;',
+    ';':'#59;', '{':'#123;', '}':'#125;', '/':'#47;', '\\':'#92;', '\n':' ' };
+  return String(s).replace(/[&#<>";{}\/\\\n]/g, (c) => ESC[c]).trim();
 }
 const NODE_CLASS = { start:'clsStart', end:'clsEnd', decision:'clsDec', process:'clsProc', io:'clsIO', subroutine:'clsSub' };
 function graphToMermaid(g) {
