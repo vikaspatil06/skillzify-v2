@@ -17,7 +17,7 @@
   /* ================= Lesson catalog ================= */
   var LESSONS = [
     {
-          id: "b1", track: "beginner", title: "Hello, Python! Your First Program",
+          id: "b1", section: "base-camp", track: "beginner", title: "Hello, Python! Your First Program",
           explain: "The print() function displays text on the screen. Text wrapped in quotes is called a string. This is the traditional first step in every programming language — and every Python journey.",
           takeaways: [
             "print() sends output to the screen — your program talking back to you.",
@@ -39,7 +39,7 @@
             answer: 1, hint: "With strings, + joins (concatenates) them instead of adding." }
         },
     {
-          id: "b2", track: "beginner", title: "Variables & Data Types",
+          id: "b2", section: "base-camp", track: "beginner", title: "Variables & Data Types",
           explain: "Variables store values under a name. Python figures out the type automatically — int for whole numbers, float for decimals, str for text, and bool for True/False. Think of a variable as a labelled box you can put things in and swap out later.",
           takeaways: [
             "Create a variable with name = value — no type declaration needed.",
@@ -60,7 +60,7 @@
             answer: ["20"], hint: "age + 5 = 25, so age must be the integer 20." }
         },
     {
-          id: "b3", track: "beginner", title: "Strings & f-strings",
+          id: "b3", section: "base-camp", track: "beginner", title: "Strings & f-strings",
           explain: "f-strings let you embed variables directly inside text using curly braces — just prefix the string with f. They're the cleanest, fastest way to build messages in modern Python, and you'll use them everywhere.",
           takeaways: [
             "Prefix a string with f to embed {expressions} inside it.",
@@ -82,7 +82,7 @@
             answer: 0, hint: "s.upper() → \"ABC\", len(s) → 3, str(3) → \"3\", then + joins them." }
         },
     {
-          id: "b4", track: "beginner", title: "Conditionals: if / elif / else",
+          id: "b4", section: "base-camp", track: "beginner", title: "Conditionals: if / elif / else",
           explain: "Conditionals let your program make decisions. Python checks each condition top to bottom and runs the first block that is True. Indentation (4 spaces) defines which lines belong to each block — get it wrong and Python complains.",
           takeaways: [
             "if / elif / else chain: first True condition wins, the rest are skipped.",
@@ -104,7 +104,7 @@
             answer: 2, hint: "These are two separate if statements — both conditions are True, so both run." }
         },
     {
-          id: "b5", track: "beginner", title: "Loops: for & while",
+          id: "b5", section: "base-camp", track: "beginner", title: "Loops: for & while",
           explain: "Loops repeat work without repeating code. A for loop walks through a sequence — range(n) gives 0 … n-1. A while loop repeats while its condition stays True. The classic beginner bug: a while loop whose condition never becomes False runs forever!",
           takeaways: [
             "for i in range(5) loops with i = 0, 1, 2, 3, 4.",
@@ -126,7 +126,7 @@
             answer: 1, hint: "range(4) → 0,1,2,3. Add them: 0+1+2+3 = 6." }
         },
     {
-            id: "b6", track: "beginner", title: "Lists & Tuples",
+            id: "b6", section: "base-camp", track: "beginner", title: "Lists & Tuples",
             explain: "Lists let you keep an ordered collection of items you can change — perfect for things like to-do lists or scores. Tuples look similar but are locked after creation, which makes them great for fixed data like coordinates. Knowing when to use each one is a core Python habit.",
             takeaways: [
               "Lists are ordered and changeable — index them from 0, or from -1 for the end.",
@@ -148,7 +148,7 @@
               answer: 1, hint: "Negative indexes count from the end of the list." }
           },
     {
-            id: "b7", track: "beginner", title: "Dictionaries & Sets",
+            id: "b7", section: "base-camp", track: "beginner", title: "Dictionaries & Sets",
             explain: "Dictionaries store data as key-value pairs, so you can look things up by name instead of by position — like a real dictionary. Sets are unordered collections that automatically drop duplicates, which makes them perfect for membership tests. Together they power everything from counting words to removing repeats.",
             takeaways: [
               "Dictionaries map keys to values; look up with d[key] or the safer d.get(key, default).",
@@ -169,7 +169,7 @@
               answer: ['"age"'], hint: "Dictionary keys go inside the square brackets." }
           },
     {
-            id: "b8", track: "beginner", title: "Conditionals & Logic",
+            id: "b8", section: "base-camp", track: "beginner", title: "Conditionals & Logic",
             explain: "Programs get smart when they can make decisions, and conditionals are how you teach them. if/elif/else lets your code take different paths based on what is true right now. Combined with and, or, and not, you can express surprisingly subtle logic in just a few lines.",
             takeaways: [
               "if/elif/else runs the first branch whose condition is true.",
@@ -191,7 +191,7 @@
               answer: 0, hint: "30 is greater than 25, so the first branch runs." }
           },
     {
-            id: "b9", track: "beginner", title: "Loops: for & while",
+            id: "b9", section: "base-camp", track: "beginner", title: "Loops: for & while",
             explain: "Loops let you repeat work without repeating code — the moment a program needs to do something a hundred times, you need them. for loops walk through collections and ranges, while while loops keep going until a condition changes. break and continue give you fine control over when to stop or skip.",
             takeaways: [
               "for i in range(n) loops n times with i going 0 to n-1.",
@@ -213,7 +213,7 @@
               answer: 2, hint: "Add them up step by step: 0+1, then +2, then +3." }
           },
     {
-            id: "b10", track: "beginner", title: "Functions",
+            id: "b10", section: "base-camp", track: "beginner", title: "Functions",
             explain: "Functions let you package logic into reusable, named blocks — write once, call anywhere. Parameters make them flexible, return values make them useful, and default arguments make them friendly. Good functions are the difference between a script and a program.",
             takeaways: [
               "def names a function; parameters are its inputs, return sends a result back.",
@@ -234,7 +234,7 @@
               answer: ["return"], hint: "The function must send the result back to the caller." }
           },
     {
-          id: "i1", track: "intermediate", title: "Functions & Return Values",
+          id: "i1", section: "base-camp", track: "intermediate", title: "Functions & Return Values",
           explain: "Functions package reusable logic under a name. def defines one, parameters receive input, and return sends a result back to the caller. Default parameters (like greeting=\"Hello\") make arguments optional — callers can skip them.",
           takeaways: [
             "def name(params): defines a function; call it with name(args).",
@@ -256,7 +256,7 @@
             answer: 2, hint: "b isn't given, so the default 10 is used: 5 + 10." }
         },
     {
-          id: "i2", track: "intermediate", title: "Lists, Tuples & Dictionaries",
+          id: "i2", section: "tool-shed", track: "intermediate", title: "Lists, Tuples & Dictionaries",
           explain: "Lists are ordered and changeable — your everyday workhorse. Tuples are ordered but frozen (great for fixed data like coordinates). Dictionaries map keys to values for fast lookups. These three cover most data you'll ever handle.",
           takeaways: [
             "Lists: ordered, mutable. Use append(), indexing, negative indices.",
@@ -278,7 +278,7 @@
             answer: 1, hint: "d[\"b\"] is 2, and the dict has 2 keys → 2 + 2." }
         },
     {
-          id: "i3", track: "intermediate", title: "Error Handling with try/except",
+          id: "i3", section: "power-lab", track: "intermediate", title: "Error Handling with try/except",
           explain: "Errors (exceptions) crash programs unless handled. Wrap risky code in try, catch specific problems with except, and use finally for cleanup that must always run. Handling specific errors beats a bare except — it keeps real bugs visible.",
           takeaways: [
             "try/except catches exceptions so your program survives them.",
@@ -300,7 +300,7 @@
             answer: 1, hint: "int(\"abc\") raises ValueError, which the except catches." }
         },
     {
-          id: "i4", track: "intermediate", title: "OOP Basics: Classes & Objects",
+          id: "i4", section: "object-castle", track: "intermediate", title: "OOP Basics: Classes & Objects",
           explain: "Classes are blueprints; objects are the things built from them. __init__ runs when an object is created to set it up, self refers to the object itself, and methods are functions that belong to the class. OOP shines when you model real things with state + behaviour.",
           takeaways: [
             "class defines a blueprint; ClassName() creates an object (instance).",
@@ -322,7 +322,7 @@
             answer: 1, hint: "__init__ stored \"Rex\" in d.name." }
         },
     {
-          id: "i5", track: "intermediate", title: "Recursion: Functions That Call Themselves",
+          id: "i5", section: "algorithm-arena", track: "intermediate", title: "Recursion: Functions That Call Themselves",
           explain: "A recursive function solves a problem by calling itself on a smaller piece of it. Every recursion needs two parts: a base case where it stops, and a recursive step that shrinks the problem. Miss the base case and you get infinite recursion → RecursionError.",
           takeaways: [
             "Base case: the stopping condition. Recursive step: call with smaller input.",
@@ -344,7 +344,7 @@
             answer: 2, hint: "Unfold it: 4 + 3 + 2 + 1 + 0 = 10." }
         },
     {
-          id: "i6", track: "intermediate", title: "File Handling: Read & Write Files",
+          id: "i6", section: "tool-shed", track: "intermediate", title: "File Handling: Read & Write Files",
           explain: "Files let programs remember things permanently. open(path, mode) opens a file: \"w\" writes (overwrites!), \"r\" reads, \"a\" appends. Always use the with statement — Python then closes the file automatically, even if an error strikes mid-way.",
           takeaways: [
             "Modes: \"w\" write, \"r\" read, \"a\" append. \"w\" erases existing content!",
@@ -365,7 +365,7 @@
             answer: ["w", "'w'", '"w"'], hint: "The write mode is a single letter…" }
         },
     {
-            id: "i7", track: "intermediate", title: "List Comprehensions",
+            id: "i7", section: "tool-shed", track: "intermediate", title: "List Comprehensions",
             explain: "List comprehensions compress a loop-and-collect pattern into a single readable line — once it clicks, you will use them everywhere. The syntax reads almost like English: transform each item, for each item, optionally only if some condition holds. They are not just shorter; they are usually faster than the equivalent loop.",
             takeaways: [
               "[expr for item in items] transforms every item into a new list.",
@@ -387,7 +387,7 @@
               answer: 2, hint: "Check the length of each word — which are longer than 2 letters?" }
           },
     {
-            id: "i8", track: "intermediate", title: "Error Handling",
+            id: "i8", section: "power-lab", track: "intermediate", title: "Error Handling",
             explain: "Real programs hit real problems: missing files, bad input, network hiccups. try/except lets your code handle failure gracefully instead of crashing. else runs when nothing went wrong, and finally always runs — perfect for cleanup.",
             takeaways: [
               "Put risky code in try and the recovery plan in except.",
@@ -409,7 +409,7 @@
               answer: 0, hint: "Dividing by zero raises ZeroDivisionError, which is caught." }
           },
     {
-            id: "i9", track: "intermediate", title: "File Handling",
+            id: "i9", section: "tool-shed", track: "intermediate", title: "File Handling",
             explain: "Programs become far more useful when they can save and load data, and files are the simplest way. The with statement opens a file and guarantees it gets closed, even if something goes wrong. Learn the read/write modes once and you will reuse this pattern for logs, configs, and datasets.",
             takeaways: [
               "with open(path) as f: auto-closes the file, even on errors.",
@@ -430,7 +430,7 @@
               answer: ["read"], hint: "The method that reads everything at once." }
           },
     {
-            id: "i10", track: "intermediate", title: "OOP Basics",
+            id: "i10", section: "object-castle", track: "intermediate", title: "OOP Basics",
             explain: "Classes let you bundle data and the functions that work on it into one tidy package — a Dog knows its name and how to bark. __init__ sets up each new object, and self is how methods refer to the specific instance they are working on. OOP is how large Python programs stay organized.",
             takeaways: [
               "class defines the blueprint; calling it creates an instance.",
@@ -452,7 +452,7 @@
               answer: 0, hint: "__init__ stores the argument on the new instance." }
           },
     {
-            id: "i11", track: "intermediate", title: "Modules & Imports",
+            id: "i11", section: "tool-shed", track: "intermediate", title: "Modules & Imports",
             explain: "You do not have to write everything yourself — Python ships with a huge standard library. import brings in a whole module, while from...import grabs just what you need. math, random, and datetime cover an enormous amount of everyday work.",
             takeaways: [
               "import math loads the module; math.sqrt(16) uses it.",
@@ -474,7 +474,7 @@
               answer: 1, hint: "floor() rounds down to the nearest whole number." }
           },
     {
-            id: "i12", track: "intermediate", title: "Lambda, map, filter",
+            id: "i12", section: "power-lab", track: "intermediate", title: "Lambda, map, filter",
             explain: "Sometimes a full def is overkill — lambda creates a tiny throwaway function right where you need it. map applies a function to every item, filter keeps only the items that pass a test, and sorted with a key function sorts by anything you can compute. Together they are a compact toolkit for transforming data.",
             takeaways: [
               "lambda n: n * 2 is a tiny function with no name.",
@@ -496,7 +496,7 @@
               answer: 1, hint: "Sorting by -n puts the biggest number first." }
           },
     {
-          id: "a1", track: "advanced", title: "List Comprehensions & Lambdas",
+          id: "a1", section: "power-lab", track: "advanced", title: "List Comprehensions & Lambdas",
           explain: "Comprehensions build lists in one expressive line — [expr for x in items if cond]. They're faster to read and often faster to run than manual loops. Lambdas are tiny anonymous functions, perfect for short transformations you pass to sorted(), map() or filter().",
           takeaways: [
             "[x**2 for x in range(5)] builds a list in a single line.",
@@ -518,7 +518,7 @@
             answer: 1, hint: "Filter keeps 2 and 4, then doubles each → [4, 8]." }
         },
     {
-          id: "a2", track: "advanced", title: "Generators & yield",
+          id: "a2", section: "power-lab", track: "advanced", title: "Generators & yield",
           explain: "Generators produce values lazily — one at a time, using almost no memory. yield pauses the function, hands out a value, and resumes where it left off when asked for the next one. Perfect for huge or infinite sequences that would never fit in a list.",
           takeaways: [
             "yield turns a function into a generator that produces values on demand.",
@@ -540,7 +540,7 @@
             answer: 0, hint: "next() resumes the generator up to the first yield → 1." }
         },
     {
-          id: "a3", track: "advanced", title: "Decorators",
+          id: "a3", section: "power-lab", track: "advanced", title: "Decorators",
           explain: "Decorators wrap functions to add behaviour — timing, logging, caching, access control — without touching the function's own code. The @ syntax applies a decorator cleanly. Under the hood, @timer on f is just f = timer(f).",
           takeaways: [
             "@decorator above def applies wrapper logic around the function.",
@@ -562,7 +562,7 @@
             answer: 1, hint: "@shout replaces greet with wrapper, which uppercases the result." }
         },
     {
-          id: "a4", track: "advanced", title: "Modules, pip & Virtual Environments",
+          id: "a4", section: "power-lab", track: "advanced", title: "Modules, pip & Virtual Environments",
           explain: "Modules organise code into importable files. pip installs third-party packages from PyPI. Virtual environments (venv) give each project its own isolated set of packages so versions never clash. This trio is the professional Python workflow — learn it now and every future project gets easier.",
           takeaways: [
             "import brings in stdlib or third-party modules; pip installs them.",
@@ -583,7 +583,7 @@
             answer: ["venv"], hint: "The stdlib module for virtual environments is called venv." }
         },
     {
-          id: "a5", track: "advanced", title: "Context Managers & the with Statement",
+          id: "a5", section: "object-castle", track: "advanced", title: "Context Managers & the with Statement",
           explain: "You've already used with open(...) — but with works with any context manager, guaranteeing setup and cleanup even when errors strike. Files close, locks release, timers stop. You can build your own with a class defining __enter__/__exit__, or more simply with the @contextmanager decorator: code before yield runs on entry, code after yield runs on exit.",
           takeaways: [
             "with guarantees cleanup (close, release, rollback) even on errors.",
@@ -605,7 +605,7 @@
             answer: 0, hint: "Entry prints <b>, the body prints hi, exit prints </b>." }
         },
     {
-            id: "a6", track: "advanced", title: "Decorators",
+            id: "a6", section: "power-lab", track: "advanced", title: "Decorators",
             explain: "A decorator is a function that wraps another function to add behavior — logging, timing, access checks — without touching its code. The @ syntax is just shorthand for passing your function through the decorator. Once you see the pattern, you will spot decorators everywhere in real Python projects.",
             takeaways: [
               "@decorator above def is shorthand for func = decorator(func).",
@@ -627,7 +627,7 @@
               answer: 1, hint: "The wrapper adds one star on each side of the result." }
           },
     {
-            id: "a7", track: "advanced", title: "Generators & Iterators",
+            id: "a7", section: "power-lab", track: "advanced", title: "Generators & Iterators",
             explain: "Generators produce values one at a time, pausing at each yield and resuming on demand. That laziness means you can work with huge or even infinite sequences without building them all in memory. for loops and next() both know how to pull values from a generator.",
             takeaways: [
               "yield pauses a function and emits one value; next() resumes it.",
@@ -649,7 +649,7 @@
               answer: 1, hint: "Each next() call resumes where the generator paused." }
           },
     {
-            id: "a8", track: "advanced", title: "Recursion",
+            id: "a8", section: "algorithm-arena", track: "advanced", title: "Recursion",
             explain: "Recursion is when a function solves a problem by calling itself on a smaller version of it. Every recursive function needs a base case — the simple situation where it stops calling itself. It is elegant for problems like factorial or tree traversal, but always respect Python's recursion limit.",
             takeaways: [
               "A recursive function calls itself with a smaller input.",
@@ -671,7 +671,7 @@
               answer: 0, hint: "Each call prints, then recurses with n - 1 — until 0 stops it silently." }
           },
     {
-            id: "a9", track: "advanced", title: "Sorting & Searching",
+            id: "a9", section: "algorithm-arena", track: "advanced", title: "Sorting & Searching",
             explain: "Sorting puts data in order so searching becomes dramatically cheaper. Binary search repeatedly halves a sorted list, finding any item in about log2(n) steps — roughly 20 steps for a million items. Python's own sort is world-class, so learn the intuition and reach for the built-ins.",
             takeaways: [
               "Sorting once makes every later search cheap.",
@@ -693,7 +693,7 @@
               answer: 1, hint: "sort() arranges the list from smallest to largest." }
           },
     {
-            id: "a10", track: "advanced", title: "Dictionaries in Depth",
+            id: "a10", section: "tool-shed", track: "advanced", title: "Dictionaries in Depth",
             explain: "Dictionaries reward deeper study: .get() with a default makes counting patterns trivial, .items() lets you loop over keys and values together, and dict comprehensions build mappings in one line. These three idioms show up constantly in real-world Python.",
             takeaways: [
               "counts[k] = counts.get(k, 0) + 1 is the classic counting idiom.",
@@ -729,6 +729,19 @@
     { id: "beginner", name: "Beginner", desc: "Zero to confident — syntax, variables, logic and loops.", icon: "🌱", needs: null },
     { id: "intermediate", name: "Intermediate", desc: "Functions, data structures, errors, OOP, recursion and files.", icon: "⚙️", needs: "beginner" },
     { id: "advanced", name: "Advanced", desc: "Pythonic mastery — generators, decorators, tooling and beyond.", icon: "🚀", needs: "intermediate" }
+  ];
+
+  /* The 7 journey sections (Vikas, 6 Nov 2026) — the learner-facing
+     grouping. `track` stays on every lesson (harmless legacy field);
+     sections are the display + unlock grouping. */
+  var SECTIONS = [
+    { id: "base-camp", name: "Base Camp", icon: "🌱", desc: "Zero to confident: syntax, variables, logic, loops and your first programs.", needs: null },
+    { id: "tool-shed", name: "Tool Shed", icon: "🧱", desc: "The data tools: collections, files and formats you'll reach for daily.", needs: "base-camp" },
+    { id: "object-castle", name: "Object Castle", icon: "🏯", desc: "Think in objects: classes, inheritance and Python's object protocol.", needs: "tool-shed" },
+    { id: "algorithm-arena", name: "Algorithm Arena", icon: "🧠", desc: "Think like an engineer: complexity, data structures and interview patterns.", needs: "object-castle" },
+    { id: "power-lab", name: "Power Lab", icon: "⚡", desc: "Pythonic mastery: decorators, generators, async, testing and tooling.", needs: "algorithm-arena" },
+    { id: "data-lab", name: "Data Lab", icon: "📊", desc: "Turn data into insight: NumPy, pandas, visualisation and ML.", needs: "power-lab" },
+    { id: "launch-pad", name: "Launch Pad", icon: "🚀", desc: "Ship real things: web apps, APIs, automation and deployment.", needs: "data-lab" }
   ];
 
   var LEVELS = [
@@ -780,7 +793,7 @@
     return s;
   }
 
-  /* ============ Extended catalog (95 lessons) ============
+  /* ============ Extended catalog (250 lessons) ============
    Per-track data files (lessons-b/i/a.js) load BEFORE this file and
    expose window.LESSONS_NEW_{BEGINNER,INTERMEDIATE,ADVANCED}.
    Splice each block right after its original track block (b10/i12/a10)
@@ -805,6 +818,23 @@
       LESSONS.splice.apply(LESSONS, [at + 1, 0].concat(fresh));
       fresh.forEach(function (l) { seen[l.id] = 1; });
     });
+  })();
+
+  /* ============ Section order ============
+     The catalog ships in track order (b block, i block, a block); the
+     7-section journey reorders it. Stable sort by section index so the
+     sequential unlock chain follows the journey and within-section order
+     stays the original catalog order. Lessons without a section (should
+     not happen) sort last. */
+  (function sortBySection() {
+    var order = {};
+    SECTIONS.forEach(function (s, i) { order[s.id] = i; });
+    var decorated = LESSONS.map(function (l, i) { return { l: l, i: i }; });
+    decorated.sort(function (a, b) {
+      var sa = (order[a.l.section] != null ? order[a.l.section] : 99) - (order[b.l.section] != null ? order[b.l.section] : 99);
+      return sa !== 0 ? sa : a.i - b.i;
+    });
+    for (var k = 0; k < decorated.length; k++) LESSONS[k] = decorated[k].l;
   })();
 
 /* ================= Unlock logic ================= */
@@ -868,6 +898,18 @@
   }
   function trackPct(trackId) {
     var ls = trackLessons(trackId), p = getProgress();
+    var done = ls.filter(function (l) { return p[l.id]; }).length;
+    return ls.length ? Math.round(done / ls.length * 100) : 0;
+  }
+  function sectionOf(id) { for (var i = 0; i < LESSONS.length; i++) if (LESSONS[i].id === id) return LESSONS[i].section || null; return null; }
+  function sectionLessons(sectionId) { return LESSONS.filter(function (l) { return l.section === sectionId; }); }
+  function sectionUnlocked(sectionId) {
+    var s = SECTIONS.filter(function (x) { return x.id === sectionId; })[0];
+    if (!s || !s.needs) return true;
+    return sectionLessons(s.needs).every(function (l) { return isDone(l.id); });
+  }
+  function sectionPct(sectionId) {
+    var ls = sectionLessons(sectionId), p = getProgress();
     var done = ls.filter(function (l) { return p[l.id]; }).length;
     return ls.length ? Math.round(done / ls.length * 100) : 0;
   }
@@ -952,7 +994,7 @@
 
   /* ================= Public API ================= */
   window.SkillzifyLearnCore = {
-    LESSONS: LESSONS, TRACKS: TRACKS, LEVELS: LEVELS,
+    LESSONS: LESSONS, TRACKS: TRACKS, LEVELS: LEVELS, SECTIONS: SECTIONS,
     totalLessons: LESSONS.length,
     esc: esc, el: el, reducedMotion: reducedMotion,
     highlight: highlightPython, shuffled: shuffled,
@@ -965,6 +1007,8 @@
     isDone: isDone, isUnlocked: isUnlocked,
     isPathOnlyUnlocked: isPathOnlyUnlocked, pathUnlockMap: pathUnlockMap,
     trackUnlocked: trackUnlocked, trackPct: trackPct,
+    sectionOf: sectionOf, sectionLessons: sectionLessons,
+    sectionUnlocked: sectionUnlocked, sectionPct: sectionPct,
     currentIdx: currentIdx, nextLesson: nextLesson,
     isLessonDone: function (id) { return isDone(id); },
     lessonIndex: function (id) { return idxOf(id); },

@@ -10,13 +10,15 @@
   if (!LC) return;
 
   /* local aliases for the overview code */
-  var LESSONS = LC.LESSONS, TRACKS = LC.TRACKS;
+  var LESSONS = LC.LESSONS, TRACKS = LC.TRACKS, SECTIONS = LC.SECTIONS;
   var esc = LC.esc, el = LC.el;
   var getProgress = LC.getProgress, getXP = LC.getXP,
       levelFor = LC.levelFor, nextLevel = LC.nextLevel;
   var idxOf = LC.idxOf, isDone = LC.isDone, isUnlocked = LC.isUnlocked,
       isPathOnlyUnlocked = LC.isPathOnlyUnlocked, trackLessons = LC.trackLessons,
       trackUnlocked = LC.trackUnlocked, trackPct = LC.trackPct,
+      sectionLessons = LC.sectionLessons, sectionUnlocked = LC.sectionUnlocked,
+      sectionPct = LC.sectionPct,
       currentIdx = LC.currentIdx;
 
   function renderHero() {
@@ -39,8 +41,8 @@
     var html = '<div class="progress-row"><span class="lbl">Overall journey</span>' +
       '<div class="bar"><span style="width:' + Math.round(done / total * 100) + '%"></span></div>' +
       '<span class="pct">' + done + "/" + total + "</span></div>";
-    TRACKS.forEach(function (t) {
-      var pct = trackPct(t.id);
+    SECTIONS.forEach(function (t) {
+      var pct = sectionPct(t.id);
       html += '<div class="progress-row"><span class="lbl">' + t.icon + " " + esc(t.name) + "</span>" +
         '<div class="bar"><span style="width:' + pct + '%"></span></div>' +
         '<span class="pct">' + pct + "%</span></div>";
@@ -78,21 +80,21 @@
   }
 
   function lockedTrackCard(t) {
-    var prev = TRACKS.filter(function (x) { return x.id === t.needs; })[0];
+    var prev = SECTIONS.filter(function (x) { return x.id === t.needs; })[0];
     var card = el("div", "track-locked");
     card.innerHTML = '<div class="big">🔒</div>' +
-      "<h3>" + t.icon + " " + esc(t.name) + " track is locked</h3>" +
-      "<p>Finish every lesson in <strong>" + esc(prev.name) + "</strong> (" + trackPct(prev.id) + "% done) to unlock " +
-      trackLessons(t.id).length + " new " + esc(t.name.toLowerCase()) + " lessons.</p>" +
-      '<div class="bar" style="max-width:280px;margin:16px auto 0"><span style="width:' + trackPct(prev.id) + '%"></span></div>';
+      "<h3>" + t.icon + " " + esc(t.name) + " is locked</h3>" +
+      "<p>Finish every lesson in <strong>" + esc(prev.name) + "</strong> (" + sectionPct(prev.id) + "% done) to unlock " +
+      sectionLessons(t.id).length + " lessons in " + esc(t.name) + ".</p>" +
+      '<div class="bar" style="max-width:280px;margin:16px auto 0"><span style="width:' + sectionPct(prev.id) + '%"></span></div>';
     return card;
   }
 
-  /* True when this track holds the learner's current lesson (stays expanded). */
+  /* True when this section holds the learner's current lesson (stays expanded). */
   function shouldExpand(trackId) {
     var i = currentIdx();
-    if (i < 0) return trackId === "beginner";
-    return LESSONS[i].track === trackId;
+    if (i < 0) return trackId === "base-camp";
+    return LESSONS[i].section === trackId;
   }
 
   function renderContinue() {
@@ -133,7 +135,7 @@
           if (matches) anyMatch = true;
         } else if (badge) {
           badge.textContent = total + " lessons";
-          var tid = sec.dataset.track;
+          var tid = sec.dataset.section;
           var c = !shouldExpand(tid);
           sec.classList.toggle("collapsed", c);
           var head = sec.querySelector(".track-head");
@@ -151,11 +153,11 @@
     if (!mount) return;
     mount.innerHTML = "";
     var lessonNum = 0;
-    TRACKS.forEach(function (t) {
+    SECTIONS.forEach(function (t) {
       var sec = el("section", "track-section");
-      sec.dataset.track = t.id;
-      var pct = trackPct(t.id);
-      var nLessons = trackLessons(t.id).length;
+      sec.dataset.section = t.id;
+      var pct = sectionPct(t.id);
+      var nLessons = sectionLessons(t.id).length;
       var head = el("button", "track-head",
         '<span class="t-icon">' + t.icon + "</span>" +
         '<span class="t-text"><span class="t-name">' + esc(t.name) + "</span>" +
@@ -165,7 +167,7 @@
         '<span class="t-chev" aria-hidden="true">\u25BE</span>');
       head.setAttribute("aria-expanded", "true");
       sec.appendChild(head);
-      if (!trackUnlocked(t.id)) {
+      if (!sectionUnlocked(t.id)) {
         sec.appendChild(lockedTrackCard(t));
       } else {
         var path = el("div", "path");
@@ -175,7 +177,7 @@
           '<stop offset="0" stop-color="#6c7bff"/><stop offset="1" stop-color="#22d3ee"/>' +
           "</linearGradient></defs>" +
           '<path class="p-base" d=""/><path class="p-prog" stroke="url(#pg-' + t.id + ')" d=""/></svg>';
-        trackLessons(t.id).forEach(function (l) {
+        sectionLessons(t.id).forEach(function (l) {
           lessonNum++;
           path.appendChild(nodeRow(l, idxOf(l.id), lessonNum));
         });
@@ -275,8 +277,8 @@
 
   /* ================= Public API (unchanged shape) ================= */
   window.SkillzifyLearn = {
-    LESSONS: LC.LESSONS, TRACKS: LC.TRACKS,
-    getProgress: LC.getProgress, trackPct: LC.trackPct,
+    LESSONS: LC.LESSONS, TRACKS: LC.TRACKS, SECTIONS: LC.SECTIONS,
+    getProgress: LC.getProgress, trackPct: LC.trackPct, sectionPct: LC.sectionPct,
     totalLessons: LC.totalLessons,
     nextLesson: LC.nextLesson, highlight: LC.highlight,
     getXP: LC.getXP, levelFor: LC.levelFor, nextLevel: LC.nextLevel,

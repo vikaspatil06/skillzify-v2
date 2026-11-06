@@ -97,12 +97,23 @@
   /* ---------------- learner context ---------------- */
   // Short plain-text summary of where this learner stands, sent with
   // every AI call so the tutor answers about THEM, not a generic student.
+  /* Totals come from the loaded catalogues (250 lessons / 150 exercises
+     after Phase 1), so the context never goes stale again. */
+  function lessonTotal() {
+    try { var c = window.SkillzifyLearnCore; if (c && c.totalLessons) return c.totalLessons; } catch (e) {}
+    return 250;
+  }
+  function exerciseTotal() {
+    try { var d = window.SkillzifyPracticeData; if (d && d.length) return d.length; } catch (e) {}
+    return 150;
+  }
+
   function buildContext(extra) {
     var lines = [];
     try {
       var prog = storeGet("skillzify_progress", {}) || {};
       var done = Object.keys(prog).filter(function (k) { return prog[k]; }).length;
-      if (done) lines.push("Lessons completed: " + done + "/95.");
+      if (done) lines.push("Lessons completed: " + done + "/" + lessonTotal() + ".");
     } catch (e) {}
     try {
       var atts = storeGet("skillzify_exercise_attempts", {}) || {};
@@ -117,7 +128,7 @@
         lines.push("Stuck on (unsolved after trying): " + names.join(", ") + ".");
       }
       var solved = Object.keys(atts).filter(function (k) { return atts[k] && atts[k].solved; }).length;
-      if (solved) lines.push("Exercises solved: " + solved + "/48.");
+      if (solved) lines.push("Exercises solved: " + solved + "/" + exerciseTotal() + ".");
     } catch (e) {}
     try {
       var st = storeGet("skillzify_streak", {}) || {};
@@ -125,6 +136,7 @@
     } catch (e) {}
     if (extra) {
       if (extra.lesson) lines.push("Current lesson: " + extra.lesson + ".");
+      if (extra.section) lines.push("Section: " + extra.section + ".");
       if (extra.exercise) lines.push("Current exercise: " + extra.exercise + ".");
       if (extra.topic) lines.push("Topic: " + extra.topic + ".");
       if (extra.note) lines.push(extra.note);

@@ -19,7 +19,7 @@
     var xp = 0, done = 0, exSolved = 0, exTotal = 0;
     try { xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0; } catch (e) {}
     try { done = Object.keys(JSON.parse(localStorage.getItem("skillzify_progress") || "{}")).length; } catch (e) {}
-    var totalLessons = (window.SkillzifyLearn && window.SkillzifyLearn.totalLessons) || 95;
+    var totalLessons = (window.SkillzifyLearn && window.SkillzifyLearn.totalLessons) || 250;
     try {
       var EXD = window.SkillzifyPracticeData || [];
       exTotal = EXD.length;
@@ -93,23 +93,25 @@
     var prog = {};
     try { prog = JSON.parse(localStorage.getItem("skillzify_progress") || "{}"); } catch (e) {}
     var html = "";
-    (L ? L.TRACKS : []).forEach(function (t) {
-      var lessons = L.LESSONS.filter(function (l) { return l.track === t.id; });
+    (L ? (L.SECTIONS || L.TRACKS) : []).forEach(function (t) {
+      var lessons = L.LESSONS.filter(function (l) { return l.section === t.id; });
       var done = lessons.filter(function (l) { return prog[l.id]; }).length;
       if (lessons.length && done === lessons.length) {
-        html += '<div class="run-item"><span>🎓 ' + esc(t.name) + " track complete</span>" +
+        html += '<div class="run-item"><span>🎓 ' + esc(t.name) + " section complete</span>" +
           '<button class="btn btn-sm" data-cert="' + t.id + '">Download certificate</button></div>';
       }
     });
-    cx.innerHTML = html || '<p class="hint">Finish every lesson in a track to unlock its certificate.</p>';
+    cx.innerHTML = html || '<p class="hint">Finish every lesson in a section to unlock its certificate.</p>';
     Array.prototype.forEach.call(cx.querySelectorAll("[data-cert]"), function (b) {
       b.addEventListener("click", function () { downloadCert(b.getAttribute("data-cert")); });
     });
   }
 
-  function downloadCert(trackId) {
+  function downloadCert(unitId) {
     var L = window.SkillzifyLearn;
-    var t = ((L && L.TRACKS.filter(function (x) { return x.id === trackId; })[0])) || { name: trackId };
+    var t = ((L && (L.SECTIONS || []).filter(function (x) { return x.id === unitId; })[0])) ||
+      ((L && L.TRACKS.filter(function (x) { return x.id === unitId; })[0])) || { name: unitId };
+    var isSection = !!(L && (L.SECTIONS || []).some(function (x) { return x.id === unitId; }));
     var user = (window.SkillzifyAuth && window.SkillzifyAuth.currentUser()) || null;
     var prof = (window.SkillzifyActivity && window.SkillzifyActivity.profile()) || {};
     var name = prof.name || (user && user.name) || "Skillzify Learner";
@@ -133,14 +135,14 @@
     g.font = "400 30px Georgia, serif"; g.fillStyle = "#cbd5e1";
     g.fillText("has successfully completed the", 600, 430);
     g.font = "700 46px Georgia, serif"; g.fillStyle = "#fff";
-    g.fillText(t.name + " Track", 600, 510);
+    g.fillText(t.name + (isSection ? " Section" : " Track"), 600, 510);
     g.font = "400 26px Georgia, serif"; g.fillStyle = "#94a3b8";
     var d = new Date();
     g.fillText("Skillzify · Learn. Build. Shine. — " + d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }), 600, 600);
     g.font = "700 40px Georgia, serif"; g.fillStyle = "#c9a227";
     g.fillText("🐍", 600, 700);
     var a = document.createElement("a");
-    a.download = "skillzify-" + trackId + "-certificate.png";
+    a.download = "skillzify-" + unitId + "-certificate.png";
     a.href = c.toDataURL("image/png");
     document.body.appendChild(a); a.click(); a.remove();
     if (window.Skillzify) window.Skillzify.toast("Certificate downloaded! 🎓", "success");
@@ -154,9 +156,9 @@
     try {
       var L = window.SkillzifyLearn;
       var prog = JSON.parse(localStorage.getItem("skillzify_progress") || "{}");
-      var tracks = [["beginner", "Beginner", "#6c7bff"], ["intermediate", "Intermediate", "#22d3ee"], ["advanced", "Advanced", "#f0a35e"]];
+      var tracks = [["base-camp", "Base Camp", "#6c7bff"], ["tool-shed", "Tool Shed", "#22d3ee"], ["object-castle", "Object Castle", "#f0a35e"], ["algorithm-arena", "Algorithm Arena", "#9d6bff"], ["power-lab", "Power Lab", "#f59e0b"], ["data-lab", "Data Lab", "#34d399"], ["launch-pad", "Launch Pad", "#f472b6"]];
       var counts = tracks.map(function (t) {
-        var lessons = L ? L.LESSONS.filter(function (l) { return l.track === t[0]; }) : [];
+        var lessons = L ? L.LESSONS.filter(function (l) { return l.section === t[0]; }) : [];
         var done = lessons.filter(function (l) { return prog[l.id]; }).length;
         return { name: t[1], color: t[2], done: done, total: lessons.length };
       });
@@ -205,7 +207,7 @@
       document.getElementById("profile-meta").textContent = "🔥 " + (p.streak || 0) + "d streak · 🏆 " + (p.achievements || []).length + " badges";
       var stats = [
         ["⚡", (p.xp || 0).toLocaleString(), "Total XP"],
-        ["📚", (p.lessonsDone || 0) + "/" + (p.lessonsTotal || 95), "Lessons done"],
+        ["📚", (p.lessonsDone || 0) + "/" + (p.lessonsTotal || 250), "Lessons done"],
         ["🔥", (p.streak || 0) + "d", "Day streak"],
         ["🏆", String((p.achievements || []).length), "Badges unlocked"]
       ];

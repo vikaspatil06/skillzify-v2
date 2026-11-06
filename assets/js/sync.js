@@ -325,6 +325,44 @@
     return { files: files, mtimes: mtimes, deleted: deleted, tabs: tabs, active: active,
              updatedAt: Math.max(l.updatedAt, c.updatedAt) };
   }
+  /* ---------- reviews (spaced repetition, website-only) ----------
+     Local shape: { lessonId: {interval, due, updatedAt} }; cloud shape:
+     the same map plus a doc-level updatedAt. Merged per-lesson by later
+     updatedAt (tie -> local), mirroring the workspace merge's spirit but
+     without tombstones — a review entry is never deleted, only rescheduled. */
+  function sanitizeReviewItems(items) {
+    var out = {};
+    if (!items || typeof items !== "object" || Array.isArray(items)) return out;
+    Object.keys(items).forEach(function (id) {
+      var e = items[id];
+      if (e && typeof e === "object" && typeof e.interval === "number" && e.interval > 0 &&
+          typeof e.due === "number" && e.due > 0 && typeof e.updatedAt === "number" && e.updatedAt > 0)
+        out[id] = { interval: e.interval, due: e.due, updatedAt: e.updatedAt };
+    });
+    return out;
+  }
+  function normalizeReviews(doc) {
+    doc = doc || {};
+    var items = sanitizeReviewItems(doc.items || doc);
+    var ts = (typeof doc.updatedAt === "number" && doc.updatedAt > 0) ? doc.updatedAt : 0;
+    return { items: items, updatedAt: ts };
+  }
+  function mergeReviews(localDoc, cloudDoc) {
+    var l = normalizeReviews(localDoc), c = normalizeReviews(cloudDoc);
+    var items = {};
+    var ids = {};
+    [l.items, c.items].forEach(function (m) { Object.keys(m).forEach(function (k) { ids[k] = true; }); });
+    Object.keys(ids).forEach(function (id) {
+      var le = l.items[id], ce = c.items[id];
+      if (le && ce) items[id] = (le.updatedAt >= ce.updatedAt) ? le : ce; // tie -> local
+      else items[id] = le || ce;
+    });
+    return { items: items, updatedAt: Math.max(l.updatedAt, c.updatedAt) };
+  }
+  function reviewsTooBig(doc) {
+    try { return unescape(encodeURIComponent(JSON.stringify((doc && doc.items) || {}))).length > 100 * 1024; }
+    catch (e) { return false; }
+  }
   function workspaceTooBig(doc) {
     try {
       var s = JSON.stringify({ files: (doc && doc.files) || {}, tabs: (doc && doc.tabs) || [], active: (doc && doc.active) || null,
@@ -363,6 +401,8 @@
     mergePaths: mergePaths,
     mergeCustomPaths: mergeCustomPaths,
     mergeWorkspace: mergeWorkspace,
+    mergeReviews: mergeReviews,
+    reviewsTooBig: reviewsTooBig,
     workspaceTooBig: workspaceTooBig,
     contentChanged: contentChanged
   };
@@ -382,7 +422,9 @@
     CUSTOM_PATHS: "skillzify_custom_paths",
     CUSTOM_PATHS_TS: "skillzify_custom_paths_ts",
     WORKSPACE: "skillzify_ws",
-    WORKSPACE_TS: "skillzify_ws_ts"
+    WORKSPACE_TS: "skillzify_ws_ts",
+    REVIEWS: "skillzify_review",
+    REVIEWS_TS: "skillzify_review_ts"
   };
 
   function lsGet(key) {
@@ -503,6 +545,32 @@
     lsSet(LS.WORKSPACE_TS, String((doc && doc.updatedAt) || 0));
   }
 
+  function readLocalReviews() {
+    // Corrupt JSON or a non-object value degrades to "no information"
+    // (empty + updatedAt 0), so the merge keeps the cloud's copy.
+    var items = {}, ts = 0;
+    try {
+      var raw = lsGet(LS.REVIEWS);
+      if (raw !== null) {
+        var v = JSON.parse(raw);
+        if (v && typeof v === "object" && !Array.isArray(v)) {
+          Object.keys(v).forEach(function (id) {
+            var e = v[id];
+            if (e && typeof e === "object" && typeof e.interval === "number" && e.interval > 0 &&
+                typeof e.due === "number" && e.due > 0 && typeof e.updatedAt === "number" && e.updatedAt > 0)
+              items[id] = { interval: e.interval, due: e.due, updatedAt: e.updatedAt };
+          });
+          ts = parseInt(lsGet(LS.REVIEWS_TS) || "0", 10) || 0;
+        }
+      }
+    } catch (e) { items = {}; ts = 0; }
+    return { items: items, updatedAt: ts };
+  }
+  function writeLocalReviews(doc) {
+    storeSet(LS.REVIEWS, (doc && doc.items) || {});
+    lsSet(LS.REVIEWS_TS, String((doc && doc.updatedAt) || 0));
+  }
+
   /* ---------- Firebase guards ---------- */
   function db() {
     try {
@@ -557,13 +625,14 @@
     return ref.get()
       .then(function (snap) {
         var data = (snap && snap.exists) ? snap.data() : {};
-        var cloud = [data.profile || null, data.progress || null, data.exercises || null, data.paths || null, data.customPaths || null, data.workspace || null];
+        var cloud = [data.profile || null, data.progress || null, data.exercises || null, data.paths || null, data.customPaths || null, data.workspace || null, data.reviews || null];
         var mergedProfile = mergeProfile(readLocalProfile(), cloud[0]);
         var mergedProgress = mergeProgress(readLocalProgress(), cloud[1]);
         var mergedExercises = mergeExercises(readLocalExercises(), cloud[2]);
         var mergedPaths = mergePaths(readLocalPaths(), cloud[3]);
         var mergedCustomPaths = mergeCustomPaths(readLocalCustomPaths(), cloud[4]);
         var mergedWorkspace = mergeWorkspace(readLocalWorkspace(), cloud[5]);
+        var mergedReviews = mergeReviews(readLocalReviews(), cloud[6]);
         // write merged state locally…
         writeLocalProfile(mergedProfile);
         writeLocalProgress(mergedProgress);
@@ -571,6 +640,7 @@
         writeLocalPaths(mergedPaths);
         writeLocalCustomPaths(mergedCustomPaths);
         writeLocalWorkspace(mergedWorkspace);
+        writeLocalReviews(mergedReviews);
         // …and push the merged doc to the cloud. Profile and customPaths
         // are whole-document last-write-wins by updatedAt, so ONLY stamp
         // them when this device actually contributed a change — re-stamping
@@ -603,6 +673,17 @@
         } else {
           mergedWorkspace.updatedAt = (cloud[5] && cloud[5].updatedAt) || mergedWorkspace.updatedAt || 0;
         }
+        // Reviews: same stamp-if-changed rule as the workspace — an
+        // empty merge (no scheduled reviews anywhere) must never be
+        // stamped or pushed, or a fresh device would poison the cloud
+        // with an empty reviews map carrying a fresh timestamp.
+        var rvHasItems = Object.keys(mergedReviews.items || {}).length > 0;
+        if (rvHasItems && contentChanged(mergedReviews, cloud[6])) {
+          mergedReviews.updatedAt = now;
+          lsSet(LS.REVIEWS_TS, String(now));
+        } else {
+          mergedReviews.updatedAt = (cloud[6] && cloud[6].updatedAt) || mergedReviews.updatedAt || 0;
+        }
         mergedProgress.updatedAt = now;
         mergedExercises.updatedAt = now;
         mergedPaths.updatedAt = now;
@@ -617,6 +698,7 @@
         } else if (wsHasFiles) {
           wsSkipped = true; // too large for the 1 MiB doc limit: keep cloud's copy
         }
+        if (rvHasItems && !reviewsTooBig(mergedReviews)) payload.reviews = mergedReviews;
         return ref.set(payload, { merge: true }).catch(function () {});
       })
       .then(function () {
@@ -657,6 +739,7 @@
     writeLocalPaths(mergePaths(readLocalPaths(), data.paths || null));
     writeLocalCustomPaths(mergeCustomPaths(readLocalCustomPaths(), data.customPaths || null));
     writeLocalWorkspace(mergeWorkspace(readLocalWorkspace(), data.workspace || null));
+    writeLocalReviews(mergeReviews(readLocalReviews(), data.reviews || null));
     setStatus("Synced ✓ " + fmtTime(Date.now()));
     try {
       if (typeof CustomEvent === "function")

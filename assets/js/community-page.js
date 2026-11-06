@@ -665,14 +665,22 @@
       renderQuestions();
     });
 
-    // Lesson picker (the real lesson list — no typos, no bogus ids)
+    // Lesson picker (the real lesson list — no typos, no bogus ids),
+    // grouped by journey section.
     try {
       var sel = $("ask-lesson");
       if (sel && C.lessonList) {
+        var curGroup = null, curLabel = null;
         C.lessonList().forEach(function (l) {
+          if (l.sectionName !== curLabel) {
+            curGroup = document.createElement("optgroup");
+            curGroup.label = l.sectionName || "Lessons";
+            sel.appendChild(curGroup);
+            curLabel = l.sectionName;
+          }
           var o = document.createElement("option");
           o.value = l.id; o.textContent = l.id + " — " + l.title;
-          sel.appendChild(o);
+          (curGroup || sel).appendChild(o);
         });
       }
     } catch (e) {}

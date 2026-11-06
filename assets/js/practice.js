@@ -12,8 +12,8 @@
   var S = window.Skillzify;
   var ATT_KEY = "skillzify_exercise_attempts";
 
-  var TOPICS = ["variables", "strings", "collections", "loops", "functions", "oop", "exceptions", "dsa"];
-  var TOPIC_LABEL = { variables: "Variables", strings: "Strings", collections: "Collections", loops: "Loops", functions: "Functions", oop: "OOP", exceptions: "Exceptions", dsa: "Algorithms" };
+  var TOPICS = ["variables", "strings", "collections", "loops", "functions", "oop", "exceptions", "dsa", "recursion", "sorting", "trees-graphs", "dynamic-programming", "data-science", "web", "files", "testing", "async"];
+  var TOPIC_LABEL = { variables: "Variables", strings: "Strings", collections: "Collections", loops: "Loops", functions: "Functions", oop: "OOP", exceptions: "Exceptions", dsa: "Algorithms", recursion: "Recursion", sorting: "Sorting", "trees-graphs": "Trees & Graphs", "dynamic-programming": "Dynamic Programming", "data-science": "Data Science", web: "Web", files: "Files", testing: "Testing", async: "Async" };
   var KIND_LABEL = { code: "✍️ Write code", predict: "🔮 Predict output", fix: "🐞 Fix the bug" };
 
   function esc(s) { return S.esc(s == null ? "" : String(s)); }
@@ -671,7 +671,7 @@
       if (a && a.solved) totalXP += a.xpEarned || Math.round(ex.xp * (a.revealed ? 0.5 : 1));
     });
     // AI drills solved: N · +X XP (from the drills attempts store and
-    // the saved drill definitions — never merged into the 48-exercise counts).
+    // the saved drill definitions — never merged into the 150-exercise counts).
     var drills = getDrills(), defs = getDrillDefs(), drillSolved = 0, drillXP = 0;
     Object.keys(drills).forEach(function (id) {
       if (drills[id] && drills[id].solved) {
@@ -690,7 +690,9 @@
   /* ---------------- Topic colors, pills, progress ---------------- */
   var TOPIC_COLORS = {
     variables: "#6c7bff", strings: "#22d3ee", collections: "#9d6bff", loops: "#fbbf24",
-    functions: "#34d399", oop: "#f472b6", exceptions: "#f87171", dsa: "#fb923c"
+    functions: "#34d399", oop: "#f472b6", exceptions: "#f87171", dsa: "#fb923c",
+    recursion: "#c084fc", sorting: "#38bdf8", "trees-graphs": "#4ade80", "dynamic-programming": "#facc15",
+    "data-science": "#60a5fa", web: "#e879f9", files: "#a3e635", testing: "#fb7185", async: "#2dd4bf"
   };
   function topicColor(t) { return TOPIC_COLORS[t] || "#6c7bff"; }
 

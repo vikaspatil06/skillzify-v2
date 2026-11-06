@@ -17,7 +17,7 @@
   if (!mount) return;
 
   /* local aliases */
-  var LESSONS = LC.LESSONS, TRACKS = LC.TRACKS;
+  var LESSONS = LC.LESSONS, TRACKS = LC.TRACKS, SECTIONS = LC.SECTIONS;
   var esc = LC.esc, el = LC.el, reducedMotion = LC.reducedMotion;
   var highlightPython = LC.highlight, copyCode = LC.copyCode, tryInCompiler = LC.tryInCompiler;
   var getProgress = LC.getProgress, saveProgress = LC.saveProgress,
@@ -141,7 +141,7 @@
       AI.ask({
         mode: "tutor-lesson",
         code: code,
-        context: AI.buildContext({ lesson: lesson.title })
+        context: AI.buildContext({ lesson: lesson.title, section: track.name })
       }, function (err, res) {
         askBtn.disabled = false; input.disabled = false;
         if (err) {
@@ -193,7 +193,7 @@
         mode: "quiz",
         json: true,
         code: JSON.stringify(payload),
-        context: AI.buildContext({ lesson: lesson.title })
+        context: AI.buildContext({ lesson: lesson.title, section: track.name })
       }, function (err, res) {
         btn.disabled = false;
         btn.textContent = label;
@@ -301,7 +301,7 @@
 
   function renderLocked(lesson) {
     document.title = "\u{1F512} " + lesson.title + " — Skillzify";
-    var track = TRACKS.filter(function (t) { return t.id === lesson.track; })[0] || { icon: "\u{1F4DA}", name: "Python" };
+    var track = (SECTIONS.filter(function (t) { return t.id === lesson.section; })[0]) || { icon: "\u{1F4DA}", name: "Python" };
     var inPaths = [];
     try {
       var P = window.SkillzifyPaths;
@@ -359,7 +359,7 @@
     curQuiz = buildQuiz(lesson); // fresh random pick + shuffled options, every open
     quizState = curQuiz.map(function () { return { correct: false, firstTry: true }; });
     challengeOk = isDone(lesson.id); // re-opening a done lesson: challenge pre-satisfied
-    var track = TRACKS.filter(function (t) { return t.id === lesson.track; })[0] || { icon: "\u{1F4DA}", name: "Python" };
+    var track = (SECTIONS.filter(function (t) { return t.id === lesson.section; })[0]) || { icon: "\u{1F4DA}", name: "Python" };
     var num = gi + 1;
     var pathOnly = !isDone(lesson.id) && isPathOnlyUnlocked(gi);
     var prev = prevUnlocked(gi), next = nextUnlocked(gi);
@@ -440,6 +440,7 @@
     var xp = addXP(gain);
     var after = levelFor(xp).name;
     var p = getProgress(); p[lesson.id] = true; saveProgress(p);
+    if (window.SkillzifyReview && typeof window.SkillzifyReview.scheduleFor === "function") window.SkillzifyReview.scheduleFor(lesson.id);
     var st = getState(); delete st[lesson.id]; saveState(st);
     bumpStreak();
     if (window.SkillzifySync) window.SkillzifySync.markDirty();

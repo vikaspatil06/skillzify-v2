@@ -11,7 +11,7 @@
 </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Skillzify Python learning path — 95 interactive lessons across beginner, intermediate and advanced tracks with quizzes, coding challenges and XP.">
+  <meta name="description" content="Skillzify Python learning path — 250 interactive lessons across 7 journey sections with quizzes, coding challenges and XP.">
   <title>Learn Python — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
   <link rel="stylesheet" href="assets/css/style.css?v=14">
@@ -58,9 +58,12 @@
         <div id="progress-box"></div>
       </div>
       <div class="continue-card" id="continue-card" aria-live="polite"></div>
+      <div class="card" id="review" style="margin-bottom:18px">
+        <div id="review-section" aria-live="polite"><p class="hint">Loading your review queue…</p></div>
+      </div>
       <div class="search-row">
         <span class="search-ico" aria-hidden="true">🔍</span>
-        <input id="lesson-search" type="search" placeholder="Search 95 lessons… try &quot;decorators&quot;, &quot;files&quot;, &quot;loops&quot;" aria-label="Search lessons" autocomplete="off">
+        <input id="lesson-search" type="search" placeholder="Search 250 lessons… try &quot;decorators&quot;, &quot;files&quot;, &quot;loops&quot;" aria-label="Search lessons" autocomplete="off">
       </div>
       <p class="hint" id="no-results" hidden style="text-align:center">No lessons match your search.</p>
       <div id="tracks"><p class="hint" id="tracks-fallback" style="padding:24px 4px">Loading your lessons… if they don't appear, hard-refresh with Ctrl+Shift+R (or Cmd+Shift+R on Mac).</p></div>
@@ -73,20 +76,21 @@
 <script src="assets/js/nav.js?v=4"></script>
 <script src="assets/js/footer.js?v=2"></script>
 <script src="assets/js/app.js?v=4"></script>
-<script src="assets/js/activity.js?v=3"></script>
+<script src="assets/js/activity.js?v=4"></script>
 <script src="assets/js/palette.js?v=1"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js?v=3"></script>
-<script src="assets/js/sync.js?v=6"></script>
-<script src="assets/js/ai.js?v=8"></script>
+<script src="assets/js/sync.js?v=7"></script>
+<script src="assets/js/ai.js?v=10"></script>
 <script src="assets/js/quiz-extra.js?v=1"></script>
-<script src="assets/js/lessons-b.js?v=1"></script>
-<script src="assets/js/lessons-i.js?v=1"></script>
-<script src="assets/js/lessons-a.js?v=1"></script>
-<script src="assets/js/paths-data.js?v=3"></script>
-<script src="assets/js/learn-core.js?v=2"></script>
-<script src="assets/js/learn.js?v=7"></script>
+<script src="assets/js/lessons-b.js?v=3"></script>
+<script src="assets/js/lessons-i.js?v=3"></script>
+<script src="assets/js/lessons-a.js?v=3"></script>
+<script src="assets/js/paths-data.js?v=4"></script>
+<script src="assets/js/learn-core.js?v=4"></script>
+<script src="assets/js/review.js?v=1"></script>
+<script src="assets/js/learn.js?v=8"></script>
 </body>
 </html>

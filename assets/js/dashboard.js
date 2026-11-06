@@ -1,7 +1,7 @@
 /* ============================================================
    Skillzify v2 — dashboard.js
    Reads localStorage progress + run history and renders the
-   learning dashboard: overall %, per-track bars, streak, runs.
+   learning dashboard: overall %, per-section bars, streak, runs.
    ============================================================ */
 (function () {
   "use strict";
@@ -19,12 +19,12 @@
     document.getElementById("dash-ring-fg").style.strokeDashoffset =
       String(264 - (264 * overall) / 100);
 
-    // Per-track
+    // Per-section
     var tracksHtml = "";
-    L.TRACKS.forEach(function (t) {
-      var pct = L.trackPct(t.id);
-      var td = L.LESSONS.filter(function (l) { return l.track === t.id && progress[l.id]; }).length;
-      var tc = L.LESSONS.filter(function (l) { return l.track === t.id; }).length;
+    L.SECTIONS.forEach(function (t) {
+      var pct = L.sectionPct(t.id);
+      var td = L.LESSONS.filter(function (l) { return l.section === t.id && progress[l.id]; }).length;
+      var tc = L.LESSONS.filter(function (l) { return l.section === t.id; }).length;
       tracksHtml += '<div class="progress-row"><span class="lbl">' + t.icon + " " + t.name + "</span>" +
         '<div class="bar"><span style="width:' + pct + '%"></span></div>' +
         '<span class="pct">' + td + "/" + tc + "</span></div>";
@@ -332,6 +332,13 @@
       rv.innerHTML = q.length ? q.map(function (ex) {
         return '<div class="run-item"><span>↻ ' + esc(ex.title) + '</span><a class="btn btn-sm btn-ghost" href="practice.html#ex=' + ex.id + '">Retry</a></div>';
       }).join("") : '<p class="hint">Nothing to review — clean slate! <a href="practice.html">Practice →</a></p>';
+      // Spaced-repetition nudge: due lesson reviews sit above the exercise retries.
+      try {
+        if (window.SkillzifyReview && typeof window.SkillzifyReview.dueCount === "function") {
+          var dueN = window.SkillzifyReview.dueCount();
+          if (dueN > 0) rv.innerHTML = '<div class="run-item"><span>🧠 ' + dueN + ' lesson' + (dueN === 1 ? '' : 's') + ' due for review</span><a class="btn btn-sm" href="learn.html#review">Review now →</a></div>' + rv.innerHTML;
+        }
+      } catch (e) {}
     }
 
     // Weak spots — weakest first, untried topics separated, each one tap from practice
