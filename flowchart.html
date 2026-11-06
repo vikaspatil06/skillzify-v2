@@ -48,7 +48,12 @@
   @media (max-width: 960px) { main { grid-template-columns: 1fr; } }
 
   .fc-card { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius);
-          padding: 20px; display: flex; flex-direction: column; min-height: 480px; box-shadow: var(--shadow); }
+          padding: 20px; display: flex; flex-direction: column; min-height: 480px; box-shadow: var(--shadow);
+          /* min-width: 0: a grid item's automatic minimum is its min-content
+             size, so a zoomed-in svg (699px at 1.4x) forced the whole grid
+             track — and the pane — wider instead of scrolling. With 0 the
+             track keeps its fr size and the overflow scrolls inside
+             #canvas-wrap (which has min-width: 0 + overflow: auto). */ min-width: 0; }
   .fc-card-head { display: flex; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
   .fc-card-head h2 { font-size: 1rem; font-weight: 700; }
   .fc-card-head .spacer { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -71,16 +76,51 @@
   @keyframes sp { to { transform: rotate(360deg); } }
 
   /* flowchart canvas */
-  #canvas-wrap { flex: 1; background: #fff; border-radius: 12px; overflow: auto; position: relative; min-height: 340px; }
-  #flowchart-output { padding: 28px; min-height: 100%; display: flex; align-items: flex-start; justify-content: center; }
-  #flowchart-output svg { max-width: 100%; height: auto; }
+  /* `min-width: 0`: a flex item's automatic minimum size is its content's
+     min-content size, so without this the pane GREW to fit a zoomed-in svg
+     (755px at 1.4x) instead of scrolling — the layout shifted and the
+     horizontal scroll never engaged. With min-width 0 the pane keeps its
+     flex-allocated width and the overflowing diagram scrolls inside it. */
+  #canvas-wrap { flex: 1; min-width: 0; background: #fff; border-radius: 12px; overflow: auto; position: relative; min-height: 340px; }
+  /* `safe center`: plain `center` parks an overflowing flex item with its
+     left edge past the scroll origin, so the left part can never be scrolled
+     to. `safe` falls back to start-alignment when the svg overflows (zoomed
+     in, narrow pane), keeping every node reachable; when it fits, the
+     diagram stays centred as before. The plain `center` line above is the
+     fallback for browsers without `safe`. */
+  #flowchart-output { padding: 28px; min-height: 100%; display: flex; align-items: flex-start; justify-content: center; justify-content: safe center; }
+  #flowchart-output svg { max-width: 100%; height: auto; flex-shrink: 0; }
+  /* `flex-shrink: 0`: the svg is a flex item of #flowchart-output, and a
+     flex item shrinks by default — so a zoomed-in svg (699px at 1.4x) was
+     squeezed back to the container width (521px) and the zoom did nothing.
+     With shrink disabled the svg keeps its zoomed width and overflows the
+     pane, which scrolls (safe center falls back to start alignment). */
   #flowchart-output .node { cursor: pointer; }
   /* Hover highlight via stroke only — the old brightness/drop-shadow
      filter here forced the SVG group to re-rasterize on every mouse
      move, so the node flickered/shattered continuously in Chrome.
      A stroke change repaints nothing. (.fc-active keeps its own
-     drop-shadow: it is set once during trace, not on hover.) */
-  #flowchart-output .node:hover .node-shape, #flowchart-output .node:hover rect, #flowchart-output .node:hover polygon, #flowchart-output .node:hover ellipse, #flowchart-output .node:hover path.node-shape { stroke: #6c7bff; stroke-width: 2.5px; }
+     drop-shadow: it is set once during trace, not on hover.)
+     The !important is REQUIRED, not cosmetic: Mermaid injects its own
+     <style> into the svg with rules like `#fc… .clsDec>* { stroke: … !important; }`
+     (the svg id changes every render, so the page rule cannot out-specify it
+     by id). A non-important rule loses to those no matter its specificity —
+     that is why the hover outline was invisible before this change. */
+  #flowchart-output .node:hover .node-shape, #flowchart-output .node:hover rect, #flowchart-output .node:hover polygon, #flowchart-output .node:hover ellipse, #flowchart-output .node:hover path.node-shape { stroke: #6c7bff !important; stroke-width: 3px !important; }
+  /* Mermaid wraps every flowchart node in <g class="node">, so the site-wide
+     learning-path `.node` rule in style.css (font-size 1.7rem, font-weight
+     800, a 0.2s transform transition and a :hover scale) leaks into the
+     diagram: labels rendered at 27.2px bold — the diagram came out ~50%
+     oversized — and the transform transition made nodes animate from the
+     origin on every render, which also corrupted Mermaid's viewBox
+     (measured mid-flight, so the print node fell outside it and was
+     clipped). Neutralise the leak here. The selector is deliberately
+     `g.node`, not `#flowchart-output g.node`: Mermaid measures the labels
+     while the svg is still in a temporary div in the body, so the reset
+     must match there too, or the shapes would be sized for 27.2px text
+     and the 16px labels would rattle around inside them. */
+  g.node { font-size: 16px !important; font-weight: 400 !important; transition: none !important; animation: none !important; }
+  g.node:hover { transform: none !important; }
   .fc-active .node-shape, .fc-active rect, .fc-active polygon, .fc-active ellipse, .fc-active path.node-shape {
     stroke: #6c7bff !important; stroke-width: 3px !important;
     filter: drop-shadow(0 0 10px rgba(108,123,255,.55)) !important; }
@@ -574,7 +614,29 @@ document.addEventListener('keydown', e => {
 });
 
 /* ---------- zoom / download ---------- */
-function applyZoom() { const s = document.querySelector('#flowchart-output svg'); if (s) s.style.transform = `scale(${currentZoom})`; }
+/* Zoom resizes the svg's layout width instead of transform: scale().
+   A transform only paints the svg bigger/smaller — its layout box (and
+   therefore #canvas-wrap's scrollable area) never changes, so zooming in
+   left content unreachable by scrolling and zooming out left dead scroll
+   space. An explicit width keeps scroll and zoom in agreement: at zoom 1
+   the original Mermaid sizing is restored exactly (width 100% + its own
+   max-width cap); at any other zoom the width is the fitted size times
+   the zoom, so the whole diagram stays reachable by scrolling. */
+function applyZoom() {
+  const s = document.querySelector('#flowchart-output svg');
+  if (!s) return;
+  if (s.dataset.origMaxW === undefined) s.dataset.origMaxW = s.style.maxWidth || '';
+  const natural = parseFloat(s.dataset.origMaxW) || (s.viewBox && s.viewBox.baseVal.width) || 0;
+  if (currentZoom === 1) {
+    s.style.width = ''; s.style.maxWidth = s.dataset.origMaxW; s.style.transform = '';
+  } else {
+    const out = document.getElementById('flowchart-output');
+    const base = natural ? Math.min(out.clientWidth || natural, natural) : s.getBoundingClientRect().width;
+    s.style.width = (base * currentZoom) + 'px';
+    s.style.maxWidth = 'none';
+    s.style.transform = '';
+  }
+}
 function zoomIn() { currentZoom = Math.min(3, currentZoom+.2); applyZoom(); }
 function zoomOut() { currentZoom = Math.max(.3, currentZoom-.2); applyZoom(); }
 function zoomReset() { currentZoom = 1; applyZoom(); }
@@ -583,6 +645,25 @@ function downloadSVG() {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([currentSVG], {type:'image/svg+xml'}));
   a.download = 'flowchart.svg'; a.click();
+}
+
+/* Mermaid computes the svg viewBox while the diagram is still in its
+   temporary render container, and that measurement can disagree with the
+   final laid-out content (the print node once ended up ~92px past the
+   viewBox's right edge and was clipped, unreachable by scroll or zoom).
+   Re-derive the viewBox from the live, laid-out geometry after insertion
+   so it always covers the content; a no-op when Mermaid got it right.
+   Also refreshes currentSVG so the downloaded SVG matches the display. */
+function fixViewBox(out) {
+  const s = out.querySelector("svg");
+  if (!s) return;
+  try {
+    const bb = s.getBBox();
+    const pad = 8;
+    s.setAttribute("viewBox", (bb.x - pad) + " " + (bb.y - pad) + " " + (bb.width + pad * 2) + " " + (bb.height + pad * 2));
+    s.style.maxWidth = (bb.width + pad * 2) + "px";
+    currentSVG = s.outerHTML;
+  } catch (e) { /* keep Mermaid's viewBox */ }
 }
 
 async function renderGraph(json, keepState) {
@@ -598,7 +679,7 @@ async function renderGraph(json, keepState) {
   try {
     const { svg } = await mermaid.render('fc'+Date.now(), currentMermaid);
     currentSVG = svg; if (!keepState) currentZoom = 1;
-    out.innerHTML = svg; applyZoom(); wireNodes();
+    out.innerHTML = svg; fixViewBox(out); applyZoom(); wireNodes();
     stats.textContent = `${g.nodes.length} nodes · ${g.edges.length} edges` + (g.truncated?' · truncated':'');
     document.getElementById('btn-trace').disabled = false;
     if (!keepState) setStatus('✓ Flowchart ready — click any node, or hit Trace execution','ok');
