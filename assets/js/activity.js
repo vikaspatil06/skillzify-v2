@@ -130,7 +130,7 @@
     { id: "early_bird",   icon: "🌅", name: "Early Bird",    desc: "Code between 5 and 8 AM" },
     { id: "ex_first",     icon: "🏋️", name: "Problem Solver", desc: "Solve your first exercise" },
     { id: "ex_10",        icon: "💪", name: "Decathlete",    desc: "Solve 10 exercises" },
-    { id: "ex_25",        icon: "🔥", name: "On Fire",       desc: "Solve 25 exercises" },
+    { id: "ex_25",        icon: "🔥", name: "On a Roll",     desc: "Solve 25 exercises" },
     { id: "ex_all",       icon: "🏆", name: "Completionist", desc: "Solve every exercise" },
     { id: "topic_master", icon: "🎯", name: "Topic Master",  desc: "Solve every exercise in one topic" }
   ];

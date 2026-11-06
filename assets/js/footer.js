@@ -21,15 +21,7 @@
     "      </div>\n" +
     "      <div>\n" +
     "        <h4>Learn</h4>\n" +
-    '        <div class="footer-links-2col">\n' +
-    '          <a href="learn.html">Base Camp</a>\n' +
-    '          <a href="learn.html">Tool Shed</a>\n' +
-    '          <a href="learn.html">Object Castle</a>\n' +
-    '          <a href="learn.html">Algorithm Arena</a>\n' +
-    '          <a href="learn.html">Power Lab</a>\n' +
-    '          <a href="learn.html">Data Lab</a>\n' +
-    '          <a href="learn.html">Launch Pad</a>\n' +
-    "        </div>\n" +
+    '        <a href="learn.html">All lessons</a>\n' +
     "      </div>\n" +
     "      <div>\n" +
     "        <h4>Platform</h4>\n" +
@@ -37,6 +29,7 @@
     '        <a href="dashboard.html">Dashboard</a>\n' +
     '        <a href="community.html">Community</a>\n' +
     '        <a href="reference.html">Reference</a>\n' +
+    '        <a href="flowchart-test.html">Flowchart Lab</a>\n' +
     "      </div>\n" +
     "      <div>\n" +
     "        <h4>Company</h4>\n" +

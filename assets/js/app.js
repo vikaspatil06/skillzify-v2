@@ -107,9 +107,17 @@
     var burger = document.getElementById("hamburger");
     var links = document.getElementById("nav-links");
     if (burger && links) {
-      burger.addEventListener("click", function () { links.classList.toggle("open"); });
+      burger.addEventListener("click", function () {
+        var open = links.classList.toggle("open");
+        burger.setAttribute("aria-expanded", open ? "true" : "false");
+        burger.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+      });
       links.querySelectorAll("a").forEach(function (a) {
-        a.addEventListener("click", function () { links.classList.remove("open"); });
+        a.addEventListener("click", function () {
+          links.classList.remove("open");
+          burger.setAttribute("aria-expanded", "false");
+          burger.setAttribute("aria-label", "Open menu");
+        });
       });
     }
     // Active link highlighting

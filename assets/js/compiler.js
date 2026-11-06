@@ -18,6 +18,7 @@
   var CM_FONT_KEY = "skillzify_cm_font";
 
   var pyodide = null;
+  var pyodideLoading = false; // guards double-load + retry (P2-35)
   var editor = null;
   var ws = null;               // {files:{}, tabs:[], active}
   var lastError = "";
@@ -394,20 +395,24 @@
     if (sr) sr.innerHTML = running ? "⏹" : "▶";
   }
   function loadPyodideRuntime() {
+    if (pyodide || pyodideLoading) return;
+    pyodideLoading = true;
     printLine("⏳ Loading Python 3.11 runtime…", "dim");
     var s = document.createElement("script");
     s.src = "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js";
     s.onload = function () {
       window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/" }).then(function (py) {
         pyodide = py;
+        pyodideLoading = false;
         printLine("✅ Python 3.11 ready (Pyodide). Press ▶ Run.", "dim");
         setRunUI(false);
         checkProblems(true);
       }).catch(function (e) {
+        pyodideLoading = false;
         printLine("❌ Could not load the Python runtime. Check your connection and reload.", "err");
       });
     };
-    s.onerror = function () { printLine("❌ Could not download Pyodide — internet required.", "err"); };
+    s.onerror = function () { pyodideLoading = false; printLine("❌ Could not download Pyodide — internet required.", "err"); };
     document.head.appendChild(s);
   }
 
@@ -566,7 +571,15 @@
 
   /* ================= run ================= */
   function runCode() {
-    if (!pyodide) { toast("Python runtime is still loading…", "error"); return; }
+    if (!pyodide) {
+      /* Retry the download instead of wedging on "still loading"
+         forever after a failed load (P2-35). */
+      if (pyodideLoading) { toast("Python runtime is still loading…", "error"); return; }
+      printLine("⏳ Retrying the Python runtime download…", "dim");
+      loadPyodideRuntime();
+      toast("Python runtime failed to load — retrying the download…", "error");
+      return;
+    }
     if (!ws.active) { toast("Open a file first", "error"); return; }
     persistActiveFile();
     saveWS();
@@ -912,13 +925,28 @@
   }
   function b64e(s) { return b64urlEncode(s); }
   function b64d(s) { return b64urlDecode(s); }
+  function copyTextFallback(text) {
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      toast(ok ? "Share link copied! 🔗" : "Copy failed — copy the URL from the address bar.", ok ? "success" : "error");
+    } catch (e) { toast("Copy failed — copy the URL from the address bar.", "error"); }
+  }
   function shareCode() {
     if (!ws.active) return;
     persistActiveFile(); saveWS();
     var payload = b64e(JSON.stringify({ files: ws.files, active: ws.active }));
     var url = location.href.split("#")[0] + "#ws=" + payload;
     try { history.replaceState(null, "", "#ws=" + payload); } catch (e) {}
-    if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { toast("Share link copied! 🔗", "success"); });
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(function () { toast("Share link copied! 🔗", "success"); })
+        .catch(function () { copyTextFallback(url); });
+    } else {
+      copyTextFallback(url);
+    }
   }
   function clearShareHash() {
     // A refresh must not re-apply the same shared snapshot and wipe
@@ -1123,14 +1151,32 @@
   }
 
   /* ================= sidebar views ================= */
+  /* Sidebar open/close on small screens (P2-31): below 860px the
+     sidebar is an overlay, so it needs a close button, a tap-to-close
+     backdrop, and re-tapping the active icon to close it. */
+  function setSidebarOpen(on) {
+    var sb = document.getElementById("sidebar");
+    if (sb) sb.classList.toggle("open", !!on);
+    var bd = document.getElementById("sidebar-backdrop");
+    if (bd) bd.classList.toggle("on", !!on && window.innerWidth <= 860);
+  }
   function switchView(name) {
+    var btn = document.querySelector('.activity-bar button[data-view="' + name + '"]');
+    var wasActive = !!(btn && btn.classList.contains("active"));
+    var sb0 = document.getElementById("sidebar");
+    var wasOpen = !!(sb0 && sb0.classList.contains("open"));
     document.querySelectorAll(".activity-bar button[data-view]").forEach(function (b) {
       b.classList.toggle("active", b.getAttribute("data-view") === name);
     });
     document.querySelectorAll(".side-view").forEach(function (v) {
       v.classList.toggle("active", v.id === "view-" + name);
     });
-    if (window.innerWidth <= 860) document.getElementById("sidebar").classList.add("open");
+    if (window.innerWidth <= 860) {
+      /* Re-tapping the active icon closes the overlay instead of
+         re-opening it. */
+      if (wasActive && wasOpen) { setSidebarOpen(false); return; }
+      setSidebarOpen(true);
+    }
   }
 
   /* ================= snippets ================= */
@@ -1240,6 +1286,11 @@
     document.querySelectorAll(".activity-bar button[data-view]").forEach(function (b) {
       b.addEventListener("click", function () { switchView(b.getAttribute("data-view")); });
     });
+    /* mobile sidebar close (P2-31): ✕ button + tap the backdrop */
+    var scb = document.getElementById("sidebar-close-btn");
+    if (scb) scb.addEventListener("click", function () { setSidebarOpen(false); });
+    var sbd = document.getElementById("sidebar-backdrop");
+    if (sbd) sbd.addEventListener("click", function () { setSidebarOpen(false); });
     /* panel tabs */
     document.querySelectorAll(".ptab").forEach(function (b) {
       b.addEventListener("click", function () { switchPtab(b.getAttribute("data-ptab")); });
@@ -1284,7 +1335,12 @@
     document.getElementById("reset-ws-btn").addEventListener("click", function () {
       if (!confirm("Reset workspace? All files will be replaced with a fresh main.py.")) return;
       backupWorkspace();
-      ws = { files: { "main.py": DEFAULT_CODE }, tabs: ["main.py"], active: "main.py" };
+      /* Tombstone every pre-reset file (except the fresh main.py) so
+         the sync merge can't resurrect them from another device (P2-32). */
+      var now = Date.now();
+      var del = {};
+      Object.keys(ws.files || {}).forEach(function (n) { if (n !== "main.py") del[n] = now; });
+      ws = { files: { "main.py": DEFAULT_CODE }, tabs: ["main.py"], active: "main.py", mtimes: { "main.py": now }, deleted: del };
       saveWS();
       if (editor) editor.setValue(ws.files["main.py"]);
       renderExplorer(); renderTabs(); updateStatusBar();
@@ -1395,8 +1451,8 @@
       if (mod && e.key.toLowerCase() === "f" && !e.shiftKey) { e.preventDefault(); openFind(false); }
       else if (mod && e.key.toLowerCase() === "h") { e.preventDefault(); openFind(true); }
       else if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); persistActiveFile(); if (saveWS()) toast("Workspace saved 💾", "success"); }
-      else if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); document.getElementById("sidebar").classList.toggle("open"); }
-      else if (e.key === "Escape") { closeFind(); }
+      else if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); var sb = document.getElementById("sidebar"); setSidebarOpen(!sb.classList.contains("open")); }
+      else if (e.key === "Escape") { closeFind(); setSidebarOpen(false); }
     });
 
     /* save on exit: never lose the last keystrokes inside the autosave window */

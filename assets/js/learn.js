@@ -113,40 +113,52 @@
 
   }
 
+  /* Search filter, shared by the input listener and by re-renders
+     (resize / sync) so a live query survives them. Locked sections
+     render their lessons into a hidden .locked-rows container so
+     search can reveal matches there too (P2-9, P2-10). */
+  function applySearch(q) {
+    var anyMatch = false;
+    document.querySelectorAll("#tracks .track-section").forEach(function (sec) {
+      var matches = 0, total = 0;
+      sec.querySelectorAll(".node-row").forEach(function (row) {
+        total++;
+        var lbl = row.querySelector(".node-label");
+        var hit = !q || (lbl && lbl.textContent.toLowerCase().indexOf(q) >= 0);
+        row.style.display = hit ? "" : "none";
+        if (hit) matches++;
+      });
+      var badge = sec.querySelector(".t-count");
+      if (q) {
+        sec.classList.remove("collapsed");
+        if (badge) badge.textContent = matches + "/" + total + " match" + (matches === 1 ? "" : "es");
+        if (matches) anyMatch = true;
+      } else if (badge) {
+        badge.textContent = total + " lessons";
+        var tid = sec.dataset.section;
+        var c = !shouldExpand(tid);
+        sec.classList.toggle("collapsed", c);
+        var head = sec.querySelector(".track-head");
+        if (head) head.setAttribute("aria-expanded", c ? "false" : "true");
+      }
+      var lr = sec.querySelector(".locked-rows");
+      if (lr) lr.style.display = (q && matches) ? "" : "none";
+    });
+    var nores = document.getElementById("no-results");
+    if (nores) nores.hidden = !(q && !anyMatch);
+    if (q) requestAnimationFrame(drawPaths);
+  }
+
+  function currentQuery() {
+    var inp = document.getElementById("lesson-search");
+    return inp ? inp.value.trim().toLowerCase() : "";
+  }
+
   function initSearch() {
     var inp = document.getElementById("lesson-search");
     if (!inp || inp.dataset.wired) return;
     inp.dataset.wired = "1";
-    inp.addEventListener("input", function () {
-      var q = inp.value.trim().toLowerCase();
-      var anyMatch = false;
-      document.querySelectorAll("#tracks .track-section").forEach(function (sec) {
-        var matches = 0, total = 0;
-        sec.querySelectorAll(".node-row").forEach(function (row) {
-          total++;
-          var lbl = row.querySelector(".node-label");
-          var hit = !q || (lbl && lbl.textContent.toLowerCase().indexOf(q) >= 0);
-          row.style.display = hit ? "" : "none";
-          if (hit) matches++;
-        });
-        var badge = sec.querySelector(".t-count");
-        if (q) {
-          sec.classList.remove("collapsed");
-          if (badge) badge.textContent = matches + "/" + total + " match" + (matches === 1 ? "" : "es");
-          if (matches) anyMatch = true;
-        } else if (badge) {
-          badge.textContent = total + " lessons";
-          var tid = sec.dataset.section;
-          var c = !shouldExpand(tid);
-          sec.classList.toggle("collapsed", c);
-          var head = sec.querySelector(".track-head");
-          if (head) head.setAttribute("aria-expanded", c ? "false" : "true");
-        }
-      });
-      var nores = document.getElementById("no-results");
-      if (nores) nores.hidden = !(q && !anyMatch);
-      if (q) requestAnimationFrame(drawPaths);
-    });
+    inp.addEventListener("input", function () { applySearch(currentQuery()); });
   }
 
   function renderTracks() {
@@ -170,6 +182,15 @@
       sec.appendChild(head);
       if (!sectionUnlocked(t.id)) {
         sec.appendChild(lockedTrackCard(t));
+        /* Hidden lesson rows so search can find locked-section lessons
+           (revealed by applySearch on a match, P2-9). */
+        var lrows = el("div", "locked-rows");
+        lrows.style.display = "none";
+        sectionLessons(t.id).forEach(function (l) {
+          lessonNum++;
+          lrows.appendChild(nodeRow(l, idxOf(l.id), lessonNum));
+        });
+        sec.appendChild(lrows);
       } else {
         var path = el("div", "path");
         path.id = "path-" + t.id;
@@ -270,7 +291,7 @@
   }
 
   function renderAll() {
-    renderHero(); renderProgress(); renderContinue(); renderTracks(); initSearch();
+    renderHero(); renderProgress(); renderContinue(); renderTracks(); initSearch(); applySearch(currentQuery());
     // Backfill: a section or path finished before the +100/+150 bonuses
     // shipped still pays out once (flags in learn-core.js).
     try { if (LC.checkSectionBonuses) LC.checkSectionBonuses(); if (LC.checkPathBonuses) LC.checkPathBonuses(); } catch (e) {}
@@ -279,7 +300,7 @@
   var resizeT = null;
   window.addEventListener("resize", function () {
     clearTimeout(resizeT);
-    resizeT = setTimeout(function () { renderTracks(); requestAnimationFrame(drawPaths); }, 250);
+    resizeT = setTimeout(function () { renderTracks(); applySearch(currentQuery()); requestAnimationFrame(drawPaths); }, 250);
   });
 
   document.addEventListener("DOMContentLoaded", function () {

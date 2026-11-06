@@ -194,10 +194,10 @@
       var dex = EX[day % EX.length];
       var da = atts[dex.id] || {};
       var renderStaticDaily = function () {
-        dd.innerHTML = '<p><strong>' + esc(dex.title) + '</strong></p>' +
+        dd.innerHTML = '<p><span class="badge">📅 Standard</span> <strong>' + esc(dex.title) + '</strong></p>' +
           '<p class="hint">' + esc(dex.prompt).slice(0, 90) + '…</p>' +
           '<p><a class="btn btn-sm" href="practice.html#ex=' + dex.id + '">' +
-          (da.solved ? "Play again →" : "Take the challenge →") + "</a></p>";
+          (da.solved ? "Play again →" : "Start →") + "</a></p>";
       };
       // The AI card is a SECOND card below the static one — it never
       // replaces the static card, so its link target can't change
@@ -207,7 +207,7 @@
         if (document.getElementById("dash-daily-ai")) return;
         dd.innerHTML += '<div id="dash-daily-ai"><p><strong>' + esc(ch.title) + '</strong> <span class="badge badge-unlock">🤖 Picked for you</span></p>' +
           '<p class="hint">' + esc(ch.prompt).slice(0, 90) + '…</p>' +
-          '<p><a class="btn btn-sm" href="practice.html#challenge">Take the challenge →</a></p></div>';
+          '<p><a class="btn btn-sm" href="practice.html#challenge">Take my challenge →</a></p></div>';
       };
       var clearFailNote = function () {
         var n = document.getElementById("dash-daily-fail");

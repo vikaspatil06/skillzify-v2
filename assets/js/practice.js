@@ -109,7 +109,18 @@
       delete defs[drill.id];
       defs[drill.id] = drill;
       var keys = Object.keys(defs);
-      while (keys.length > DRILL_DEF_MAX) { delete defs[keys.shift()]; }
+      while (keys.length > DRILL_DEF_MAX) {
+        /* Evict the oldest UNSOLVED drill first — a solved drill's XP
+           is earned progress, not dead weight (P2-18). Only when every
+           drill is solved does the oldest solved one go. */
+        var drills = getDrills();
+        var unsolved = keys.filter(function (k) { return !(drills[k] && drills[k].solved); });
+        var victim = unsolved.length ? unsolved[0] : keys[0];
+        var title = defs[victim] && defs[victim].title;
+        delete defs[victim];
+        keys = Object.keys(defs);
+        try { if (window.Skillzify && window.Skillzify.toast) window.Skillzify.toast("Dropped your oldest drill" + (title ? " (“" + title + "”)" : "") + " — the drill shelf holds 20."); } catch (e) {}
+      }
       localStorage.setItem(DRILL_DEF_KEY, JSON.stringify(defs));
     } catch (e) {}
   }
@@ -255,7 +266,7 @@
       '<p class="hint">The AI writes a fresh exercise targeting the topics you keep missing — then proves it works before you see it.</p>';
     if (!weak.length) {
       html += '<p class="hint">Solve a few exercises first — your weak spots will show up here.</p>' +
-        '<button class="btn" disabled>Generate a drill</button>';
+        '<button class="btn" data-drill-topic="variables">Generate a beginner drill</button>';
     } else {
       html += '<div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">' +
         weak.slice(0, 3).map(function (w) {
@@ -398,13 +409,17 @@
     }
     var entry = null;
     weakestTopics().forEach(function (w) { if (w.topic === topic) entry = w; });
-    if (!entry) return;
+    /* No weak spot for this topic (e.g. a brand-new user): still allow
+       a beginner drill instead of silently returning (P2-15). */
+    if (!entry) entry = { topic: topic, attempts: 0, exercises: [] };
     setDrillBusy(true);
     if (status) status.innerHTML = '<p class="hint">🤖 Writing a drill for ' + esc(TOPIC_LABEL[topic] || topic) + '…</p>';
     var summary = "Topic: " + (TOPIC_LABEL[topic] || topic) +
-      ". The student recently failed these exercises (unsolved after trying): " +
-      entry.exercises.map(function (e) { return e.title + " (" + e.attempts + " tries)"; }).join("; ") +
-      ". Write ONE short drill exercise that targets the same skills and the same common mistakes.";
+      (entry.exercises.length
+        ? ". The student recently failed these exercises (unsolved after trying): " +
+          entry.exercises.map(function (e) { return e.title + " (" + e.attempts + " tries)"; }).join("; ") +
+          ". Write ONE short drill exercise that targets the same skills and the same common mistakes."
+        : ". The student is just starting this topic. Write ONE short beginner drill exercise that introduces the basics.");
     AI.ask({ mode: "drill", json: true, code: summary, extra: { topic: topic } }, function (err, res) {
       if (err) {
         setDrillBusy(false);
@@ -642,7 +657,7 @@
     if (!ex) { host.style.display = "none"; return; }
     var a = attFor(ex.id);
     host.innerHTML =
-      '<div class="daily-inner"><div><div class="badge">📅 Daily challenge</div>' +
+      '<div class="daily-inner"><div><div class="badge">📅 Today\'s exercise</div>' +
       '<h3>' + esc(ex.title) + '</h3>' +
       '<p class="hint">' + esc(TOPIC_LABEL[ex.topic] || ex.topic) + ' · ' + (KIND_LABEL[ex.kind] || "") + ' · ' + ex.xp + ' XP</p></div>' +
       '<div><a class="btn" href="#ex=' + ex.id + '">' + (a.solved ? "Play again →" : "Start →") + '</a></div></div>';
@@ -818,7 +833,7 @@
       ex.options.forEach(function (opt, i) {
         html += '<button class="btn btn-ghost opt-btn" data-opt="' + i + '">' + esc(opt) + '</button>';
       });
-      html += '</div><div id="predict-msg" style="margin-top:12px"></div></div>';
+      html += '</div><div id="predict-msg" aria-live="polite" style="margin-top:12px"></div></div>';
     } else {
       var draft = getDraft(ex.id);
       var initial = (draft != null && draft !== "") ? draft : (ex.starter || "");
@@ -831,7 +846,7 @@
         '<label class="hint" style="margin-left:auto"><input type="checkbox" id="ex-timed"> ⏱ Timed</label>' +
         '<select id="ex-timelen" class="input-sm"><option value="300">5 min</option><option value="600" selected>10 min</option><option value="900">15 min</option></select>' +
         '</div><div id="ex-timer" class="hint" style="display:none"></div>' +
-        '<div id="ex-results" style="margin-top:12px"></div></div>';
+        '<div id="ex-results" aria-live="polite" style="margin-top:12px"></div></div>';
     }
 
     html += '<div class="card"><h3>💡 Hints <span class="hint">(progressive)</span></h3><div class="btn-row" id="hint-btns">';

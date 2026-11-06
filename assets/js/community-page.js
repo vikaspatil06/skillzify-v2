@@ -13,6 +13,14 @@
   }
   function $(id) { return document.getElementById(id); }
 
+  /* Author name → link to their public profile (P2-19); plain text
+     when the author has no uid (legacy/anonymous). */
+  function authorLink(a) {
+    var name = esc(a.authorName || "Anonymous");
+    if (a.authorUid) return '<a href="profile.html?uid=' + esc(a.authorUid) + '">' + name + "</a>";
+    return "<span>" + name + "</span>";
+  }
+
   var C = window.SkillzifyCommunity || null;
   var ERR_MSG = "Couldn't load the community right now — check your connection and try again.";
   var DRAFT_KEY = "skillzify_community_draft";
@@ -20,7 +28,8 @@
   var state = {
     tab: "questions", filter: "all", qid: null, query: "",
     questions: [], showcase: [], showcaseLoaded: false,
-    currentQ: null, currentAnswers: []
+    currentQ: null, currentAnswers: [],
+    qCursor: null, qHasMore: false
   };
   var pendingDraft = null; // draft from the compiler, kept for the ask submit
 
@@ -114,8 +123,8 @@
   function switchTab(tab) {
     state.tab = tab;
     var tq = $("tab-questions"), ts = $("tab-showcase");
-    if (tq) tq.classList.toggle("active", tab === "questions");
-    if (ts) ts.classList.toggle("active", tab === "showcase");
+    if (tq) { tq.classList.toggle("active", tab === "questions"); tq.setAttribute("aria-selected", tab === "questions" ? "true" : "false"); }
+    if (ts) { ts.classList.toggle("active", tab === "showcase"); ts.setAttribute("aria-selected", tab === "showcase" ? "true" : "false"); }
     var pq = $("comm-questions"), ps = $("comm-showcase");
     if (pq) pq.hidden = tab !== "questions";
     if (ps) ps.hidden = tab !== "showcase";
@@ -144,6 +153,21 @@
     }
     C.listQuestions({ filter: state.filter }).then(function (qs) {
       state.questions = qs || [];
+      state.qCursor = qs ? qs._cursor : null;
+      state.qHasMore = !!(qs && qs._hasMore);
+      renderQuestions();
+    }).catch(onApiError);
+  }
+  /* P2-20: load the next page of questions (older than the current
+     cursor) and append it, so search can reach past the first 50. */
+  function loadMoreQuestions() {
+    if (!state.qCursor || !state.qHasMore) return;
+    C.listQuestions({ filter: state.filter, after: state.qCursor }).then(function (qs) {
+      var seen = {};
+      state.questions.forEach(function (q) { seen[q.id] = true; });
+      (qs || []).forEach(function (q) { if (!seen[q.id]) state.questions.push(q); });
+      state.qCursor = qs ? qs._cursor : null;
+      state.qHasMore = !!(qs && qs._hasMore);
       renderQuestions();
     }).catch(onApiError);
   }
@@ -180,19 +204,18 @@
     try { shown = C.filterByQuery(state.questions, state.query || ""); } catch (e) { shown = state.questions; }
     if (!shown.length) {
       list.innerHTML = (state.query || "").trim()
-        ? '<p class="hint">No questions match "' + esc(state.query.trim()) + '".</p>'
+        ? '<p class="hint">No questions match "' + esc(state.query.trim()) + '".' + (state.qHasMore ? " Only the " + state.questions.length + " most recent are loaded — load more below to search older ones." : "") + "</p>"
         : state.filter === "unanswered"
         ? '<p class="hint">No open questions right now — every question has an answer. Nice.</p>'
         : state.filter === "mine"
         ? '<p class="hint">You haven\'t asked anything yet.</p>'
         : '<p class="hint">No questions yet — be the first to ask.</p>';
-      return;
-    }
-    list.innerHTML = shown.map(function (q) {
+    } else {
+      list.innerHTML = shown.map(function (q) {
       var n = q.answerCount || 0;
       return '<article class="card comm-q">' +
         '<h3><a href="community.html?q=' + esc(q.id) + '" data-qid="' + esc(q.id) + '">' + esc(q.title) + "</a></h3>" +
-        '<p class="comm-meta"><span>' + esc(q.authorName || "Anonymous") + "</span>" +
+        '<p class="comm-meta">' + authorLink(q) +
         "<span>" + esc(relTime(q.createdAt)) + "</span>" +
         lessonTag(q) +
         "<span>" + n + (n === 1 ? " answer" : " answers") + "</span>" +
@@ -203,6 +226,12 @@
           : "") +
         "</article>";
     }).join("");
+    }
+    if (state.qHasMore) {
+      list.innerHTML += '<div style="text-align:center;margin-top:12px"><button class="btn btn-ghost" type="button" data-load-more>Load more questions ↓</button></div>';
+      var moreBtn = list.querySelector("[data-load-more]");
+      if (moreBtn) moreBtn.addEventListener("click", function () { loadMoreQuestions(); });
+    }
     list.querySelectorAll("[data-qid]").forEach(function (a) {
       a.addEventListener("click", function (e) {
         e.preventDefault();
@@ -324,7 +353,7 @@
     var html = '<p><a class="comm-back" href="community.html" data-back>← All questions</a></p>' +
       '<article class="card comm-q">' +
       "<h2>" + esc(q.title) + "</h2>" +
-      '<p class="comm-meta"><span>' + esc(q.authorName || "Anonymous") + "</span>" +
+      '<p class="comm-meta">' + authorLink(q) +
       "<span>" + esc(relTime(q.createdAt)) + "</span>" +
       lessonTag(q) + statusPill(q) + "</p>" +
       (isAuthor ? '<div class="comm-actions"><button class="btn btn-sm btn-ghost" type="button" data-del-q="' + esc(q.id) + '">Delete question</button></div>' : "") +
@@ -336,7 +365,7 @@
       '<h3 style="margin:18px 0 10px">' + sorted.length + (sorted.length === 1 ? " answer" : " answers") + "</h3>" +
       '<div id="comm-answers">' + (sorted.length ? sorted.map(function (a) {
         return '<article class="card comm-ans' + (a.isBest ? " comm-ans-best" : "") + '">' +
-          '<p class="comm-meta"><span>' + esc(a.authorName || "Anonymous") + "</span>" +
+          '<p class="comm-meta">' + authorLink(a) +
           "<span>" + esc(relTime(a.createdAt)) + "</span>" +
           (a.isBest ? '<span class="comm-best">✓ Best answer</span>' : "") + "</p>" +
           "<p>" + nl2br(a.body) + "</p>" +
@@ -499,12 +528,12 @@
     return '<article class="card comm-card' + (featured ? " comm-featured" : "") + '">' +
       (featured ? '<div class="comm-featured-label">⭐ Featured this week</div>' : "") +
       "<h3>" + esc(p.title) + "</h3>" +
-      '<p class="comm-meta"><span>' + esc(p.authorName || "Anonymous") + "</span>" +
+      '<p class="comm-meta">' + authorLink(p) +
       "<span>" + esc(relTime(p.createdAt)) + "</span></p>" +
       (p.desc ? '<p class="comm-excerpt">' + esc(excerpt(p.desc, 160)) + "</p>" : "") +
       (p.code ? '<div class="comm-code"><pre class="code hidden" data-showcode="' + esc(p.id) + '">' + esc(p.code) + "</pre></div>" : "") +
       '<div class="comm-actions">' +
-      '<button class="comm-star' + (starred ? " on" : "") + '" type="button" data-star="' + esc(p.id) + '">' +
+      '<button class="comm-star' + (starred ? " on" : "") + '" type="button" data-star="' + esc(p.id) + '" aria-label="Star project" aria-pressed="' + (starred ? "true" : "false") + '">' +
       '<span data-star-icon="' + esc(p.id) + '">' + (starred ? "★" : "☆") + '</span> <span data-star-count="' + esc(p.id) + '">' + (p.starCount || 0) + "</span></button>" +
       (p.code ? '<button class="btn btn-sm btn-ghost" type="button" data-viewcode="' + esc(p.id) + '">View code</button>' : "") +
       '<button class="btn btn-sm" type="button" data-fork="' + esc(p.id) + '">Fork</button>' +
@@ -547,6 +576,7 @@
           b.disabled = false;
           if (post) post.starCount = Math.max(0, (post.starCount || 0) + (starred ? 1 : -1));
           b.classList.toggle("on", !!starred);
+          b.setAttribute("aria-pressed", starred ? "true" : "false");
           var icon = root.querySelector('[data-star-icon="' + id + '"]');
           if (icon) icon.textContent = starred ? "★" : "☆";
           var n = root.querySelector('[data-star-count="' + id + '"]');

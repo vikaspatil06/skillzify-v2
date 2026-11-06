@@ -133,12 +133,24 @@
     opts = opts || {};
     var d = db();
     if (!d) return Promise.reject(new Error("Community is unavailable right now."));
-    return d.collection("questions").orderBy("createdAt", "desc").limit(50).get().then(function (snap) {
+    var q = d.collection("questions").orderBy("createdAt", "desc");
+    /* P2-20: page through older questions with startAfter instead of
+       stopping at the 50 most recent. The harness fake DB has no
+       startAfter — guard so it keeps returning page 1 there. */
+    if (opts.after && q.startAfter) q = q.startAfter(opts.after);
+    return q.limit(50).get().then(function (snap) {
       var out = [];
-      snap.forEach(function (doc) { out.push(normDoc(doc)); });
+      var last = null, n = 0;
+      snap.forEach(function (doc) { out.push(normDoc(doc)); last = doc; n++; });
+      var cursor = last, hasMore = n === 50;
       if (opts.lessonId) out = out.filter(function (q) { return q.lessonId === opts.lessonId; });
       var u = currentUser();
-      return filterQuestions(out, opts.filter || "all", u ? u.uid : null);
+      out = filterQuestions(out, opts.filter || "all", u ? u.uid : null);
+      /* Cursor + has-more ride on the array so callers keep the same
+         shape (the harness asserts qs.length / qs[0].id). */
+      out._cursor = cursor;
+      out._hasMore = hasMore;
+      return out;
     });
   }
   function getQuestion(id) {
@@ -342,26 +354,33 @@
     if (!u) return Promise.resolve(0);
     var d = db();
     if (!d) return Promise.resolve(0);
-    return d.collection("xpGrants").where("toUid", "==", u.uid).limit(20).get().then(function (snap) {
+    return d.collection("xpGrants").where("toUid", "==", u.uid).where("claimed", "==", false).limit(20).get().then(function (snap) {
       var pending = [];
       snap.forEach(function (doc) {
         var g = doc.data() || {};
-        if (!g.claimed && g.amount > 0) pending.push({ id: doc.id, amount: g.amount });
+        if (g.amount > 0) pending.push({ id: doc.id, amount: g.amount });
       });
       if (!pending.length) return 0;
       var total = 0;
       pending.forEach(function (g) { total += g.amount; });
-      try {
-        if (window.SkillzifyLearnCore && window.SkillzifyLearnCore.addXP) window.SkillzifyLearnCore.addXP(total);
-        else {
-          var xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0;
-          localStorage.setItem("skillzify_xp", String(xp + total));
-        }
-      } catch (e) {}
+      /* Mark claimed FIRST, then credit XP only once the write lands.
+         The old order credited first and swallowed mark failures, so a
+         failed write re-paid the same grant on the next visit (P2-23).
+         If the mark fails, nothing is credited and the grant stays
+         pending for a later retry. */
       var jobs = pending.map(function (g) {
-        return d.collection("xpGrants").doc(g.id).update({ claimed: true }).catch(function () {});
+        return d.collection("xpGrants").doc(g.id).update({ claimed: true });
       });
-      return Promise.all(jobs).then(function () { return total; });
+      return Promise.all(jobs).then(function () {
+        try {
+          if (window.SkillzifyLearnCore && window.SkillzifyLearnCore.addXP) window.SkillzifyLearnCore.addXP(total);
+          else {
+            var xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0;
+            localStorage.setItem("skillzify_xp", String(xp + total));
+          }
+        } catch (e) {}
+        return total;
+      });
     }).catch(function () { return 0; });
   }
 

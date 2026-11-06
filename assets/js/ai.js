@@ -19,6 +19,9 @@
   var API_BASE = "https://skillzify-v2.onrender.com";
   var KEY_STORE = "skillzify_ai_key";
   var MODEL = "gemini-3.8-flash";
+  /* Personal-key fallback models, in order (P2-38): the server path has
+     6-model failover; the key path had one model and no retry. */
+  var KEY_MODELS = ["gemini-3.8-flash", "gemini-2.5-flash-lite", "gemini-3.5-flash-lite"];
   var BASE = (function () {
     try {
       return /\.onrender\.com$/.test(window.location.hostname) ? "" : API_BASE;
@@ -285,20 +288,39 @@
       ctrl = new AbortController();
       timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 30000);
     } catch (e) {}
-    var keyOpts = {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
-      body: JSON.stringify({ model: MODEL, messages: [{ role: "user", content: prompt }], max_tokens: 1200 })
-    };
-    if (ctrl) keyOpts.signal = ctrl.signal;
-    return fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", keyOpts).then(function (r) {
-      if (timer) clearTimeout(timer);
-      return r.json();
-    }).then(function (d) {
-      var t = (d.choices && d.choices[0] && d.choices[0].message) ? d.choices[0].message.content : "";
-      if (!t) throw new Error("empty");
-      return { explanation: t, via: "key" };
-    }).catch(function (e) {
+    /* Try each model in turn: 429/503/404 fail over to the next model
+       (a model can be retired or rate-limited), 401/403 fail fast —
+       the saved key itself is wrong (P2-38). */
+    function tryKeyModel(i) {
+      if (i >= KEY_MODELS.length) return Promise.reject(new Error("empty"));
+      var keyOpts = {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+        body: JSON.stringify({ model: KEY_MODELS[i], messages: [{ role: "user", content: prompt }], max_tokens: 1200 })
+      };
+      if (ctrl) keyOpts.signal = ctrl.signal;
+      return fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", keyOpts).then(function (r) {
+        if (!r.ok) {
+          if (r.status === 401 || r.status === 403) {
+            var bad = new Error("Your saved API key was rejected.");
+            bad.code = "BAD_KEY";
+            throw bad;
+          }
+          if ((r.status === 429 || r.status === 503 || r.status === 404) && i + 1 < KEY_MODELS.length) return tryKeyModel(i + 1);
+          throw new Error("http-" + r.status);
+        }
+        return r.json();
+      }).then(function (d) {
+        var t = (d.choices && d.choices[0] && d.choices[0].message) ? d.choices[0].message.content : "";
+        if (!t) {
+          if (i + 1 < KEY_MODELS.length) return tryKeyModel(i + 1);
+          throw new Error("empty");
+        }
+        if (timer) clearTimeout(timer);
+        return { explanation: t, via: "key" };
+      });
+    }
+    return tryKeyModel(0).catch(function (e) {
       if (timer) clearTimeout(timer);
       throw e;
     });
@@ -316,6 +338,7 @@
     if (code === "QUOTA") return { code: code, message: "The AI is out of quota right now. Try again in a bit." };
     if (code === "OVERLOADED" || code === "TIMEOUT") return { code: code, message: "The AI is busy or slow to wake on the free tier. Try again in a moment." };
     if (code === "KEY_ERROR" || code === "MODEL_NOT_FOUND") return { code: code, message: "The AI backend needs attention (configuration problem)." };
+    if (code === "BAD_KEY") return { code: code, message: "Your saved API key was rejected — check it in Code Studio → AI Settings." };
     // Anything else (RATE_LIMIT, NOT_CONFIGURED, BAD_JSON, EMPTY_REPLY,
     // MODEL_ERROR, ...): the server's message, verbatim, when it has one.
     if (msg) return { code: code || "UNREACHABLE", message: msg };
@@ -379,7 +402,14 @@
         }
         setStatus("ok");
         safeCb(cb, null, res);
-      }).catch(function () {
+      }).catch(function (ke) {
+        // A rejected personal key must surface as itself (P2-38), not
+        // fall through to the generic offline heuristic.
+        if (ke && ke.code === "BAD_KEY") {
+          setStatus("offline");
+          safeCb(cb, friendlyError(ke), null);
+          return;
+        }
         // DAILY_CAP / RATE_LIMIT must reach the student verbatim — never
         // let the offline heuristic mask them with generic tips, even
         // when opts.error matches a heuristic rule. (A saved personal

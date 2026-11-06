@@ -65,37 +65,42 @@
            (day < 10 ? "0" + day : day);
   }
 
+  /* Coerce non-numeric values (e.g. "abc") to 0 so a malformed doc
+     can't poison xp / streak / updatedAt with NaN (P2-36). */
+  function num(v) { v = Number(v); return isFinite(v) ? v : 0; }
+
   function mergeProgress(localDoc, cloudDoc) {
     localDoc = localDoc || {};
     cloudDoc = cloudDoc || {};
-    // lessons: UNION of keys
+    // lessons: UNION of keys (arrays rejected — an array would create
+    // phantom "0"/"1" entries; only truthy values count as done)
     var lessons = {};
     [localDoc.lessons, cloudDoc.lessons].forEach(function (m) {
-      if (m && typeof m === "object") {
-        Object.keys(m).forEach(function (k) { lessons[k] = true; });
+      if (m && typeof m === "object" && !Array.isArray(m)) {
+        Object.keys(m).forEach(function (k) { if (m[k]) lessons[k] = true; });
       }
     });
     // xp: MAX
-    var xp = Math.max(localDoc.xp || 0, cloudDoc.xp || 0);
+    var xp = Math.max(num(localDoc.xp), num(cloudDoc.xp));
     // streak: later streakLast wins (ISO strings compare correctly);
     // tie (or both missing) -> larger streakCount. Copy both from winner.
     var lLast = normalizeDate(localDoc.streakLast);
     var cLast = normalizeDate(cloudDoc.streakLast);
     var streakLast, streakCount;
     if ((lLast || "") > (cLast || "")) {
-      streakLast = lLast; streakCount = localDoc.streakCount || 0;
+      streakLast = lLast; streakCount = num(localDoc.streakCount);
     } else if ((cLast || "") > (lLast || "")) {
-      streakLast = cLast; streakCount = cloudDoc.streakCount || 0;
+      streakLast = cLast; streakCount = num(cloudDoc.streakCount);
     } else {
       streakLast = lLast || cLast || null;
-      streakCount = Math.max(localDoc.streakCount || 0, cloudDoc.streakCount || 0);
+      streakCount = Math.max(num(localDoc.streakCount), num(cloudDoc.streakCount));
     }
     return {
       lessons: lessons,
       xp: xp,
       streakCount: streakCount,
       streakLast: streakLast,
-      updatedAt: Math.max(localDoc.updatedAt || 0, cloudDoc.updatedAt || 0)
+      updatedAt: Math.max(num(localDoc.updatedAt), num(cloudDoc.updatedAt))
     };
   }
 
@@ -114,15 +119,15 @@
       out[id] = {
         attempts: Math.max(a.attempts || 0, b.attempts || 0),
         solved: !!(a.solved || b.solved),
-        hintsUsed: Math.max(a.hintsUsed || 0, b.hintsUsed || 0),
+        hintsUsed: Math.max(num(a.hintsUsed), num(b.hintsUsed)),
         revealed: !!(a.revealed || b.revealed),
         bestMs: bests.length ? Math.min.apply(null, bests) : 0,
-        lastTry: Math.max(a.lastTry || 0, b.lastTry || 0)
+        lastTry: Math.max(num(a.lastTry), num(b.lastTry))
       };
     });
     return {
       attempts: out,
-      updatedAt: Math.max(localDoc.updatedAt || 0, cloudDoc.updatedAt || 0)
+      updatedAt: Math.max(num(localDoc.updatedAt), num(cloudDoc.updatedAt))
     };
   }
 
@@ -130,11 +135,11 @@
     localDoc = localDoc || {};
     cloudDoc = cloudDoc || {};
     // last-write-wins by updatedAt (whole document); tie -> local
-    var winner = (localDoc.updatedAt || 0) >= (cloudDoc.updatedAt || 0) ? localDoc : cloudDoc;
+    var winner = num(localDoc.updatedAt) >= num(cloudDoc.updatedAt) ? localDoc : cloudDoc;
     return {
       name: winner.name || "",
       bio: winner.bio || "",
-      updatedAt: Math.max(localDoc.updatedAt || 0, cloudDoc.updatedAt || 0)
+      updatedAt: Math.max(num(localDoc.updatedAt), num(cloudDoc.updatedAt))
     };
   }
 

@@ -23,6 +23,18 @@
   var readyCbs = [];
   var authChangeCbs = [];
 
+  /* Local safe wrappers for the app.js helpers (P2-34): if app.js
+     failed to load, window.Skillzify is undefined and a bare
+     dereference in refreshAccountUI would throw before the login /
+     register wiring runs. These fall back instead of throwing. */
+  function esc(s) {
+    try { if (window.Skillzify && typeof window.Skillzify.esc === "function") return window.Skillzify.esc(s); } catch (e) {}
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; });
+  }
+  function toast(m, t) {
+    try { if (window.Skillzify && typeof window.Skillzify.toast === "function") window.Skillzify.toast(m, t); } catch (e) {}
+  }
+
   function onReady(cb) { if (ready) { try { cb(); } catch (e) {} } else readyCbs.push(cb); }
 
   // M3: subscribe to auth-state changes. The callback receives the
@@ -111,6 +123,7 @@
   function loginUser(email, password) {
     email = (email || "").trim().toLowerCase();
     if (!validEmail(email)) return Promise.resolve({ ok: false, error: "Please enter a valid email address." });
+    if (!password) return Promise.resolve({ ok: false, error: "Please enter your password." });
     if (!auth) return Promise.resolve({ ok: false, error: "Sign-in service unavailable. Check your connection." });
     return auth.signInWithEmailAndPassword(email, password || "").then(function () {
       fbUser = auth.currentUser;
@@ -147,12 +160,12 @@
     if (user) {
       slot.innerHTML =
         '<span style="font-weight:700;font-size:.9rem">\uD83D\uDC4B ' +
-        window.Skillzify.esc(user.name.split(" ")[0]) +
+        esc(user.name.split(" ")[0]) +
         '</span> <button class="btn btn-sm btn-ghost" id="logout-btn">Logout</button>';
       var btn = document.getElementById("logout-btn");
       if (btn) btn.addEventListener("click", function () {
         logoutUser();
-        window.Skillzify.toast("Logged out. See you soon!", "success");
+        toast("Logged out. See you soon!", "success");
         if (location.pathname.indexOf("dashboard") !== -1) location.href = "index.html";
       });
     } else {
@@ -171,6 +184,8 @@
     function show(which) {
       loginTab.classList.toggle("active", which === "login");
       regTab.classList.toggle("active", which === "register");
+      loginTab.setAttribute("aria-selected", which === "login" ? "true" : "false");
+      regTab.setAttribute("aria-selected", which === "register" ? "true" : "false");
       loginForm.style.display = which === "login" ? "block" : "none";
       regForm.style.display = which === "register" ? "block" : "none";
     }
@@ -191,10 +206,10 @@
       ).then(function (r) {
         setBusy(loginForm, false);
         if (r.ok) {
-          window.Skillzify.toast("Welcome back, " + r.user.name.split(" ")[0] + "! \uD83C\uDF89", "success");
+          toast("Welcome back, " + r.user.name.split(" ")[0] + "! \uD83C\uDF89", "success");
           setTimeout(function () { location.href = "dashboard.html"; }, 700);
         } else {
-          window.Skillzify.toast(r.error, "error");
+          toast(r.error, "error");
         }
       });
     });
@@ -209,10 +224,10 @@
       ).then(function (r) {
         setBusy(regForm, false);
         if (r.ok) {
-          window.Skillzify.toast("Account created — let's start learning! \uD83D\uDE80", "success");
+          toast("Account created — let's start learning! \uD83D\uDE80", "success");
           setTimeout(function () { location.href = "learn.html"; }, 700);
         } else {
-          window.Skillzify.toast(r.error, "error");
+          toast(r.error, "error");
         }
       });
     });

@@ -15,6 +15,16 @@
   var SESSION_MAX = 10;
 
   function now() { return Date.now(); }
+  /* Local Fisher-Yates shuffle (mirrors LC.shuffled; review.js must
+     not depend on learn-core.js being loaded first). */
+  function shuffled(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
   function storeGet(k, fb) { try { var v = localStorage.getItem(k); return v == null ? fb : JSON.parse(v); } catch (e) { return fb; } }
   function storeSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function esc(s) {
@@ -153,7 +163,8 @@
   function startSession(mount) {
     var due = dueList().filter(function (id) { return !!lessonById(id); }).slice(0, SESSION_MAX);
     if (!due.length) { renderSection(mount); return; }
-    session = { ids: due, li: 0, qi: 0, allCorrect: true, done: 0 };
+    /* Shuffle lesson order so reviews don't always run oldest-due first (P2-13). */
+    session = { ids: shuffled(due), li: 0, qi: 0, allCorrect: true, done: 0, qs: null, qsFor: null };
     renderCard(mount);
   }
   function currentLesson() {
@@ -164,6 +175,9 @@
     var lesson = currentLesson();
     if (!lesson) { finishSession(mount); return; }
     var qs = Array.isArray(lesson.quiz) ? lesson.quiz : [];
+    /* Shuffle each lesson's questions once per session visit (P2-13). */
+    if (session.qsFor !== lesson.id) { session.qs = shuffled(qs); session.qsFor = lesson.id; }
+    qs = session.qs;
     if (!qs.length || session.qi >= qs.length) {
       // lesson finished: record the outcome, move on
       recordResult(lesson.id, session.allCorrect);
@@ -179,7 +193,7 @@
     mount.innerHTML =
       '<p class="hint" style="margin:0 0 6px">Review ' + (session.li + 1) + ' of ' + total + ' · ' + esc(lesson.title) + '</p>' +
       '<h3 style="margin:0 0 10px">' + esc(q.q) + '</h3>' +
-      '<div data-review-answer hidden>' +
+      '<div data-review-answer aria-live="polite" hidden>' +
         '<p style="margin:0 0 6px"><strong>Answer: ' + esc(q.options[q.answer]) + '</strong></p>' +
         '<p class="hint" style="margin:0 0 12px">' + esc(q.why || "") + '</p>' +
         '<div style="display:flex;gap:10px;flex-wrap:wrap">' +

@@ -16,7 +16,8 @@
       { label: "Lessons", href: "learn.html", icon: "📚" },
       { label: "Practice", href: "practice.html", icon: "✍️" },
       { label: "Learning Paths", href: "paths.html", icon: "🗺️" },
-      { label: "Projects", href: "projects.html", icon: "🛠️" }
+      { label: "Projects", href: "projects.html", icon: "🛠️" },
+      { label: "Flowchart Lab", href: "flowchart-test.html", icon: "🔀" }
     ]},
     { label: "Code Studio", href: "compiler.html" },
     { label: "Reference", href: "reference.html" },
@@ -56,7 +57,7 @@
       if (item.children) {
         var kids = item.children.map(function (k) {
           var act = isActiveHref(k.href) ? ' class="active"' : "";
-          return '<a href="' + esc(k.href) + '"' + act + ">" +
+          return '<a role="menuitem" href="' + esc(k.href) + '"' + act + ">" +
             (k.icon ? '<span class="mi">' + k.icon + "</span>" : "") + esc(k.label) + "</a>";
         }).join("");
         var parentActive = item.children.some(function (k) { return isActiveHref(k.href); });
@@ -78,7 +79,7 @@
       '<span id="ai-status-pill" class="ai-status-pill" role="status" aria-live="polite"></span>' +
       '<span id="account-link"></span>' +
       '<button class="icon-btn" data-theme-toggle aria-label="Toggle dark/light theme">☀️</button>' +
-      '<button class="icon-btn hamburger" id="hamburger" aria-label="Open menu">☰</button>' +
+      '<button class="icon-btn hamburger" id="hamburger" aria-label="Open menu" aria-expanded="false">☰</button>' +
       "</div></div></nav>";
     mount.dataset.navBuilt = "1";
 
@@ -140,7 +141,29 @@
       if (!e.target.closest || !e.target.closest(".nav-drop")) closeAll(null);
     });
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") closeAll(null);
+      if (e.key === "Escape") {
+        /* Return focus to the dropdown trigger that opened it (P2-44). */
+        var openBtn = document.querySelector(".nav-drop.open .nav-drop-btn");
+        closeAll(null);
+        if (openBtn) openBtn.focus();
+        return;
+      }
+      /* Arrow-key navigation inside an open dropdown (P2-44): move
+         focus across its links, wrapping at the ends. */
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
+      var active = document.activeElement;
+      if (!active || !active.closest || !active.closest(".nav-drop")) return;
+      var drop = active.closest(".nav-drop");
+      if (!drop.classList.contains("open")) return;
+      var links = Array.prototype.slice.call(drop.querySelectorAll(".nav-menu a"));
+      if (!links.length) return;
+      var i = links.indexOf(active);
+      if (e.key === "ArrowDown") i = (i + 1) % links.length;
+      else if (e.key === "ArrowUp") i = (i - 1 + links.length) % links.length;
+      else if (e.key === "Home") i = 0;
+      else if (e.key === "End") i = links.length - 1;
+      e.preventDefault();
+      links[i].focus();
     });
   }
 

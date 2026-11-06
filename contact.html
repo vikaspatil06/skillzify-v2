@@ -14,7 +14,7 @@
   <meta name="description" content="Contact the Skillzify team.">
   <title>Contact — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=18">
+  <link rel="stylesheet" href="assets/css/style.css?v=20">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -63,6 +63,7 @@
               <textarea id="c-msg" rows="5" placeholder="Write your message…" required></textarea>
             </div>
             <button class="btn" type="submit" style="width:100%">Send message →</button>
+            <p class="hint" style="margin-top:10px">This opens your email app — nothing is sent from this page. If you don't have a mail app set up, use the GitHub Issues link above instead.</p>
           </form>
         </div>
         <div>
@@ -111,17 +112,17 @@
 
 <div id="site-footer"></div>
 
-<script src="assets/js/nav.js?v=4"></script>
-<script src="assets/js/footer.js?v=5"></script>
-<script src="assets/js/app.js?v=4"></script>
-<script src="assets/js/activity.js?v=5"></script>
-<script src="assets/js/palette.js?v=1"></script>
+<script src="assets/js/nav.js?v=6"></script>
+<script src="assets/js/footer.js?v=7"></script>
+<script src="assets/js/app.js?v=5"></script>
+<script src="assets/js/activity.js?v=6"></script>
+<script src="assets/js/palette.js?v=2"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
-<script src="assets/js/auth.js?v=3"></script>
-<script src="assets/js/sync.js?v=9"></script>
-<script src="assets/js/ai.js?v=12"></script>
+<script src="assets/js/auth.js?v=5"></script>
+<script src="assets/js/sync.js?v=10"></script>
+<script src="assets/js/ai.js?v=13"></script>
 <script>
 // Contact form → opens the visitor's email app addressed to us (mailto fallback)
 var contactTopic = "General";
@@ -139,10 +140,8 @@ document.getElementById("contact-form").addEventListener("submit", function (e) 
   var email = document.getElementById("c-email").value.trim();
   var subject = document.getElementById("c-subject").value.trim();
   var message = document.getElementById("c-msg").value.trim();
-  // keep a local copy too (offline record)
-  var msgs = window.Skillzify.storeGet("skillzify_messages", []);
-  msgs.push({ name: name, email: email, subject: subject, message: message, t: Date.now() });
-  window.Skillzify.storeSet("skillzify_messages", msgs);
+  // keep a local copy too (offline record) — REMOVED (P2-47): nothing
+  // ever read skillzify_messages, so it only implied a backup existed.
   var body = "Name: " + name + "\nEmail: " + email + "\n\n" + message;
   window.location.href = "mailto:skillzifyind2024@gmail.com"
     + "?subject=" + encodeURIComponent("[Skillzify:" + contactTopic + "] " + subject)

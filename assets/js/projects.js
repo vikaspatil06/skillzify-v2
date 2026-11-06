@@ -10,6 +10,20 @@
   var filter = "all";
   function projColor(p) { return p.color || "#6c7bff"; }
 
+  /* Project completion (local-only, like stars/pins): which projects
+     the learner has marked done. Stored as an array of project ids. */
+  var DONE_KEY = "skillzify_projects_done";
+  function getDone() {
+    try { var d = JSON.parse(localStorage.getItem(DONE_KEY) || "[]"); return Array.isArray(d) ? d : []; } catch (e) { return []; }
+  }
+  function isDone(id) { return getDone().indexOf(id) >= 0; }
+  function setDone(id, on) {
+    var d = getDone(), i = d.indexOf(id);
+    if (on && i < 0) d.push(id);
+    if (!on && i >= 0) d.splice(i, 1);
+    try { localStorage.setItem(DONE_KEY, JSON.stringify(d)); } catch (e) {}
+  }
+
   /* ---------------- LIST ---------------- */
   function levelPills(projects) {
     var levels = ["Beginner", "Intermediate", "Advanced"];
@@ -34,6 +48,7 @@
       '<p class="hint proj-skills">' + esc(p.skills || "") + "</p>" +
       '<p class="hint">' + esc(p.desc) + "</p>" +
       '<div class="path-foot"><span class="pct">' + p.steps.length + " steps</span>" +
+      (isDone(p.id) ? '<span class="badge badge-done">✓ Done</span>' : "") +
       '<span class="proj-open">Open →</span></div></a>';
   }
 
@@ -165,8 +180,9 @@
     var steps = p.steps.map(function (s) { return "<li>" + s + "</li>"; }).join("");
     var codeHtml = '<pre class="code">' + esc(p.code) + "</pre>";
     var tryBtn = p.tryIt
-      ? '<a class="btn btn-sm" href="compiler.html">Try it in the compiler →</a>'
+      ? '<a class="btn btn-sm" id="proj-try" href="compiler.html">Try it in the compiler →</a>'
       : "";
+    var doneBtn = '<button class="btn btn-sm" id="proj-done-btn">' + (isDone(p.id) ? "✓ Completed — undo" : "✓ Mark complete") + "</button>";
     var note = p.note ? '<p class="hint">' + p.note + "</p>" : "";
 
     // prev/next navigation
@@ -189,10 +205,21 @@
       '<div class="card"><h2 class="section-title" style="font-size:1.3rem">🛠️ Build it</h2>' +
       "<ol class='proj-steps'>" + steps + "</ol></div>" +
       '<div class="card"><h2 class="section-title" style="font-size:1.3rem">💻 Starter code</h2>' +
-      codeHtml + '<div style="margin-top:12px">' + tryBtn + ' <button class="btn btn-sm" id="ai-review-btn">🤖 AI review</button></div>' + note + '<div id="ai-review-result"></div></div>' +
+      codeHtml + '<div style="margin-top:12px">' + tryBtn + ' ' + doneBtn + ' <button class="btn btn-sm" id="ai-review-btn">🤖 AI review</button></div>' + note + '<div id="ai-review-result"></div></div>' +
       nav;
 
     $("proj-back").addEventListener("click", function () { location.hash = ""; });
+    var tryEl = $("proj-try");
+    if (tryEl) tryEl.addEventListener("click", function () {
+      /* Preload the project's starter code into the compiler (P2-17):
+         the compiler reads skillzify_compiler_code on load. */
+      try { localStorage.setItem("skillzify_compiler_code", projectCodeText(p)); } catch (e) {}
+    });
+    var doneEl = $("proj-done-btn");
+    if (doneEl) doneEl.addEventListener("click", function () {
+      setDone(p.id, !isDone(p.id));
+      renderDetail(p.id);
+    });
     bindReviewBtn(p);
   }
 

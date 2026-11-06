@@ -217,6 +217,9 @@
       s.onerror = function () { reject(new Error("Could not load the Python runtime — check your connection.")); };
       document.head.appendChild(s);
     });
+    /* A failed load must not stick: reset the cached promise so the
+       next click retries the CDN instead of re-throwing (P2-35). */
+    pyodideLoading.catch(function () { pyodideLoading = null; });
     return pyodideLoading;
   }
   function runExample(code, execFn) {
@@ -280,8 +283,19 @@
     });
     content.querySelectorAll(".ref-ov-browse").forEach(function (b) {
       b.addEventListener("click", function () {
-        var g = groupsOf(R).filter(function (x) { return x.group === b.getAttribute("data-group"); })[0];
-        if (g && g.items[0]) show(g.items[0].name);
+        var gname = b.getAttribute("data-group");
+        collapsed[gname] = false;
+        renderNav("");
+        var nav = $("ref-nav");
+        if (nav) {
+          var groups = nav.querySelectorAll(".ref-group");
+          for (var i = 0; i < groups.length; i++) {
+            if (groups[i].getAttribute("data-group") === gname) {
+              groups[i].scrollIntoView({ block: "start" });
+              break;
+            }
+          }
+        }
       });
     });
     renderNav($("ref-search") ? $("ref-search").value : "");
@@ -302,7 +316,7 @@
     var fav = isFav(r.name);
     content.innerHTML =
       '<p class="hint ref-crumb">' + esc(r.group) + ' · <span class="ref-level ref-level-' + levelOf(r) + '">' + LEVEL_LABEL[levelOf(r)] + "</span></p>" +
-      '<div class="ref-title-row"><h2>' + esc(r.name) + '</h2><button class="ref-fav" id="ref-fav" title="' + (fav ? "Remove from favourites" : "Add to favourites") + '">' + (fav ? "★" : "☆") + "</button></div>" +
+      '<div class="ref-title-row"><h2>' + esc(r.name) + '</h2><button class="ref-fav" id="ref-fav" title="' + (fav ? "Remove from favourites" : "Add to favourites") + '" aria-label="' + (fav ? "Remove from favourites" : "Add to favourites") + '" aria-pressed="' + (fav ? "true" : "false") + '">' + (fav ? "★" : "☆") + "</button></div>" +
       '<p><code class="sig">' + esc(r.sig) + "</code></p>" +
       "<p>" + esc(r.desc) + "</p>" +
       paramList(r.params) +
@@ -327,7 +341,7 @@
     $("ref-fav").addEventListener("click", function () {
       var nowFav = toggleFav(r.name);
       var b = $("ref-fav");
-      if (b) { b.textContent = nowFav ? "★" : "☆"; b.title = nowFav ? "Remove from favourites" : "Add to favourites"; }
+      if (b) { b.textContent = nowFav ? "★" : "☆"; b.title = nowFav ? "Remove from favourites" : "Add to favourites"; b.setAttribute("aria-label", nowFav ? "Remove from favourites" : "Add to favourites"); b.setAttribute("aria-pressed", nowFav ? "true" : "false"); }
       renderNav($("ref-search") ? $("ref-search").value : "");
       if (S && S.toast) S.toast(nowFav ? "Added to favourites ★" : "Removed from favourites", "success");
     });

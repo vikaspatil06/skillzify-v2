@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify Code Studio — a VS Code-like Python IDE in your browser. Multi-file workspace, terminal, problems panel, AI assistant.">
   <title>Code Studio — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=18">
+  <link rel="stylesheet" href="assets/css/style.css?v=20">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
@@ -150,12 +150,12 @@
     .welcome-keys kbd { background: var(--ide-input); border-radius: 4px; padding: 2px 7px;
       font-family: "JetBrains Mono", monospace; font-size: 11px; }
 
-    /* find bar */
+    /* find bar — wraps on narrow screens so the close button stays reachable (P2-30) */
     .findbar { display: none; align-items: center; gap: 6px; padding: 6px 12px; background: var(--ide-side);
-      border-bottom: 1px solid var(--ide-border); flex-shrink: 0; }
+      border-bottom: 1px solid var(--ide-border); flex-shrink: 0; flex-wrap: wrap; }
     .findbar.on { display: flex; }
     .findbar input { background: var(--ide-input); border: 1px solid transparent; color: var(--ide-text);
-      border-radius: 4px; padding: 5px 9px; font-size: 12px; width: 200px; }
+      border-radius: 4px; padding: 5px 9px; font-size: 12px; flex: 1 1 160px; min-width: 120px; }
     .findbar input:focus { outline: none; border-color: var(--ide-accent); }
     .findbar .cnt { font-size: 11px; color: var(--ide-muted); min-width: 70px; }
     .findbar button { background: none; border: 0; color: var(--ide-muted); cursor: pointer; font-size: 13px;
@@ -225,12 +225,22 @@
     .status-bar .right { margin-left: auto; display: flex; gap: 16px; align-items: center; }
     .status-bar .err-bg { background: #c72e1d; }
 
+    /* mobile sidebar close (P2-31): hidden on desktop, shown ≤860px */
+    .sidebar-close { display: none; }
+    #sidebar-backdrop { display: none; }
+
     @media (max-width: 860px) {
       .sidebar { position: absolute; z-index: 40; height: 100%; box-shadow: 8px 0 24px rgba(0,0,0,.5);
         transform: translateX(-100%); transition: transform .2s; }
       .sidebar.open { transform: none; }
       .activity-bar { width: 44px; } .activity-bar button { width: 44px; }
       .welcome-keys { grid-template-columns: 1fr; }
+      /* status bar (P2-29): hide low-value items, scroll the rest */
+      .status-bar { gap: 8px; padding: 0 8px; overflow-x: auto; }
+      .status-bar .st-hide-sm { display: none; }
+      .sidebar-close { display: block; position: absolute; top: 8px; right: 8px; z-index: 50; background: none; border: 0; color: var(--ide-muted); font-size: 16px; cursor: pointer; padding: 6px 10px; border-radius: 4px; }
+      .sidebar-close:hover { color: #fff; background: var(--ide-hover); }
+      #sidebar-backdrop.on { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 30; }
     }
   </style>
 </head>
@@ -253,6 +263,7 @@
 
     <!-- sidebar -->
     <div class="sidebar" id="sidebar">
+      <button class="sidebar-close" id="sidebar-close-btn" title="Close panel" aria-label="Close panel">✕</button>
       <div class="side-view active" id="view-explorer">
         <div class="side-title">EXPLORER <span><button id="new-file-btn" title="New file">＋</button></span></div>
         <div class="file-list" id="file-list"></div>
@@ -330,6 +341,7 @@
         </div>
       </div>
     </div>
+    <div id="sidebar-backdrop"></div>
 
     <!-- main column -->
     <div class="main-col">
@@ -395,9 +407,9 @@
         <span class="st-item" id="st-file" style="font-family:'JetBrains Mono',monospace">main.py</span>
         <div class="right">
           <span class="st-item" id="st-save" title="Workspace save status">Saved ✓</span>
-          <span class="st-item" id="st-pos">Ln 1, Col 1</span>
-          <span class="st-item">Spaces: 4</span>
-          <span class="st-item">UTF-8</span>
+          <span class="st-item st-hide-sm" id="st-pos">Ln 1, Col 1</span>
+          <span class="st-item st-hide-sm">Spaces: 4</span>
+          <span class="st-item st-hide-sm">UTF-8</span>
           <button class="st-item" id="st-theme" title="Editor theme">Dracula</button>
         </div>
       </div>
@@ -409,23 +421,23 @@
 
 <div id="site-footer"></div>
 
-<script src="assets/js/nav.js?v=4"></script>
-<script src="assets/js/footer.js?v=5"></script>
-<script src="assets/js/app.js?v=4"></script>
-<script src="assets/js/activity.js?v=5"></script>
-<script src="assets/js/palette.js?v=1"></script>
+<script src="assets/js/nav.js?v=6"></script>
+<script src="assets/js/footer.js?v=7"></script>
+<script src="assets/js/app.js?v=5"></script>
+<script src="assets/js/activity.js?v=6"></script>
+<script src="assets/js/palette.js?v=2"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
-<script src="assets/js/auth.js?v=3"></script>
-<script src="assets/js/sync.js?v=9"></script>
-<script src="assets/js/ai.js?v=12"></script>
+<script src="assets/js/auth.js?v=5"></script>
+<script src="assets/js/sync.js?v=10"></script>
+<script src="assets/js/ai.js?v=13"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
-<script src="assets/js/compiler.js?v=14"></script>
+<script src="assets/js/compiler.js?v=16"></script>
 </body>
 </html>

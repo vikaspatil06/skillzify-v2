@@ -288,6 +288,8 @@ END</textarea>
     <div id="trace-bar">
       <button class="btn btn-sm" onclick="tracePrev()">← Prev</button>
       <button class="btn btn-sm" onclick="traceNext()">Next →</button>
+      <button class="btn btn-sm" id="trace-yes" onclick="traceBranch(true)" style="display:none">✓ Yes</button>
+      <button class="btn btn-sm" id="trace-no" onclick="traceBranch(false)" style="display:none">✗ No</button>
       <span id="trace-label">Ready</span>
       <span id="trace-step"></span>
     </div>
@@ -302,10 +304,11 @@ END</textarea>
 
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
-<script src="assets/js/auth.js?v=3"></script>
-<script src="assets/js/ai.js?v=12"></script>
+<script src="assets/js/auth.js?v=5"></script>
+<script src="assets/js/ai.js?v=13"></script>
 <script>
 let pyodide = null, currentGraph = null, currentSVG = null, currentMermaid = null, currentZoom = 1, currentSource = null;
+let engineFailed = false; // set when the Pyodide engine itself fails to load (P2-25)
 /* Mermaid loads from the jsdelivr CDN (line 10): if it fails, the bare
    mermaid.initialize() below used to throw and abort this whole script —
    mode tabs never wired, init() never ran, no error shown. Guard it so
@@ -348,13 +351,19 @@ function setBtn(id, loading) { const b = document.getElementById(id); if (b) b.d
 
 async function init() {
   const fromLink = loadFromHash();
+  engineFailed = false;
   setStatus('Loading Python engine…', 'working');
   try {
     pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.23.4/full/' });
-    const [gen, algo] = await Promise.all([
-      fetch('assets/js/flowchart-gen.py').then(r => r.text()),
-      fetch('assets/js/flowchart-algo.py').then(r => r.text())
+    /* Fetch both generator scripts independently: one 404 must not
+       silently lose the other, and the failure must name its file (P2-26). */
+    const results = await Promise.allSettled([
+      fetch('assets/js/flowchart-gen.py').then(r => { if (!r.ok) throw new Error('flowchart-gen.py: HTTP ' + r.status); return r.text(); }),
+      fetch('assets/js/flowchart-algo.py').then(r => { if (!r.ok) throw new Error('flowchart-algo.py: HTTP ' + r.status); return r.text(); })
     ]);
+    const failed = results.find(r => r.status === 'rejected');
+    if (failed) throw failed.reason;
+    const gen = results[0].value, algo = results[1].value;
     pyodide.runPython(gen); pyodide.runPython(algo);
     if (fromLink) {
       setStatus('✓ Shared flowchart loaded — hit Generate','ok');
@@ -365,7 +374,10 @@ async function init() {
     // but init() overwrites the status line while loading — re-assert it
     // so the failure stays visible instead of a misleading "✓ Ready".
     if (!mermaidReady) setStatus(MERMAID_FAIL_MSG, 'err');
-  } catch(e) { setStatus('✗ ' + e.message, 'err'); }
+  } catch(e) {
+    if (!pyodide) engineFailed = true;
+    setStatus('✗ ' + e.message, 'err', ' <button class="btn btn-sm" onclick="init()">↻ Retry</button>');
+  }
 }
 
 /* ---------- mermaid ---------- */
@@ -450,6 +462,7 @@ function markNode(nid, cls) {
 
 /* ---------- trace mode ---------- */
 let tracing = false, tracePath = [], traceIdx = -1;
+let tracePending = null; // { yes, no } edges awaiting a Yes/No choice (P2-27)
 
 function toggleTrace() {
   if (!currentGraph) return;
@@ -465,7 +478,7 @@ function startTrace() {
   updateTraceUI();
 }
 function stopTrace() {
-  tracing = false; tracePath = []; traceIdx = -1; clearHighlight();
+  tracing = false; tracePath = []; traceIdx = -1; tracePending = null; clearHighlight();
   document.getElementById('trace-bar').classList.remove('on');
   document.getElementById('btn-trace').innerHTML = '▶ Trace execution';
   document.getElementById('btn-trace-reset').style.display = 'none';
@@ -501,25 +514,42 @@ function traceNext() {
   if (!outs.length) { setStatus('Reached the end of this path ✓', 'ok'); return; }
   const node = nodeById(cur);
   if (node.type === 'decision' && outs.length > 1) {
+    /* No native prompt(): ask in the page with Yes/No buttons (P2-27).
+       traceBranch() below advances once the learner chooses. */
     const yes = outs.find(e => /yes/i.test(e.label || ''));
     const no = outs.find(e => /no/i.test(e.label || ''));
-    const choice = prompt(`◆ ${node.label}\n\nWhich branch? Type "yes" or "no":`, 'yes');
-    if (choice === null) return;
-    const pick = /^\s*y/i.test(choice) ? (yes || outs[0]) : (no || outs[1] || outs[0]);
-    tracePath = tracePath.slice(0, traceIdx+1); tracePath.push(pick.to); traceIdx++;
-  } else {
-    // avoid infinite loops: cap path length
-    if (tracePath.length > 200) { setStatus('Stopped: loop detected (200 steps) — this is a cycle in the chart.', 'err'); return; }
-    tracePath.push(outs[0].to); traceIdx++;
+    tracePending = { yes: yes || outs[0], no: no || outs[1] || outs[0] };
+    document.getElementById('trace-label').textContent = '◆ ' + node.label + ' — which branch?';
+    document.getElementById('trace-yes').style.display = '';
+    document.getElementById('trace-no').style.display = '';
+    return;
   }
+  // avoid infinite loops: cap path length
+  if (tracePath.length > 200) { setStatus('Stopped: loop detected (200 steps) — this is a cycle in the chart.', 'err'); return; }
+  tracePath.push(outs[0].to); traceIdx++;
+  updateTraceUI();
+}
+function traceBranch(yes) {
+  if (!tracePending) return;
+  const pick = yes ? tracePending.yes : tracePending.no;
+  tracePending = null;
+  document.getElementById('trace-yes').style.display = 'none';
+  document.getElementById('trace-no').style.display = 'none';
+  if (tracePath.length > 200) { setStatus('Stopped: loop detected (200 steps) — this is a cycle in the chart.', 'err'); return; }
+  tracePath = tracePath.slice(0, traceIdx+1); tracePath.push(pick.to); traceIdx++;
   updateTraceUI();
 }
 function tracePrev() {
   if (!tracing || traceIdx <= 0) return;
+  tracePending = null;
+  document.getElementById('trace-yes').style.display = 'none';
+  document.getElementById('trace-no').style.display = 'none';
   traceIdx--; updateTraceUI();
 }
 document.addEventListener('keydown', e => {
   if (!tracing) return;
+  if (tracePending && (e.key === 'y' || e.key === 'Y')) { traceBranch(true); return; }
+  if (tracePending && (e.key === 'n' || e.key === 'N')) { traceBranch(false); return; }
   if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); traceNext(); }
   if (e.key === 'ArrowLeft') tracePrev();
   if (e.key === 'Escape') stopTrace();
@@ -607,11 +637,27 @@ function activeInput() {
        : m === 'algo' ? document.getElementById('algo-input').value
        : document.getElementById('question-input').value;
 }
+function copyTextFallback(text, okMsg) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    setStatus(ok ? okMsg : '✗ Copy failed — copy the URL manually', ok ? 'ok' : 'err');
+  } catch(e) { setStatus('✗ Copy failed — copy the URL manually', 'err'); }
+}
 function shareLink() {
   try {
     const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ mode: activeMode(), input: activeInput() }))));
     const url = location.origin + location.pathname + '#fc=' + payload;
-    navigator.clipboard.writeText(url).then(() => setStatus('✓ Share link copied — anyone opening it sees your input','ok'));
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url)
+        .then(() => setStatus('✓ Share link copied — anyone opening it sees your input','ok'))
+        .catch(() => copyTextFallback(url, '✓ Share link copied — anyone opening it sees your input'));
+    } else {
+      copyTextFallback(url, '✓ Share link copied — anyone opening it sees your input');
+    }
   } catch(e) { setStatus('✗ Share failed','err'); }
 }
 function loadFromHash() {
@@ -634,6 +680,7 @@ function toggleFullscreen() {
 }
 
 async function genFromCode() {
+  if (engineFailed) return setStatus('✗ Python engine failed to load — check your connection and reload', 'err', ' <button class="btn btn-sm" onclick="init()">↻ Retry</button>');
   if (!pyodide) return setStatus('Engine loading…','working');
   setBtn('btn-code', true); setStatus('Analyzing Python code…','working');
   try {
@@ -644,6 +691,7 @@ async function genFromCode() {
   setBtn('btn-code', false);
 }
 async function genFromAlgo() {
+  if (engineFailed) return setStatus('✗ Python engine failed to load — check your connection and reload', 'err', ' <button class="btn btn-sm" onclick="init()">↻ Retry</button>');
   if (!pyodide) return setStatus('Engine loading…','working');
   setBtn('btn-algo', true); setStatus('Parsing algorithm…','working');
   try {
@@ -656,6 +704,7 @@ async function genFromAlgo() {
 async function genFromQuestion() {
   const q = document.getElementById('question-input').value.trim();
   if (!q) return setStatus('Type a question first','err');
+  if (engineFailed) return setStatus('✗ Python engine failed to load — check your connection and reload', 'err', ' <button class="btn btn-sm" onclick="init()">↻ Retry</button>');
   if (!pyodide) return setStatus('Engine loading…','err');
   const AI = window.SkillzifyAI;
   if (!AI) return setStatus('AI module did not load — reload the page','err');

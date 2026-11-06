@@ -28,7 +28,9 @@
   function allItems() {
     var items = PAGES.slice().concat(ACTIONS);
     try {
-      var L = window.SkillzifyLearn;
+      /* Lesson pages load learn-core.js but not learn.js, so fall back
+         to the core catalog or the palette shows no lessons (P2-11). */
+      var L = window.SkillzifyLearn || window.SkillzifyLearnCore;
       if (L && L.LESSONS) L.LESSONS.forEach(function (l) {
         items.push({ icon: "📚", title: l.title, kind: "lesson", sub: l.track, run: function () { location.href = "learn.html#lesson-" + l.id; } });
       });

@@ -18,6 +18,12 @@
 
   /* local aliases */
   var LESSONS = LC.LESSONS, TRACKS = LC.TRACKS, SECTIONS = LC.SECTIONS;
+
+  /* Safe toast (P2-34): if app.js failed to load, a bare
+     window.Skillzify.toast call would abort lesson completion. */
+  function toast(m, t) {
+    try { if (window.Skillzify && window.Skillzify.toast) window.Skillzify.toast(m, t); } catch (e) {}
+  }
   var esc = LC.esc, el = LC.el, reducedMotion = LC.reducedMotion;
   var highlightPython = LC.highlight, copyCode = LC.copyCode, tryInCompiler = LC.tryInCompiler;
   var getProgress = LC.getProgress, saveProgress = LC.saveProgress,
@@ -55,7 +61,7 @@
           "<strong>" + "ABCD"[oi] + ".</strong> " + esc(o) + "</button>";
       }).join("");
       return '<div class="quiz-q" data-qi="' + qi + '"><h4>Q' + (qi + 1) + ". " + esc(q.q) + "</h4>" +
-        opts + '<div class="quiz-why" id="why-' + qi + '"></div></div>';
+        opts + '<div class="quiz-why" id="why-' + qi + '" aria-live="polite"></div></div>';
     }).join("");
   }
 
@@ -70,7 +76,7 @@
       inner += '<div class="blank-row"><input type="text" id="ch-blank" placeholder="Type your answer…" autocomplete="off" spellcheck="false" aria-label="Your answer">' +
         '<button class="btn btn-sm" id="ch-check">Check</button></div>';
     }
-    inner += '<div class="ch-feedback" id="ch-feedback"></div>';
+    inner += '<div class="ch-feedback" id="ch-feedback" aria-live="polite"></div>';
     if (ch.hint) inner += '<details class="ch-hint"><summary>Need a hint?</summary><p>' + esc(ch.hint) + "</p></details>";
     return inner;
   }
@@ -289,7 +295,10 @@
     setTimeout(function () { layer.innerHTML = ""; }, 2400);
   }
   function xpPop(n) {
-    var card = document.getElementById("xp-card");
+    /* #xp-card lives only on learn.html — on lesson pages float the
+       +XP from the completion box instead of silently no-op'ing (P2-39).
+       .lm-complete is position:sticky, so the absolute pop anchors to it. */
+    var card = document.getElementById("xp-card") || document.getElementById("lm-complete-wrap") || document.getElementById("lesson-page");
     if (!card || reducedMotion()) return;
     var s = document.createElement("span");
     s.className = "xp-pop"; s.textContent = "+" + n + " XP";
@@ -421,11 +430,11 @@
       starBtn.addEventListener("click", function () {
         var on = A.toggleStar("lesson", lesson.id, lesson.title);
         A.log("star", (on ? "Starred lesson: " : "Unstarred lesson: ") + lesson.title);
-        paint(); window.Skillzify.toast(on ? "Starred \u2B50" : "Unstarred", "success");
+        paint(); toast(on ? "Starred \u2B50" : "Unstarred", "success");
       });
       pinBtn.addEventListener("click", function () {
         var on = A.togglePin("lesson", lesson.id, lesson.title);
-        paint(); window.Skillzify.toast(on ? "Pinned \u{1F4CC}" : "Unpinned", "success");
+        paint(); toast(on ? "Pinned \u{1F4CC}" : "Unpinned", "success");
       });
     })();
     bindQuiz();
@@ -460,15 +469,18 @@
     confetti();
     xpPop(gain);
     if (before !== after) {
-      window.Skillzify.toast("\u{1F389} LEVEL UP! You are now " + after + " (+" + gain + " XP)", "success");
+      toast("\u{1F389} LEVEL UP! You are now " + after + " (+" + gain + " XP)", "success");
     } else {
-      window.Skillzify.toast("Lesson complete! +" + gain + " XP \u{1F389}", "success");
+      toast("Lesson complete! +" + gain + " XP \u{1F389}", "success");
     }
     var next = nextUnlocked(cur);
+    var prev = prevUnlocked(cur);
     var wrap = document.getElementById("lm-complete-wrap");
     if (wrap) {
       wrap.innerHTML = '<div class="lesson-done-note">\u2705 <strong>Completed!</strong> +' + gain + ' XP earned.</div>' +
         '<div class="lm-nav">' +
+        (prev >= 0 ? '<a class="icon-btn" href="' + lessonHref(prev) + '" aria-label="Previous lesson">\u2190</a>'
+                   : '<button class="icon-btn" disabled aria-label="No previous lesson">\u2190</button>') +
         (next >= 0 ? '<a class="btn" href="' + lessonHref(next) + '">Next lesson: ' + esc(LESSONS[next].title) + " \u2192</a>"
                    : '<a class="btn" href="learn.html">\u2190 Back to Learn</a>') +
         "</div>";
