@@ -82,6 +82,10 @@
     });
     // xp: MAX
     var xp = Math.max(num(localDoc.xp), num(cloudDoc.xp));
+    // runCount: MAX, same as xp. Each origin counts only its own runs,
+    // so the true total is at least the larger count. (SUM would
+    // double-count after the first sync writes the merged value back.)
+    var runCount = Math.max(num(localDoc.runCount), num(cloudDoc.runCount));
     // streak: later streakLast wins (ISO strings compare correctly);
     // tie (or both missing) -> larger streakCount. Copy both from winner.
     var lLast = normalizeDate(localDoc.streakLast);
@@ -98,6 +102,7 @@
     return {
       lessons: lessons,
       xp: xp,
+      runCount: runCount,
       streakCount: streakCount,
       streakLast: streakLast,
       updatedAt: Math.max(num(localDoc.updatedAt), num(cloudDoc.updatedAt))
@@ -466,6 +471,7 @@
     return {
       lessons: storeGet(LS.PROGRESS, {}) || {},
       xp: parseInt(lsGet(LS.XP) || "0", 10) || 0,
+      runCount: parseInt(lsGet(LS.RUN_COUNT) || "0", 10) || 0,
       streakCount: (storeGet(LS.STREAK, {}) || {}).count || 0,
       streakLast: normalizeDate((storeGet(LS.STREAK, {}) || {}).last),
       updatedAt: Date.now()
@@ -474,6 +480,7 @@
   function writeLocalProgress(doc) {
     storeSet(LS.PROGRESS, (doc && doc.lessons) || {});
     lsSet(LS.XP, String((doc && doc.xp) || 0));
+    lsSet(LS.RUN_COUNT, String((doc && doc.runCount) || 0));
     // write back normalized yyyy-MM-dd (both formats stay readable)
     storeSet(LS.STREAK, {
       last: normalizeDate(doc && doc.streakLast),

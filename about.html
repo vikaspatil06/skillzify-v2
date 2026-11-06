@@ -30,13 +30,13 @@
       <img data-logo src="assets/logo-light.png" alt="Skillzify" style="height:84px;margin-bottom:16px">
       <h1 class="section-title">About Skillzify</h1>
       <p class="section-sub">Learn. Build. Shine.</p>
-      <p style="color:var(--muted);max-width:640px">We believe the best way to learn programming is to write code from day one — with friendly guidance when things break.</p>
+      <p style="color:var(--muted);max-width:640px;margin:0 auto">We believe the best way to learn programming is to write code from day one — with friendly guidance when things break.</p>
       <div class="about-stats" id="about-stats">
-        <div class="stat"><div class="num" id="st-lessons">–</div><div class="lbl">Lessons</div></div>
-        <div class="stat"><div class="num" id="st-exercises">–</div><div class="lbl">Exercises</div></div>
-        <div class="stat"><div class="num" id="st-projects">–</div><div class="lbl">Projects</div></div>
-        <div class="stat"><div class="num" id="st-reference">–</div><div class="lbl">Reference entries</div></div>
-        <div class="stat"><div class="num" id="st-paths">–</div><div class="lbl">Learning paths</div></div>
+        <div class="stat"><div class="num" id="st-lessons" data-count="250">0</div><div class="lbl">Lessons</div></div>
+        <div class="stat"><div class="num" id="st-exercises" data-count="150">0</div><div class="lbl">Exercises</div></div>
+        <div class="stat"><div class="num" id="st-projects" data-count="14">0</div><div class="lbl">Projects</div></div>
+        <div class="stat"><div class="num" id="st-reference" data-count="127">0</div><div class="lbl">Reference entries</div></div>
+        <div class="stat"><div class="num" id="st-paths" data-count="6">0</div><div class="lbl">Learning paths</div></div>
       </div>
     </div>
   </section>
@@ -113,19 +113,35 @@
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js?v=5"></script>
-<script src="assets/js/sync.js?v=10"></script>
+<script src="assets/js/sync.js?v=11"></script>
 <script>
 (function () {
   "use strict";
   function set(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
   document.addEventListener("DOMContentLoaded", function () {
-    /* Counts are hardcoded here (same numbers as the cards above) so
+    /* Card counts are hardcoded here (same numbers as the stats above) so
        this page doesn't need the ~900 KB Learn data stack (P2-40). */
-    set("st-lessons", 250); set("c-lessons", 250);
-    set("st-exercises", 150); set("c-exercises", 150);
-    set("st-projects", 14); set("c-projects", 14);
-    set("st-reference", 127);
-    set("st-paths", 6); set("c-paths", 6);
+    set("c-lessons", 250);
+    set("c-exercises", 150);
+    set("c-projects", 14);
+    set("c-paths", 6);
+    /* Stat counters: same 0 → target count-up as the home page
+       (ease-out cubic over 1.2s, starts when the stats scroll into view). */
+    var els = document.querySelectorAll("[data-count]");
+    var seen = false;
+    function animate() {
+      if (seen) return; seen = true;
+      els.forEach(function (el) {
+        var target = parseInt(el.dataset.count, 10), t0 = performance.now();
+        (function tick(t) {
+          var p = Math.min((t - t0) / 1200, 1);
+          el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3)));
+          if (p < 1) requestAnimationFrame(tick);
+        })(t0);
+      });
+    }
+    var io = new IntersectionObserver(function (e) { if (e[0].isIntersecting) { animate(); io.disconnect(); } });
+    if (els.length) io.observe(els[0]);
   });
 })();
 </script>
