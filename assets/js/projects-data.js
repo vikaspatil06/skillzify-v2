@@ -56,7 +56,7 @@ print(f"{city}: {now['weatherDesc'][0]['value']}, "
     id: "web-scraper", icon: "🕷️", title: "Web Scraper",
     level: "Intermediate", color: "#9d6bff",
     skills: "requests, BeautifulSoup, lists, CSV output",
-    desc: "Scrape headlines from a news site and save them to a CSV file. Respect <code>robots.txt</code> — scrape gently.",
+    desc: "Scrape headlines from a news site and save them to a CSV file. Respect robots.txt — scrape gently.",
     steps: [
       "Fetch the page HTML with <code>requests</code>.",
       "Parse with <code>BeautifulSoup(html, \"html.parser\")</code>.",

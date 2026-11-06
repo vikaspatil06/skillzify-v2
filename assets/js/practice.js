@@ -390,10 +390,19 @@
   }
 
   /* Render a drill through the EXISTING exercise detail view. */
+  /* The hero stats card lives outside #practice-list, so the
+     list/detail toggle does not hide it — hide it explicitly in
+     detail view (it is empty there: renderStats only runs in the
+     list view) and restore it when back on the list. */
+  function setStatsCard(show) {
+    var c = $("practice-stats-card");
+    if (c) c.style.display = show ? "" : "none";
+  }
   function openDrill(ex) {
     saveDrillDef(ex); // persist the definition so the drill survives reload
     cur = ex;
     stopTimer();
+    setStatsCard(false);
     $("practice-list").style.display = "none";
     $("practice-detail").style.display = "";
     renderDetail();
@@ -774,6 +783,7 @@
     if (!ex) { showList(); return; }
     cur = ex;
     stopTimer();
+    setStatsCard(false);
     $("practice-list").style.display = "none";
     $("practice-detail").style.display = "";
     renderDetail();
@@ -781,6 +791,7 @@
   }
   function showList() {
     cur = null; stopTimer();
+    setStatsCard(true);
     $("practice-detail").style.display = "none";
     $("practice-list").style.display = "";
     if (location.hash) history.replaceState(null, "", location.pathname);

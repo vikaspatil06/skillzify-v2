@@ -393,7 +393,7 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 .continue-hero h3 { font-size: 1.25rem; }
 .ch-actions { display: flex; gap: 10px; flex: none; flex-wrap: wrap; }
 #path-pills { margin: 4px 0 18px; }
-.path-hero { --pc: #6c7bff; display: flex; gap: 18px; align-items: flex-start; margin: 20px 0; }
+.path-hero { --pc: #6c7bff; display: flex; gap: 18px; align-items: center; margin: 20px 0; }
 .up-next { --pc: #6c7bff; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-left: 4px solid var(--pc); margin-bottom: 18px; }
 .up-next.done { border-left-color: #2ecc71; }
 .path-timeline { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 2px; }
@@ -424,6 +424,19 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 .proj-steps { margin: 12px 0 0 20px; display: grid; gap: 8px; }
 .proj-steps code, .proj-card2 code { font-size: 0.85em; }
 .proj-nav { display: flex; justify-content: space-between; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+/* Detail views: even gaps between the stacked cards. Both detail
+   pages render their cards as adjacent siblings and .card itself
+   carries no margin, so the cards touched each other. The list grids
+   already have gap: 20px; only the detail stacks needed this. */
+#projects-list > .card + .card { margin-top: 20px; }
+#practice-detail > * + * { margin-top: 20px; }
+#practice-detail > #compare-box:empty { margin-top: 0; }
+/* Empty result boxes must not reserve space: :empty stops matching
+   the moment content is injected, so the boxes reappear on use. */
+#practice-detail #hint-box:empty, #practice-detail #tutor-box:empty,
+#practice-detail #solution-box:empty, #practice-detail #predict-msg:empty,
+#practice-detail #ex-results:empty { display: none; }
+#drill-card #drill-status:empty, #drill-card #my-drills:empty { display: none; }
 
 /* ---------- About ---------- */
 .about-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 28px; text-align: center; }
@@ -990,7 +1003,12 @@ p.fail { color: #e74c3c; font-weight: 600; }
 .stat-l { font-size: .8rem; color: var(--muted); }
 .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 18px 0; }
-.filter-bar select, .filter-bar input[type="text"] { background: var(--card); color: var(--text); border: 1px solid var(--card-border); border-radius: 8px; padding: 9px 12px; font-size: .9rem; }
+.filter-bar select, .filter-bar input[type="text"] { background: var(--card); color: var(--text); border: 1px solid var(--card-border); border-radius: 8px; padding: 9px 12px; font-size: .9rem; width: auto; }
+/* The global input rule sets width: 100% — without these the select
+   and search each take a full row. Search grows; the rest stay put. */
+.filter-bar select { flex: none; }
+.filter-bar input[type="text"] { flex: 1; min-width: 200px; }
+.filter-bar .checkline { flex: none; white-space: nowrap; }
 .input-sm { background: var(--card); color: var(--text); border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 8px; font-size: .85rem; }
 .checkline { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; color: var(--muted); }
 /* Paths + projects */
