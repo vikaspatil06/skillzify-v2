@@ -98,9 +98,37 @@
     return LESSONS[i].section === trackId;
   }
 
+  /* Next Up card (Mastery Engine Phase 2): the continue card now shows
+     the engine's top-ranked step — due review, weak-topic drill, next
+     lesson, untried-topic intro, or all-done — with the reason why.
+     "Not now" cycles to the next candidate (no persisted state, just an
+     index). Falls back to the plain next-lesson card if mastery.js
+     didn't load. */
+  var nuIdx = 0;
   function renderContinue() {
     var box = document.getElementById("continue-card");
     if (!box) return;
+    var M = window.SkillzifyMastery;
+    if (!M || typeof M.nextSteps !== "function") { renderContinueLegacy(box); return; }
+    var steps = M.nextSteps();
+    if (!steps.length) { renderContinueLegacy(box); return; }
+    var step = steps[nuIdx % steps.length];
+    var html = '<div class="cc-label">\u{1F3AF} Next up</div>' +
+      '<div class="cc-title">' + esc(step.title) + "</div>" +
+      '<a class="btn" id="cc-go" href="' + esc(step.href) + '">' + esc(step.cta || "Go \u2192") + "</a>" +
+      '<div class="hint" style="width:100%;margin:2px 0 0">' + esc(step.reason) + "</div>";
+    if (steps.length > 1) {
+      html += '<a href="#" class="hint" id="cc-cycle" style="width:100%">Not now — show me something else \u21BB</a>';
+    }
+    box.innerHTML = html;
+    var cyc = document.getElementById("cc-cycle");
+    if (cyc) cyc.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      nuIdx = (nuIdx + 1) % steps.length;
+      renderContinue();
+    });
+  }
+  function renderContinueLegacy(box) {
     var i = currentIdx();
     if (i < 0) {
       box.innerHTML = '<div class="cc-done">\u{1F389} All ' + LESSONS.length + " lessons complete — you're a Python master. Time to build!</div>";
@@ -110,7 +138,6 @@
     box.innerHTML = '<div class="cc-label">\u25B6 Continue learning</div>' +
       '<div class="cc-title"><span class="cc-num">#' + (i + 1) + "</span> " + esc(l.title) + "</div>" +
       '<a class="btn" id="cc-go" href="lesson.html?id=' + l.id + '">Resume lesson \u2192</a>';
-
   }
 
   /* Search filter, shared by the input listener and by re-renders
@@ -320,6 +347,8 @@
   window.addEventListener("skillzify-sync", function () {
     try {
       if (!document.getElementById("tracks")) return;
+      // Next Up reflects synced progress/reviews even when unlocks don't change.
+      renderContinue();
       var cur = unlockJson();
       if (cur !== lastUnlockJson) { lastUnlockJson = cur; renderAll(); }
     } catch (e) {}

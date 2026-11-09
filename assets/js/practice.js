@@ -503,7 +503,19 @@
     var untried = rows.filter(function (r) { return r.tried === 0; });
     var unsolved = EX.filter(function (ex) { var a = atts[ex.id]; return a && a.attempts > 0 && !a.solved; });
     var parts = [];
-    if (triedRows.length) {
+    var mWeak = null, mStrong = null;
+    try {
+      var M = window.SkillzifyMastery;
+      if (M && typeof M.topicMastery === "function") {
+        var mrows = M.topicMastery().filter(function (r) { return r.tried > 0 && r.score != null; })
+          .sort(function (a, b) { return a.score - b.score; });
+        if (mrows.length) { mWeak = mrows[0]; mStrong = mrows[mrows.length - 1]; }
+      }
+    } catch (e) {}
+    if (mWeak) {
+      parts.push("Weakest topic: " + mWeak.label + " (mastery " + mWeak.score + "% \u2014 " + mWeak.band + (mWeak.rusty ? ", rusty" : "") + ").");
+      if (mStrong && mStrong.topic !== mWeak.topic) parts.push("Strongest topic: " + mStrong.label + " (mastery " + mStrong.score + "% \u2014 " + mStrong.band + ").");
+    } else if (triedRows.length) {
       parts.push("Weakest topic: " + triedRows[0].label + " (" + triedRows[0].pct + "% of " + triedRows[0].tried + " tried).");
       if (triedRows.length > 1) parts.push("Strongest topic: " + triedRows[triedRows.length - 1].label + " (" + triedRows[triedRows.length - 1].pct + "%).");
     }
@@ -1126,6 +1138,7 @@
 
   /* Expose for dashboard widgets */
   window.SkillzifyPractice = {
+    _weakSpotsSummary: weakSpotsSummary,
     dailyExercise: dailyExercise,
     revisionQueue: revisionQueue,
     solvedCount: solvedCount,

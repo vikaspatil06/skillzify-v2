@@ -437,6 +437,7 @@
     WORKSPACE: "skillzify_ws",
     WORKSPACE_TS: "skillzify_ws_ts",
     REVIEWS: "skillzify_review",
+    LAST_UID: "skillzify_last_uid",
     REVIEWS_TS: "skillzify_review_ts",
     // activity keys (activity.js) — also per-user, wiped on logout so the
     // next sign-in's syncCycle() cannot merge the previous user's data
@@ -794,7 +795,7 @@
      also wipes as a safety net if logout happens another way. */
   function clearLocalUserData() {
     [LS.PROGRESS, LS.XP, LS.STREAK, LS.ATTEMPTS, LS.PROFILE, LS.PROFILE_TS, LS.PATHS, LS.CUSTOM_PATHS, LS.CUSTOM_PATHS_TS,
-     LS.WORKSPACE, LS.WORKSPACE_TS, LS.REVIEWS, LS.REVIEWS_TS,
+     LS.WORKSPACE, LS.WORKSPACE_TS, LS.REVIEWS, LS.REVIEWS_TS, LS.LAST_UID,
      LS.ACTIVITY_DAYS, LS.ACTIVITY_FEED, LS.ACHIEVEMENTS, LS.PINS, LS.STARS, LS.SNIPPETS, LS.RUN_COUNT, LS.STREAK_BONUS].forEach(function (k) {
       try { localStorage.removeItem(k); } catch (e) {}
     });
@@ -823,11 +824,16 @@
       if (!root.firebase || !root.firebase.auth) { setStatus("Sync offline"); return; }
       root.firebase.auth().onAuthStateChanged(function (u) {
         try {
-          if (u) { syncCycle(); startListener(); }
-          else {
+          if (u) {
+            lsSet(LS.LAST_UID, u.uid); // remember: this device had a signed-in session
+            syncCycle(); startListener();
+          } else {
             stopListener();
             if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
-            clearLocalUserData(); // safety net: never leave progress visible after logout
+            // Wipe only if a previous signed-in session is recorded (a
+            // real logout / revoked session). The initial null for an
+            // anonymous visitor must NOT wipe their local progress.
+            if (lsGet(LS.LAST_UID)) clearLocalUserData();
             setStatus("Sync offline"); // stop syncing; keep cloud data
           }
         } catch (e) { setStatus("Sync offline"); }

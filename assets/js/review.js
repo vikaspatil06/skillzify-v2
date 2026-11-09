@@ -149,6 +149,26 @@
         : '<p class="hint">Finish a lesson and its first review will be scheduled for tomorrow.</p>';
     } else {
       html += '<p style="margin:0 0 10px"><strong>' + due.length + ' lesson' + (due.length === 1 ? '' : 's') + ' due</strong> — quick recall, a few minutes.</p>';
+      // Phase 4: rusty nudge — a due lesson whose section hasn't been
+      // reviewed in 21+ days gets flagged, so the learner knows why
+      // these reviews matter most right now.
+      try {
+        var M = window.SkillzifyMastery;
+        if (M && typeof M.sectionMastery === "function") {
+          var secs = {};
+          M.sectionMastery().forEach(function (sec) { secs[sec.section] = sec; });
+          var seen = {}, rustyNames = [];
+          due.forEach(function (id) {
+            var l = lessonById(id);
+            if (l && secs[l.section] && secs[l.section].rusty && !seen[l.section]) { seen[l.section] = 1; rustyNames.push(secs[l.section].name); }
+          });
+          if (rustyNames.length) {
+            html += '<p class="hint" style="margin:0 0 10px">\u{1F342} ' + rustyNames.slice(0, 2).map(function (n) { return esc(n); }).join(" \u00B7 ") +
+              (rustyNames.length > 2 ? " (+" + (rustyNames.length - 2) + " more)" : "") +
+              (rustyNames.length === 1 ? " is" : " are") + ' rusty — 21+ days since your last review there.</p>';
+          }
+        }
+      } catch (e) {}
       html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">' +
         due.slice(0, SESSION_MAX).map(function (id) {
           var l = lessonById(id);

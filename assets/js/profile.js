@@ -170,6 +170,32 @@
         return '<span><i style="background:' + c.color + '"></i>' + c.name + " — " + c.done + "/" + c.total + "</span>";
       }).join("");
     } catch (e) {}
+    // Phase 4: per-topic mastery rows (own view only — the whole card
+    // hides for public views via hideCard, so no local data leaks).
+    var topicsEl = document.getElementById("profile-mastery-topics");
+    if (topicsEl) {
+      try {
+        var MM = window.SkillzifyMastery;
+        if (MM && typeof MM.topicMastery === "function") {
+          var esc = (window.Skillzify && window.Skillzify.esc) || function (x) { return String(x); };
+          var mrows = MM.topicMastery();
+          var triedM = mrows.filter(function (r) { return r.tried > 0; }).sort(function (a, b) { return a.score - b.score; });
+          var untriedM = mrows.filter(function (r) { return r.tried === 0; });
+          var th = "";
+          if (!mrows.length) { th = ""; }
+          else if (!triedM.length) { th = '<p class="hint">No exercises tried yet — solve a few and your topic mastery will show here.</p>'; }
+          else {
+            th = triedM.map(function (r) {
+              return '<div class="weak-row"><div class="weak-top"><span class="lbl">' + esc(r.label) + '</span>' +
+                '<span class="pct">' + r.score + "% · " + esc(r.band) + (r.rusty ? " \u{1F342}" : "") + '</span></div>' +
+                '<div class="bar"><span style="width:' + r.score + '%"></span></div></div>';
+            }).join("");
+            if (untriedM.length) th += '<p class="hint" style="margin-top:10px">Not tried yet: ' + untriedM.map(function (r) { return esc(r.label); }).join(" · ") + "</p>";
+          }
+          topicsEl.innerHTML = th;
+        }
+      } catch (e) {}
+    }
   }
 
   function hideCard(el) {

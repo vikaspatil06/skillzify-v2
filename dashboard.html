@@ -39,15 +39,21 @@
           <div class="cc-label">🎯 Up next</div>
           <div class="cc-title" id="dash-next-title">Loading your next step…</div>
           <p class="hint" id="dash-next-sub" style="margin:6px 0 0"></p>
+          <a href="#" class="hint" id="dash-next-cycle" hidden>Not now — show me something else ↻</a>
         </div>
         <div class="next-actions">
-          <a class="btn" href="learn.html">Resume lesson →</a>
+          <a class="btn" id="dash-next-btn" href="learn.html">Resume lesson →</a>
           <div class="next-quick">
             <a href="practice.html">🏋️ Practice</a><span>·</span>
             <a href="paths.html">🗺️ Paths</a><span>·</span>
             <a href="projects.html">🛠️ Projects</a>
           </div>
         </div>
+      </div>
+      <div class="dash-card" id="dash-plan-card" style="margin-top:20px">
+        <h3>📋 Today's plan</h3>
+        <p class="hint" id="dash-plan-sub" style="margin:4px 0 0">About 15 minutes.</p>
+        <div id="dash-plan" style="margin-top:8px"></div>
       </div>
       <div class="dash-grid">
         <div class="dash-card">
@@ -131,28 +137,16 @@
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js?v=5"></script>
-<script src="assets/js/sync.js?v=11"></script>
+<script src="assets/js/sync.js?v=12"></script>
 <script src="assets/js/ai.js?v=15"></script>
 <script src="assets/js/lessons-b.js?v=3"></script>
 <script src="assets/js/lessons-i.js?v=3"></script>
 <script src="assets/js/lessons-a.js?v=3"></script>
 <script src="assets/js/learn-core.js?v=5"></script>
-<script src="assets/js/review.js?v=5"></script>
-<script src="assets/js/learn.js?v=11"></script>
+<script src="assets/js/review.js?v=6"></script>
+<script src="assets/js/mastery.js?v=1"></script>
+<script src="assets/js/learn.js?v=12"></script>
 <script src="assets/js/practice-data.js?v=4"></script>
-<script src="assets/js/dashboard.js?v=12"></script>
-<script>
-// "Up next" hero: first incomplete lesson
-document.addEventListener("DOMContentLoaded", function () {
-  var L = window.SkillzifyLearn, p = L.getProgress();
-  var done = L.LESSONS.filter(function (l) { return p[l.id]; }).length;
-  var next = L.LESSONS.filter(function (l) { return !p[l.id]; })[0];
-  var t = document.getElementById("dash-next-title"), s = document.getElementById("dash-next-sub");
-  if (t) t.textContent = next ? next.title : "All 250 lessons complete — you're a Python star! 🌟";
-  if (s) s.textContent = next
-    ? "Lesson " + (L.LESSONS.indexOf(next) + 1) + " of " + L.totalLessons + " · " + (function () { var s = (L.SECTIONS || []).filter(function (x) { return x.id === next.section; })[0]; return s ? s.icon + " " + s.name : ""; })() + " · " + done + " done so far"
-    : "Time to build something of your own.";
-});
-</script>
+<script src="assets/js/dashboard.js?v=15"></script>
 </body>
 </html>

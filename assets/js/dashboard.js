@@ -73,6 +73,52 @@
              "Your learning at a glance — log in to sync your name here.";
 
     renderUpgrades();
+    renderNextUp();
+    renderDailyPlan();
+  }
+
+  /* Next Up card (Mastery Engine Phase 2): the dashboard hero now shows
+     the engine's top-ranked step with the reason why. Falls back to the
+     first incomplete lesson when mastery.js didn't load. */
+  var dashNuIdx = 0;
+  function renderNextUp() {
+    var t = document.getElementById("dash-next-title"),
+        sub = document.getElementById("dash-next-sub"),
+        b = document.getElementById("dash-next-btn"),
+        c = document.getElementById("dash-next-cycle");
+    if (!t || !sub) return;
+    var M = window.SkillzifyMastery;
+    if (!M || typeof M.nextSteps !== "function") { renderNextUpLegacy(t, sub, b, c); return; }
+    var steps = M.nextSteps();
+    if (!steps.length) { renderNextUpLegacy(t, sub, b, c); return; }
+    var step = steps[dashNuIdx % steps.length];
+    t.textContent = step.title;
+    sub.textContent = step.reason;
+    if (b) { b.href = step.href; b.textContent = step.cta || "Go \u2192"; }
+    if (c) {
+      c.hidden = steps.length <= 1;
+      if (!c.dataset.wired) {
+        c.dataset.wired = "1";
+        c.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          dashNuIdx = (dashNuIdx + 1) % M.nextSteps().length;
+          renderNextUp();
+        });
+      }
+    }
+  }
+  function renderNextUpLegacy(t, sub, b, c) {
+    var L = window.SkillzifyLearn;
+    if (!L) return;
+    var p = L.getProgress();
+    var done = L.LESSONS.filter(function (l) { return p[l.id]; }).length;
+    var next = L.LESSONS.filter(function (l) { return !p[l.id]; })[0];
+    t.textContent = next ? next.title : "All 250 lessons complete — you're a Python star! \u{1F31F}";
+    sub.textContent = next
+      ? "Lesson " + (L.LESSONS.indexOf(next) + 1) + " of " + L.totalLessons + " \u00B7 " + (function () { var sec = (L.SECTIONS || []).filter(function (x) { return x.id === next.section; })[0]; return sec ? sec.icon + " " + sec.name : ""; })() + " \u00B7 " + done + " done so far"
+      : "Time to build something of your own.";
+    if (b) { b.href = "learn.html"; b.textContent = "Resume lesson \u2192"; }
+    if (c) c.hidden = true;
   }
 
   function renderUpgrades() {
@@ -112,6 +158,9 @@
 
   // Plain-text weak-spot summary for the AI daily challenge prompt:
   // weakest topic first, unsolved exercises, untried topics.
+  // Phase 4: the weakest/strongest lines come from the mastery engine
+  // (quality-weighted coverage + band + rust) when it is loaded; the
+  // old solve-rate lines are the fallback.
   function weakSpotsSummary(EX, atts) {
     var rows = topicRows(EX, atts);
     var tried = rows.filter(function (r) { return r.tried > 0; })
@@ -119,7 +168,19 @@
     var untried = rows.filter(function (r) { return r.tried === 0; });
     var unsolved = EX.filter(function (ex) { var a = atts[ex.id]; return a && a.attempts > 0 && !a.solved; });
     var parts = [];
-    if (tried.length) {
+    var mWeak = null, mStrong = null;
+    try {
+      var M = window.SkillzifyMastery;
+      if (M && typeof M.topicMastery === "function") {
+        var mrows = M.topicMastery().filter(function (r) { return r.tried > 0 && r.score != null; })
+          .sort(function (a, b) { return a.score - b.score; });
+        if (mrows.length) { mWeak = mrows[0]; mStrong = mrows[mrows.length - 1]; }
+      }
+    } catch (e) {}
+    if (mWeak) {
+      parts.push("Weakest topic: " + mWeak.label + " (mastery " + mWeak.score + "% \u2014 " + mWeak.band + (mWeak.rusty ? ", rusty" : "") + ").");
+      if (mStrong && mStrong.topic !== mWeak.topic) parts.push("Strongest topic: " + mStrong.label + " (mastery " + mStrong.score + "% \u2014 " + mStrong.band + ").");
+    } else if (tried.length) {
       parts.push("Weakest topic: " + tried[0].label + " (" + tried[0].pct + "% of " + tried[0].tried + " tried).");
       if (tried.length > 1) parts.push("Strongest topic: " + tried[tried.length - 1].label + " (" + tried[tried.length - 1].pct + "%).");
     }
@@ -131,6 +192,8 @@
     if (!parts.length) parts.push("No practice attempts yet — pick a beginner-friendly challenge.");
     return parts.join(" ");
   }
+  // Test hook (also lets other pages reuse the prompt text).
+  window.SkillzifyDashboard = { _weakSpotsSummary: weakSpotsSummary };
 
   // Local "YYYY-MM-DD" for the one-challenge-per-day cache.
   function localToday() {
@@ -343,6 +406,24 @@
           if (dueN > 0) rv.innerHTML = '<div class="run-item"><span>🧠 ' + dueN + ' lesson' + (dueN === 1 ? '' : 's') + ' due for review</span><a class="btn btn-sm" href="learn.html#review">Review now →</a></div>' + rv.innerHTML;
         }
       } catch (e) {}
+      // Phase 4: rusty nudge — same signal as the Learn review queue.
+      try {
+        var MM2 = window.SkillzifyMastery, LC2 = window.SkillzifyLearnCore;
+        if (MM2 && LC2 && window.SkillzifyReview && typeof window.SkillzifyReview.dueList === "function") {
+          var secs2 = {};
+          MM2.sectionMastery().forEach(function (sec) { secs2[sec.section] = sec; });
+          var seen2 = {}, names2 = [];
+          window.SkillzifyReview.dueList().forEach(function (id) {
+            var ll = LC2.lessonById(id);
+            if (ll && secs2[ll.section] && secs2[ll.section].rusty && !seen2[ll.section]) { seen2[ll.section] = 1; names2.push(secs2[ll.section].name); }
+          });
+          if (names2.length) {
+            rv.innerHTML = '<p class="hint" style="margin:0 0 4px">\u{1F342} ' + names2.slice(0, 2).join(" \u00B7 ") +
+              (names2.length > 2 ? " (+" + (names2.length - 2) + " more)" : "") +
+              (names2.length === 1 ? " is" : " are") + ' rusty — 21+ days since your last review there.</p>' + rv.innerHTML;
+          }
+        }
+      } catch (e) {}
     }
 
     // Weak spots — weakest first. Compact by design: only the TOP 3
@@ -355,12 +436,23 @@
       var tried = rows.filter(function (r) { return r.tried > 0; })
                       .sort(function (a, b) { return a.pct - b.pct || b.tried - a.tried; });
       var untried = rows.filter(function (r) { return r.tried === 0; });
+      // Phase 4: mastery score + band + rusty badge per topic, from the
+      // mastery engine when loaded (falls back to solve-rate-only rows).
+      var masteryByTopic = {};
+      try {
+        var MM = window.SkillzifyMastery;
+        if (MM && typeof MM.topicMastery === "function") {
+          MM.topicMastery().forEach(function (mr) { masteryByTopic[mr.topic] = mr; });
+        }
+      } catch (e) {}
       var weakRowHtml = function (r) {
         var weak = r.tried >= 2 && r.pct < 60;
+        var m = masteryByTopic[r.topic];
         return '<div class="weak-row' + (weak ? " is-weak" : "") + '">' +
           '<div class="weak-top"><span class="lbl">' + esc(r.label) +
           (weak ? ' <span class="badge badge-try">weak spot</span>' : "") + "</span>" +
           '<span class="pct">' + r.solved + "/" + r.tried + " · " + r.pct + "%</span></div>" +
+          (m && m.score != null ? '<div class="hint" style="margin:0 0 6px">Mastery ' + m.score + "% · " + esc(m.band) + (m.rusty ? " \u{1F342} rusty" : "") + "</div>" : "") +
           '<div class="bar"><span style="width:' + r.pct + '%"></span></div>' +
           '<a class="weak-link" href="practice.html#topic=' + r.topic + '">Practice ' + esc(r.label) + " →</a>" +
           "</div>";
@@ -399,5 +491,146 @@
     // (Certificates + downloadCert moved to profile.js — showcase lives on the profile)
   }
 
+  /* Daily plan (Mastery Engine Phase 3): "Today's plan — ~15 min".
+     The day's items are generated once (from SkillzifyMastery.dailyPlan)
+     and stored for the day, so the checklist is stable: completing an
+     item checks it off instead of swapping in the next one. The plan
+     regenerates tomorrow. Completion is auto-detected from real data
+     (review no longer due / exercise solved / lesson done) and can also
+     be toggled by hand. Local-only, not synced — losing it on another
+     device just regenerates the plan, harmless.
+     +10 XP on completion (Vikas's call, 9 Nov): awarded once per day
+     when the last item completes, guarded by the xpAwarded flag on the
+     plan itself — re-renders and syncs can never re-award it. */
+  var PLAN_KEY = "skillzify_daily_plan";
+  function readPlanFlag() {
+    try {
+      var f = window.Skillzify.storeGet(PLAN_KEY, null);
+      if (f && typeof f === "object" && f.date === localToday() &&
+          Array.isArray(f.items) && Array.isArray(f.done)) return f;
+    } catch (e) {}
+    return null;
+  }
+  function savePlanFlag(f) {
+    try { window.Skillzify.storeSet(PLAN_KEY, f); } catch (e) {}
+  }
+  function getDailyPlan() {
+    var M = window.SkillzifyMastery;
+    if (!M || typeof M.dailyPlan !== "function") return null;
+    var stored = readPlanFlag();
+    if (stored) return stored;
+    var dp = M.dailyPlan() || {};
+    var items = [];
+    (dp.reviews || []).forEach(function (id) {
+      items.push({ key: "review:" + id, kind: "review", id: id });
+    });
+    if (dp.exercise) items.push({ key: "exercise:" + dp.exercise, kind: "exercise", id: dp.exercise });
+    if (dp.lesson) items.push({ key: "lesson:" + dp.lesson, kind: "lesson", id: dp.lesson });
+    var flag = { date: localToday(), items: items, done: [] };
+    savePlanFlag(flag);
+    return flag;
+  }
+  function isPlanItemDone(item) {
+    try {
+      if (item.kind === "review") {
+        if (window.SkillzifyReview && typeof window.SkillzifyReview.dueList === "function") {
+          return window.SkillzifyReview.dueList().indexOf(item.id) < 0;
+        }
+        var rm = window.Skillzify.storeGet("skillzify_review", {});
+        var e = rm ? rm[item.id] : null;
+        if (!e) return true;
+        return typeof e.due === "number" ? e.due > Date.now() : false;
+      }
+      if (item.kind === "exercise") {
+        var atts = window.Skillzify.storeGet("skillzify_exercise_attempts", {});
+        var a = atts ? atts[item.id] : null;
+        return !!(a && a.solved);
+      }
+      if (item.kind === "lesson") {
+        var L = window.SkillzifyLearn;
+        return !!(L && L.getProgress && L.getProgress()[item.id]);
+      }
+    } catch (e) {}
+    return false;
+  }
+  function planItemMeta(item, lessonById, exById) {
+    if (item.kind === "review") {
+      var l = lessonById[item.id];
+      return { icon: "\u{1F9E0}", label: "Review: " + (l ? l.title : item.id), href: "learn.html#review" };
+    }
+    if (item.kind === "exercise") {
+      var ex = exById[item.id];
+      return { icon: "\u{1F3CB}️", label: "Practice: " + (ex ? ex.title : item.id), href: "practice.html#ex=" + item.id };
+    }
+    var ll = lessonById[item.id];
+    return { icon: "\u{1F4D6}", label: "Learn: " + (ll ? ll.title : item.id), href: "lesson.html?id=" + item.id };
+  }
+  function renderDailyPlan() {
+    var mount = document.getElementById("dash-plan");
+    var card = document.getElementById("dash-plan-card");
+    var sub = document.getElementById("dash-plan-sub");
+    if (!mount || !card) return;
+    var plan = getDailyPlan();
+    if (!plan) { card.style.display = "none"; return; }
+    card.style.display = "";
+    var esc = (window.Skillzify && window.Skillzify.esc) || function (x) { return String(x); };
+    var L = window.SkillzifyLearn;
+    var lessonById = {}, exById = {};
+    if (L && Array.isArray(L.LESSONS)) L.LESSONS.forEach(function (l) { lessonById[l.id] = l; });
+    var EX = window.SkillzifyPracticeData || [];
+    EX.forEach(function (e) { exById[e.id] = e; });
+    var doneSet = {};
+    (plan.done || []).forEach(function (k) { doneSet[k] = true; });
+    plan.items.forEach(function (it) { if (isPlanItemDone(it)) doneSet[it.key] = true; });
+    var doneN = plan.items.filter(function (it) { return doneSet[it.key]; }).length;
+    // +10 XP, once per day, the moment the plan completes. The flag is
+    // set right after a successful award, in the same synchronous block,
+    // so no re-render or sync can award it twice.
+    if (plan.items.length > 0 && doneN === plan.items.length && !plan.xpAwarded) {
+      try {
+        var LC = window.SkillzifyLearnCore;
+        if (LC && typeof LC.addXP === "function") {
+          LC.addXP(10);
+          plan.xpAwarded = true;
+          savePlanFlag(plan);
+          try { window.Skillzify.toast("+10 XP — daily plan complete! \u{1F389}", "success"); } catch (e2) {}
+        }
+      } catch (e) {}
+    }
+    if (sub) sub.textContent = plan.items.length === 0 ? "All caught up." :
+      (doneN === plan.items.length ? "\u2713 All done — nice work!" + (plan.xpAwarded ? " +10 XP \u{1F389}" : "") : doneN + " of " + plan.items.length + " done \u00B7 about 15 minutes");
+    if (plan.items.length === 0) {
+      mount.innerHTML = '<p class="hint">Everything is solid for today \u{1F389} — no reviews due, nothing weak, nothing new. ' +
+        'Take on the AI challenge below or build something in <a href="compiler.html">Code Studio</a>.</p>';
+      return;
+    }
+    var html = "";
+    plan.items.forEach(function (it) {
+      var meta = planItemMeta(it, lessonById, exById);
+      var done = !!doneSet[it.key];
+      var label = esc(meta.icon + " " + meta.label);
+      html += '<div class="run-item"><span><input type="checkbox" data-plan-key="' + esc(it.key) + '"' +
+        (done ? " checked" : "") + ' aria-label="Mark done: ' + label + '"> ' +
+        (done ? "<s>" : "") + '<a href="' + esc(meta.href) + '">' + label + "</a>" + (done ? "</s>" : "") + "</span></div>";
+    });
+    mount.innerHTML = html;
+    mount.querySelectorAll("#dash-plan input").forEach(function (cb) {
+      cb.addEventListener("click", function () {
+        var key = cb.getAttribute("data-plan-key");
+        var f = readPlanFlag();
+        if (!f) return;
+        var i = f.done.indexOf(key);
+        if (i >= 0) f.done.splice(i, 1); else f.done.push(key);
+        savePlanFlag(f);
+        renderDailyPlan();
+      });
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", renderDashboard);
+  // Keep Next Up fresh after a cross-device sync (cheap, targeted —
+  // the full dashboard render would reset the weak-spots toggle).
+  window.addEventListener("skillzify-sync", function () {
+    try { renderNextUp(); renderDailyPlan(); } catch (e) {}
+  });
 })();
