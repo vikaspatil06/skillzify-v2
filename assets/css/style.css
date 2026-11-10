@@ -431,7 +431,7 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 
 /* ---------- About ---------- */
 .about-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 28px; text-align: center; }
-.about-stats .stat { padding: 20px 8px; }
+.about-stats .stat { padding: 20px 8px; text-align: center; }
 .about-stats .num { font-size: 1.9rem; }
 .link-card { display: block; text-decoration: none; color: inherit; transition: transform .15s ease, box-shadow .15s ease; }
 .link-card:hover { transform: translateY(-3px); color: inherit; }
@@ -627,11 +627,16 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 .weak-row:last-child { border-bottom: 0; }
 .weak-row .weak-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }
 .weak-row .lbl { font-weight: 700; }
-/* The global .pct below is 52px, sized for a bare percentage. Weak-row
-   labels carry more ("8% · Starting out", "1/1 · 100%"), so the label
-   must size to its content and never shrink below it — otherwise the
-   nowrap text spills 49px past the card's right edge and gets clipped. */
-.weak-row .pct { width: auto; flex-shrink: 0; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The global .pct is 52px, sized for a bare percentage, but weak-row
+   labels carry more ("8% · Starting out" on profile, "1/1 · 100%" on the
+   dashboard), so the label must size to its content and never shrink
+   below it — otherwise the nowrap text spills up to 49px past the card's
+   right edge and gets clipped. Scoped to the two cards that render weak
+   rows — the profile topic-mastery card (#profile-mastery-topics) and
+   the dashboard weak-spots card (#dash-topic-acc, which wraps both its
+   top-3 rows and its show-all rest rows) — and nowhere else, so no other
+   .pct label is affected. */
+#profile-mastery-topics .weak-row .pct, #dash-topic-acc .weak-row .pct { width: auto; flex-shrink: 0; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .weak-row .bar { margin: 0 0 6px; }
 .weak-row.is-weak .bar span { background: linear-gradient(90deg, #f87171, #fb923c); }
 .weak-link { font-size: 0.85rem; font-weight: 700; }
@@ -865,6 +870,11 @@ button, a, .quiz-opt, .quiz-opt *, .node, .auth-tabs button {
 .profile-head { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
 .profile-head #profile-avatar svg { box-shadow: 0 4px 18px rgba(108,123,255,.35); }
 .dash-card.stat { display: flex; gap: 12px; align-items: center; }
+/* P2-60 scoped the compact .stat padding to .stats-row only; the profile
+   stat cards lost their old 14px 8px padding (and centred text) in the
+   process. Restore it here, scoped to #profile-stats, so the home stats
+   (30px 16px) and practice stats keep theirs. */
+#profile-stats .dash-card.stat { padding: 14px 8px; text-align: center; }
 .stat-ico { font-size: 1.6rem; }
 .pin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: 12px; }
 .pin-card { display: flex; gap: 10px; align-items: center; background: var(--bg-soft); border: 1px solid var(--card-border); border-radius: 10px; padding: 12px; color: var(--text); text-decoration: none; font-weight: 600; font-size: .92rem; position: relative; }
