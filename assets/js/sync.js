@@ -448,6 +448,9 @@
     STARS: "skillzify_stars",
     SNIPPETS: "skillzify_snippets",
     RUN_COUNT: "skillzify_run_count",
+    // Placement test result (placement.js / learn-core.js) — per-user,
+    // local-only, wiped on logout so the next user doesn't inherit it.
+    PLACEMENT: "skillzify_placement",
     STREAK_BONUS: "skillzify_streak_bonus" // claimed 7/30-day bonus flags (activity.js)
   };
 
@@ -796,7 +799,7 @@
   function clearLocalUserData() {
     [LS.PROGRESS, LS.XP, LS.STREAK, LS.ATTEMPTS, LS.PROFILE, LS.PROFILE_TS, LS.PATHS, LS.CUSTOM_PATHS, LS.CUSTOM_PATHS_TS,
      LS.WORKSPACE, LS.WORKSPACE_TS, LS.REVIEWS, LS.REVIEWS_TS, LS.LAST_UID,
-     LS.ACTIVITY_DAYS, LS.ACTIVITY_FEED, LS.ACHIEVEMENTS, LS.PINS, LS.STARS, LS.SNIPPETS, LS.RUN_COUNT, LS.STREAK_BONUS].forEach(function (k) {
+     LS.ACTIVITY_DAYS, LS.ACTIVITY_FEED, LS.ACHIEVEMENTS, LS.PINS, LS.STARS, LS.SNIPPETS, LS.RUN_COUNT, LS.STREAK_BONUS, LS.PLACEMENT].forEach(function (k) {
       try { localStorage.removeItem(k); } catch (e) {}
     });
   }

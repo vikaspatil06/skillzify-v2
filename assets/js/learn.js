@@ -20,6 +20,7 @@
       sectionLessons = LC.sectionLessons, sectionUnlocked = LC.sectionUnlocked,
       sectionPct = LC.sectionPct,
       currentIdx = LC.currentIdx,
+      placedSection = LC.placedSection,
       reducedMotion = LC.reducedMotion;
 
   function renderHero() {
@@ -104,6 +105,51 @@
      "Not now" cycles to the next candidate (no persisted state, just an
      index). Falls back to the plain next-lesson card if mastery.js
      didn't load. */
+  /* Placement banner (Phase 3): for learners with 0 lessons done — a
+     nudge to take the test, or the placed result with Start here +
+     Retake. Once lessons are done the journey is underway and the
+     banner hides (the unlock rule still applies). */
+  function lessonsDoneCount() {
+    try {
+      var p = getProgress() || {}, n = 0;
+      Object.keys(p).forEach(function (k) { if (p[k]) n++; });
+      return n;
+    } catch (e) { return 0; }
+  }
+  function placementStep() {
+    try {
+      var placed = placedSection ? placedSection() : null;
+      if (!placed || lessonsDoneCount() > 0) return null;
+      var first = sectionLessons(placed)[0];
+      if (!first) return null;
+      var sec = SECTIONS.filter(function (x) { return x.id === placed; })[0];
+      var name = sec ? sec.name : placed;
+      return { title: "Start at " + name + " — " + first.title, href: "lesson.html?id=" + first.id, cta: "Start here \u2192", reason: "Placed here by your 3-minute test." };
+    } catch (e) { return null; }
+  }
+  function renderPlacementBanner() {
+    var box = document.getElementById("plc-banner");
+    if (!box) return;
+    if (lessonsDoneCount() > 0) { box.innerHTML = ""; return; }
+    var placed = placedSection ? placedSection() : null;
+    var inner;
+    if (!placed) {
+      inner = '<div><h3 style="margin:0 0 6px">\u{1F3AF} New here?</h3>' +
+        '<p class="hint" style="margin:0">Take the 3-minute placement test and skip what you already know.</p></div>' +
+        '<div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn" href="placement.html">Take the placement test \u2192</a></div>';
+    } else {
+      var first = sectionLessons(placed)[0];
+      var sec = SECTIONS.filter(function (x) { return x.id === placed; })[0];
+      var name = sec ? (sec.icon ? sec.icon + " " : "") + sec.name : placed;
+      inner = '<div><h3 style="margin:0 0 6px">\u{1F3AF} Placed at ' + esc(name) + "</h3>" +
+        '<p class="hint" style="margin:0">Your test put you here — start at this section, or move freely.</p></div>' +
+        '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
+        (first ? '<a class="btn" id="plc-start-here" href="lesson.html?id=' + first.id + '">Start here \u2192</a>' : "") +
+        '<a class="btn btn-ghost" href="placement.html">Retake</a></div>';
+    }
+    box.innerHTML = '<div class="card" style="margin-bottom:18px"><div class="daily-inner">' + inner + "</div></div>";
+  }
+
   var nuIdx = 0;
   function renderContinue() {
     var box = document.getElementById("continue-card");
@@ -111,6 +157,11 @@
     var M = window.SkillzifyMastery;
     if (!M || typeof M.nextSteps !== "function") { renderContinueLegacy(box); return; }
     var steps = M.nextSteps();
+    /* A fresh placed learner's top Next Up step is the placed section's
+       first lesson — not currentIdx() (which still points at Base Camp
+       lesson 1, spec §5). "Not now" still cycles to the other candidates. */
+    var placedStep = placementStep();
+    if (placedStep) steps = [placedStep].concat(steps);
     if (!steps.length) { renderContinueLegacy(box); return; }
     var step = steps[nuIdx % steps.length];
     var html = '<div class="cc-label">\u{1F3AF} Next up</div>' +
@@ -129,6 +180,14 @@
     });
   }
   function renderContinueLegacy(box) {
+    var placedStep = placementStep();
+    if (placedStep) {
+      box.innerHTML = '<div class="cc-label">\u{1F3AF} Placed here</div>' +
+        '<div class="cc-title">' + esc(placedStep.title) + "</div>" +
+        '<a class="btn" id="cc-go" href="' + esc(placedStep.href) + '">' + esc(placedStep.cta) + "</a>" +
+        '<div class="hint" style="width:100%;margin:2px 0 0">' + esc(placedStep.reason) + "</div>";
+      return;
+    }
     var i = currentIdx();
     if (i < 0) {
       box.innerHTML = '<div class="cc-done">\u{1F389} All ' + LESSONS.length + " lessons complete — you're a Python master. Time to build!</div>";
@@ -318,7 +377,7 @@
   }
 
   function renderAll() {
-    renderHero(); renderProgress(); renderContinue(); renderTracks(); initSearch(); applySearch(currentQuery());
+    renderHero(); renderProgress(); renderPlacementBanner(); renderContinue(); renderTracks(); initSearch(); applySearch(currentQuery());
     // Backfill: a section or path finished before the +100/+150 bonuses
     // shipped still pays out once (flags in learn-core.js).
     try { if (LC.checkSectionBonuses) LC.checkSectionBonuses(); if (LC.checkPathBonuses) LC.checkPathBonuses(); } catch (e) {}
@@ -348,7 +407,7 @@
     try {
       if (!document.getElementById("tracks")) return;
       // Next Up reflects synced progress/reviews even when unlocks don't change.
-      renderContinue();
+      renderPlacementBanner(); renderContinue();
       var cur = unlockJson();
       if (cur !== lastUnlockJson) { lastUnlockJson = cur; renderAll(); }
     } catch (e) {}

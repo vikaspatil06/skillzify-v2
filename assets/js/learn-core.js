@@ -906,6 +906,18 @@
   function isUnlocked(gi) {
     if (gi <= 0) return true;
     if (isDone(LESSONS[gi - 1].id)) return true;
+    // The first lesson of an unlocked section is open. In the normal flow
+    // this is already implied (the previous section is fully done, so the
+    // previous lesson is done) — but a placement unlocks a section without
+    // its predecessor, so the entry point needs this rule, or the placed
+    // learner would see an open section whose first lesson is locked
+    // (lesson.html enforces the same lock). The rest of the section still
+    // unlocks sequentially, lesson by lesson.
+    var sec = LESSONS[gi].section;
+    if (sec) {
+      var first = sectionLessons(sec)[0];
+      if (first && first.id === LESSONS[gi].id && sectionUnlocked(sec)) return true;
+    }
     // Enrolled learning paths act as keys: their lessons open even mid-chain
     return !!pathUnlockMap()[LESSONS[gi].id];
   }
@@ -966,9 +978,29 @@
   }
   function sectionOf(id) { for (var i = 0; i < LESSONS.length; i++) if (LESSONS[i].id === id) return LESSONS[i].section || null; return null; }
   function sectionLessons(sectionId) { return LESSONS.filter(function (l) { return l.section === sectionId; }); }
+  /* The placement result, if any: {section, score, total, stages, date}
+     (localStorage key shared with placement.js — learn.html does not load
+     that module, so this reads the key directly). Validated against
+     SECTIONS so a stale or foreign value can never unlock anything. */
+  var PLACEMENT_KEY = "skillzify_placement";
+  function placedSection() {
+    try {
+      var r = JSON.parse(localStorage.getItem(PLACEMENT_KEY) || "null");
+      if (!r || typeof r.section !== "string") return null;
+      return SECTIONS.some(function (x) { return x.id === r.section; }) ? r.section : null;
+    } catch (e) { return null; }
+  }
   function sectionUnlocked(sectionId) {
     var s = SECTIONS.filter(function (x) { return x.id === sectionId; })[0];
     if (!s || !s.needs) return true;
+    // Placement overrides the needs-chain: every section at or before
+    // the placed one is open (spec §5). Sections after it still unlock
+    // normally, by finishing the previous section.
+    var placed = placedSection();
+    if (placed) {
+      var ids = SECTIONS.map(function (x) { return x.id; });
+      if (ids.indexOf(sectionId) <= ids.indexOf(placed)) return true;
+    }
     return sectionLessons(s.needs).every(function (l) { return isDone(l.id); });
   }
   function sectionPct(sectionId) {
@@ -1072,6 +1104,7 @@
     isPathOnlyUnlocked: isPathOnlyUnlocked, pathUnlockMap: pathUnlockMap,
     trackUnlocked: trackUnlocked, trackPct: trackPct,
     sectionOf: sectionOf, sectionLessons: sectionLessons,
+    placedSection: placedSection,
     sectionUnlocked: sectionUnlocked, sectionPct: sectionPct,
     currentIdx: currentIdx, nextLesson: nextLesson,
     isLessonDone: function (id) { return isDone(id); },

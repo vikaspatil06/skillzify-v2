@@ -37,6 +37,7 @@
           <a href="learn.html" class="btn">Start learning →</a>
           <a href="compiler.html" class="btn btn-ghost">▶ Try the compiler</a>
         </div>
+        <p class="hint" style="margin-top:10px"><a href="placement.html" id="plc-hero-link" hidden>Not sure where to start? Take the placement test →</a></p>
       </div>
       <div class="hero-card">
         <div class="code-window">
@@ -124,7 +125,7 @@
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js?v=5"></script>
-<script src="assets/js/sync.js?v=12"></script>
+<script src="assets/js/sync.js?v=13"></script>
 <script src="assets/js/ai.js?v=15"></script>
 <script>
 // Animated stat counters
@@ -144,6 +145,16 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   var io = new IntersectionObserver(function (e) { if (e[0].isIntersecting) { animate(); io.disconnect(); } });
   if (els.length) io.observe(els[0]);
+
+  // Placement test link: signed-out users only. onReady fires once auth
+  // state is known; if auth.js never loaded, show the link (it works
+  // either way — it just isn't needed once signed in).
+  var plcLink = document.getElementById("plc-hero-link");
+  if (plcLink) {
+    var A = window.SkillzifyAuth;
+    if (!A || typeof A.onReady !== "function") { plcLink.hidden = false; }
+    else A.onReady(function () { if (!A.currentUser || !A.currentUser()) plcLink.hidden = false; });
+  }
 });
 </script>
 </body>
