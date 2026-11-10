@@ -116,22 +116,48 @@
       return n;
     } catch (e) { return 0; }
   }
+  /* Placement is "consumed" once the learner completes a lesson in the
+     placed section or later — not after any lesson anywhere (P1-02). A
+     placed learner who first does an easy Base Camp lesson still sees
+     the "Placed at X" banner and the Next Up placement step. */
+  function placementConsumed() {
+    try {
+      var placed = placedSection ? placedSection() : null;
+      if (!placed) return true;
+      var ids = SECTIONS.map(function (x) { return x.id; });
+      var pi = ids.indexOf(placed);
+      if (pi < 0) return true;
+      var p = getProgress() || {};
+      return Object.keys(p).some(function (id) {
+        if (!p[id]) return false;
+        var sec = (LC && typeof LC.sectionOf === "function") ? LC.sectionOf(id) : null;
+        return !!sec && ids.indexOf(sec) >= pi;
+      });
+    } catch (e) { return true; }
+  }
   function placementStep() {
     try {
       var placed = placedSection ? placedSection() : null;
-      if (!placed || lessonsDoneCount() > 0) return null;
+      if (!placed || placementConsumed()) return null;
       var first = sectionLessons(placed)[0];
       if (!first) return null;
       var sec = SECTIONS.filter(function (x) { return x.id === placed; })[0];
       var name = sec ? sec.name : placed;
-      return { title: "Start at " + name + " — " + first.title, href: "lesson.html?id=" + first.id, cta: "Start here \u2192", reason: "Placed here by your 3-minute test." };
+      return { title: "Start at " + name + " — " + first.title, href: "lesson.html?id=" + first.id, cta: "Start here \u2192", reason: "Placed here by your 3-minute test.", lessonId: first.id };
     } catch (e) { return null; }
   }
   function renderPlacementBanner() {
     var box = document.getElementById("plc-banner");
     if (!box) return;
-    if (lessonsDoneCount() > 0) { box.innerHTML = ""; return; }
     var placed = placedSection ? placedSection() : null;
+    // No placement: the "New here?" nudge is for 0-lesson learners only.
+    // Placed: the banner stays until the placement is consumed — a lesson
+    // done in the placed section or later — not after any lesson (P1-02).
+    if (!placed) {
+      if (lessonsDoneCount() > 0) { box.innerHTML = ""; return; }
+    } else if (placementConsumed()) {
+      box.innerHTML = ""; return;
+    }
     var inner;
     if (!placed) {
       inner = '<div><h3 style="margin:0 0 6px">\u{1F3AF} New here?</h3>' +
@@ -161,7 +187,13 @@
        first lesson — not currentIdx() (which still points at Base Camp
        lesson 1, spec §5). "Not now" still cycles to the other candidates. */
     var placedStep = placementStep();
-    if (placedStep) steps = [placedStep].concat(steps);
+    if (placedStep) {
+      // The mastery lesson step now points at the same placed lesson
+      // (P1-01); drop it so the placed lesson doesn't appear twice.
+      steps = [placedStep].concat(steps.filter(function (st) {
+        return !(st.kind === "lesson" && st.lessonId === placedStep.lessonId);
+      }));
+    }
     if (!steps.length) { renderContinueLegacy(box); return; }
     var step = steps[nuIdx % steps.length];
     var html = '<div class="cc-label">\u{1F3AF} Next up</div>' +

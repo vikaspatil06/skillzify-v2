@@ -116,7 +116,9 @@
     if (!L) return;
     var p = L.getProgress();
     var done = L.LESSONS.filter(function (l) { return p[l.id]; }).length;
-    var next = L.LESSONS.filter(function (l) { return !p[l.id]; })[0];
+    // Placement-aware when available: the first undone lesson in global
+    // order sends a placed learner back to Base Camp (P1-01).
+    var next = (L.nextLesson ? L.nextLesson() : null) || L.LESSONS.filter(function (l) { return !p[l.id]; })[0];
     t.textContent = next ? next.title : "All 250 lessons complete — you're a Python star! \u{1F31F}";
     sub.textContent = next
       ? "Lesson " + (L.LESSONS.indexOf(next) + 1) + " of " + L.totalLessons + " \u00B7 " + (function () { var sec = (L.SECTIONS || []).filter(function (x) { return x.id === next.section; })[0]; return sec ? sec.icon + " " + sec.name : ""; })() + " \u00B7 " + done + " done so far"
@@ -587,10 +589,15 @@
     (plan.done || []).forEach(function (k) { doneSet[k] = true; });
     plan.items.forEach(function (it) { if (isPlanItemDone(it)) doneSet[it.key] = true; });
     var doneN = plan.items.filter(function (it) { return doneSet[it.key]; }).length;
+    // P1-05: the +10 XP pays only when every item is AUTO-detected
+    // done (real review / solve / lesson). Hand-ticked checkboxes
+    // still check the box visually, but they never pay the XP and
+    // never count toward the Plan Keeper badge (skillzify_plans_done).
+    var autoDoneN = plan.items.filter(function (it) { return isPlanItemDone(it); }).length;
     // +10 XP, once per day, the moment the plan completes. The flag is
     // set right after a successful award, in the same synchronous block,
     // so no re-render or sync can award it twice.
-    if (plan.items.length > 0 && doneN === plan.items.length && !plan.xpAwarded) {
+    if (plan.items.length > 0 && autoDoneN === plan.items.length && !plan.xpAwarded) {
       try {
         var LC = window.SkillzifyLearnCore;
         if (LC && typeof LC.addXP === "function") {

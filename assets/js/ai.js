@@ -251,7 +251,11 @@
       err.status = res.status;
       throw err;
     }).catch(function (e) {
-      if (attempt < 1 && (e.name === "AbortError" || e.name === "TypeError")) {
+      // P1-23: retry a network failure (TypeError) once, but NEVER an
+      // AbortError — that is our own 60 s timeout firing, and the server
+      // may still complete (and count) the aborted request; retrying the
+      // whole thing would burn a second daily-cap answer for one answer.
+      if (attempt < 1 && e.name === "TypeError") {
         return new Promise(function (ok) { setTimeout(ok, 1500); }).then(function () { return backendAsk(payload, attempt + 1); });
       }
       throw e;
@@ -273,12 +277,81 @@
     var key = "";
     try { key = storeGet(KEY_STORE, ""); } catch (e) {}
     if (!key) return Promise.reject(new Error("no-key"));
-    var prompt = opts.mode === "generate" ? "Write Python code for: " + (opts.code || "")
-      : opts.mode === "fix" ? "Fix this Python code. Error: " + (opts.error || "") + "\n\n" + (opts.code || "")
-      : opts.mode === "flowchart" ? "Write ONLY clean, simple Python code that solves this problem. Use only beginner Python (input/print, if/elif/else, for/while loops, functions, lists) — no classes, decorators, or match statements. Output raw code only:\n\n" + (opts.code || "")
-      : opts.mode === "flowchart-code" ? "Write ONLY clean, simple Python code that implements these flowchart steps. Use input() for INPUT steps and print() for PRINT/OUTPUT steps. Output raw code only:\n\n" + (opts.code || "")
-      : opts.mode === "flowchart-explain" ? "Explain this flowchart / algorithm in plain words, step by step, as if teaching a beginner what the program does and why each step exists. No code, just the explanation.\n\nFLOWCHART / ALGORITHM:\n" + (opts.code || "")
-      : "Explain this Python code for a beginner. Code:\n" + (opts.code || "") + (opts.error ? "\nError:\n" + opts.error : "");
+    // P1-24: mirror the server's per-mode prompts (server.js MODES /
+    // buildPrompt) instead of one generic "Explain this Python code"
+    // default. Before this fix tutor/tutor-lesson lost the Socratic rules
+    // (a key-path tutor could hand over the full corrected code), the
+    // JSON modes got a contradictory explain-task prompt, and the learner
+    // context in payload.context was never used at all. The flowchart /
+    // generate / fix prompts already matched the server and are kept.
+    // Context is appended for the modes the server grounds in it (and
+    // for tutor / explain); it is NOT appended to the raw-code-only
+    // flowchart prompts, where trailing prose would break the output.
+    var ctx = (payload && payload.context) ? String(payload.context) : "";
+    var ctxBlock = ctx ? "\n\nLEARNER CONTEXT:\n" + ctx : "";
+    var socratic =
+      "You are a Socratic Python tutor for a beginner student. " +
+      "Rules you MUST follow:\n" +
+      "1. NEVER write the full corrected code — not even a snippet longer than one line.\n" +
+      "2. Explain what is likely wrong in plain words, then give exactly ONE guiding hint.\n" +
+      "3. Ask one short follow-up question that nudges the student to discover the fix.\n" +
+      "4. Keep the whole answer under 120 words. Be encouraging.\n\n";
+    var prompt;
+    switch (opts.mode) {
+      case "generate":
+        prompt = "Write clean, beginner-friendly Python code for this request. Output the code inside a single ```python fenced block, then 2-3 short bullet points explaining the key parts. Keep it simple — no advanced tricks.\n\nREQUEST:\n" + (opts.code || "");
+        break;
+      case "fix":
+        prompt = "A student's Python code has this error. Output the FULL corrected code inside a single ```python fenced block, then 2-3 short bullet points explaining what was wrong and what you changed. Fix only what's broken — keep their style.\n\nCODE:\n" + (opts.code || "") + "\n\nERROR:\n" + (opts.error || "");
+        break;
+      case "flowchart":
+        prompt = "Write ONLY clean, simple Python code that solves this problem. Use only beginner Python (input/print, if/elif/else, for/while loops, functions, lists) — no classes, decorators, or match statements. Output raw code only:\n\n" + (opts.code || "");
+        break;
+      case "flowchart-code":
+        prompt = "Write ONLY clean, simple Python code that implements these flowchart steps. Use input() for INPUT steps and print() for PRINT/OUTPUT steps. Output raw code only:\n\n" + (opts.code || "");
+        break;
+      case "flowchart-explain":
+        prompt = "Explain this flowchart / algorithm in plain words, step by step, as if teaching a beginner what the program does and why each step exists. No code, just the explanation.\n\nFLOWCHART / ALGORITHM:\n" + (opts.code || "");
+        break;
+      case "tutor":
+        prompt = socratic + "A student is stuck on this Python exercise. Their code is failing. Follow your Socratic rules strictly.\n\n" + (opts.code || "") + "\n\n" + (opts.error || "") + ctxBlock;
+        break;
+      case "tutor-lesson":
+        prompt = socratic + "A student is working through a lesson and is stuck. Use the lesson context to ground your hint in what they just learned. Follow your Socratic rules strictly.\n\nLESSON CONTEXT:\n" + ctx + "\n\nSTUDENT CODE / QUESTION:\n" + (opts.code || "") + "\n\nERROR / STUCK POINT:\n" + (opts.error || "");
+        break;
+      case "quiz":
+        prompt = "Write 3 multiple-choice quiz questions that test the concepts in this lesson. Each question: one clear question, exactly 4 options, exactly one correct answer, and a one-line 'why' explaining the answer. Keep questions at the lesson's level — no advanced topics.\n\nLESSON:\n" + (opts.code || "") + ctxBlock + "\n\nJSON shape: {\"questions\":[{\"q\":\"...\",\"options\":[\"...\",\"...\",\"...\",\"...\"],\"answer\":0,\"why\":\"...\"}]} — answer is the 0-based index of the correct option.";
+        break;
+      case "drill":
+        prompt = "Write ONE short coding exercise that drills this weak topic. The student keeps failing here:\n\nWEAK TOPIC:\n" + (opts.code || "") + ctxBlock + "\n\nRules: 2-3 tests; each test is {\"run\": \"a Python expression using the function\", \"expect\": \"the exact str() of the result\"}; difficulty 1-3; the solution MUST pass all tests when run; keep it small.";
+        break;
+      case "challenge":
+        prompt = "Write ONE small daily-challenge exercise for this learner, based on their weak spots. It should take under 10 minutes. Same JSON shape and rules as a drill exercise.\n\nWEAK SPOTS:\n" + (opts.code || "") + ctxBlock;
+        break;
+      case "trace":
+        prompt = "Walk through this Python code line by line, in execution order. For each step say what happens and what each variable holds after that step. Use short numbered steps. If the program reads input, show one example run with sample input. Keep it plain and beginner-friendly.\n\nCODE:\n" + (opts.code || "") + (opts.error ? "\n\nRUN OUTPUT / ERROR:\n" + opts.error : "") + ctxBlock;
+        break;
+      case "review":
+        prompt = "Review this student project code. Score it 0-100 and list concrete issues with line numbers, plus what's already good. Be specific — quote the line you're talking about.\n\nPROJECT:\n" + (opts.code || "") + ctxBlock;
+        break;
+      case "path":
+        prompt = "Build a custom learning path for this goal. Use ONLY the lesson IDs from the LESSONS list below, in a sensible learning order (basics before advanced). Pick 6-12 lessons, then name the closest existing project from the PROJECTS list, or 'none'.\n\nGOAL + LISTS:\n" + (opts.code || "") + ctxBlock;
+        break;
+      case "viva":
+        if (String(opts.stage || "") === "judge") {
+          prompt = "The student answered a viva question. Judge the answer: is it correct, partly right, or wrong? Reply with short feedback and name the exact lesson(s) to revisit if they got it wrong.\n\nQUESTION:\n" + (opts.code || "") + "\n\nSTUDENT ANSWER:\n" + (opts.error || "") + ctxBlock;
+        } else {
+          prompt = "Ask ONE viva question about this lesson. It should test understanding, not memorization — ask the student to explain WHY or predict what happens. One question only.\n\nLESSON:\n" + (opts.code || "") + "\n\nPREVIOUS QUESTIONS (don't repeat these):\n" + (opts.error || "");
+        }
+        break;
+      default:
+        prompt = "Explain this Python code for a beginner, using this structure:\n" +
+          "1. One line starting with '🎯 In short: ' stating what the program does.\n" +
+          "2. A '🔍 Walkthrough:' section explaining the important parts step by step (group repetitive lines; explain WHY each part exists, not just WHAT it says).\n" +
+          "3. A '💡 Key concepts:' section listing each Python idea used with one short line each.\n" +
+          "Keep the whole answer concise. Use short bullet points.\n\nCODE:\n" + (opts.code || "") + (opts.error ? "\n\nERROR:\n" + opts.error : "") + ctxBlock;
+        break;
+    }
     if (opts.json) {
       prompt += "\n\nReturn ONLY valid JSON, no markdown fences, no explanation.";
       var shapeKey = opts.mode === "viva" ? "viva-" + String(opts.stage || "") : opts.mode;

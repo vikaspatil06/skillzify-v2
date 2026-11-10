@@ -47,6 +47,18 @@
     checkAchievements();
   }
 
+  /* Feed-only log (P1-06): records the feed entry without touching
+     the streak counter or the day counts. Achievement unlocks are not
+     learning activity — a pending unlock discovered by a page-open
+     checkAchievements() must not credit that day or bridge a gap.
+     Also avoids the log() -> checkAchievements() recursion, since
+     unlock() is called from inside checkAchievements(). */
+  function logFeed(type, text) {
+    var feed = get(FEED_KEY, []);
+    feed.unshift({ t: Date.now(), type: type, text: text });
+    set(FEED_KEY, feed.slice(0, 60));
+  }
+
   function feed(limit) { return get(FEED_KEY, []).slice(0, limit || 20); }
   function dayCounts() { return get(DAYS_KEY, {}); }
   function runCount() { return get(RUN_COUNT_KEY, 0) || 0; }
@@ -152,7 +164,9 @@
     if (u[id]) return false;
     u[id] = Date.now(); set(ACH_KEY, u);
     var a = ACHIEVEMENTS.filter(function (x) { return x.id === id; })[0];
-    if (a) log("achievement", "Unlocked achievement: " + a.icon + " " + a.name);
+    // P1-06: feed-only — unlocking a badge is not activity, so it must
+    // not bump the streak (log() would) merely because a page was opened.
+    if (a) logFeed("achievement", "Unlocked achievement: " + a.icon + " " + a.name);
     return true;
   }
   /* Snapshot of everything achievements care about, read once so the

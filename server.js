@@ -71,6 +71,12 @@ if (!GEMINI_KEYS.length && GEMINI_API_KEY) GEMINI_KEYS.push(GEMINI_API_KEY);
 // overloaded model only burns the client's 60s.
 const ATTEMPT_TIMEOUT_MS = 12000;
 const FAILOVER_BUDGET_MS = 40000;
+// P1-23: the MAX_TOKENS retry gets its OWN deadline (started + 55 s) instead
+// of the 40 s failover budget — a slow first call (up to 4 x 12 s = 48 s)
+// must not make the retry fail instantly and discard a valid first reply.
+// The client aborts at 60 s, so 55 s leaves room to deliver the answer.
+// Overridable via env only for tests (MAX_TOKENS_DEADLINE_MS).
+const MAX_TOKENS_DEADLINE_MS = Number(process.env.MAX_TOKENS_DEADLINE_MS) || 55000;
 const DAILY_CAP_USER = 50;
 const DAILY_CAP_ANON = 10;
 
@@ -408,15 +414,18 @@ app.post("/api/explain", async (req, res) => {
   // (overloaded), 404 (model unavailable on this project), timeout /
   // network errors — move to the next combination. Fatal: 401/403 (the
   // key is bad for every model) and anything else — answer at once.
-  async function callGemini(promptText, maxTokens, onlyModel, timeoutMs) {
+  async function callGemini(promptText, maxTokens, onlyModel, timeoutMs, budgetMs) {
     var models = onlyModel ? [onlyModel] : MODELS;
     var attemptTimeout = timeoutMs || ATTEMPT_TIMEOUT_MS;
+    // P1-23: budgetMs overrides the failover budget for this call only
+    // (used by the MAX_TOKENS retry, which has its own 55 s deadline).
+    var budget = (typeof budgetMs === "number" && budgetMs > 0) ? budgetMs : FAILOVER_BUDGET_MS;
     var lastErr = { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
     var lastModel = models[0], lastKeyIdx = 0;
     for (var ki = 0; ki < GEMINI_KEYS.length; ki++) {
       for (var mi = 0; mi < models.length; mi++) {
         var model = models[mi];
-        if (Date.now() - started > FAILOVER_BUDGET_MS) {
+        if (Date.now() - started > budget) {
           console.log("[ai] failover budget spent — answering with last error " + lastErr.code);
           return { r: null, model: lastModel, keyIdx: lastKeyIdx, error: lastErr };
         }
@@ -475,22 +484,54 @@ app.post("/api/explain", async (req, res) => {
     let cand = data.candidates && data.candidates[0];
     let finishReason = cand && cand.finishReason;
     console.log("[explain] finishReason:", finishReason || "(none)");
-    // If the model stopped because it ran out of output budget, retry once
-    // with more room — same model (it just proved healthy), longer clock.
+    // P1-23: if the model stopped because it ran out of output budget,
+    // retry once with more room — same model (it just proved healthy),
+    // longer clock, under its OWN deadline (started + 55 s), exempt from
+    // the 40 s failover budget. The retry's per-attempt timeout is capped
+    // at the time left before that deadline, so the whole request stays
+    // inside the client's 60 s abort. If the retry fails (or there is no
+    // time left for it), return the truncated first reply instead of
+    // erroring and discarding a valid answer — but only for non-JSON
+    // modes: a truncated JSON blob cannot parse, so JSON modes still
+    // report the retry failure.
+    let firstText = (cand && cand.content && cand.content.parts)
+      ? cand.content.parts.map(function (p) { return p.text || ""; }).join("") : "";
     if (finishReason === "MAX_TOKENS") {
       console.log("[explain] hit token budget — retrying with a larger one");
-      got = await callGemini(prompt, 4000, usedModel, 25000);
-      if (!got.r || !got.r.ok) {
-        const g = got.error || { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
+      var retryRemaining = MAX_TOKENS_DEADLINE_MS - (Date.now() - started);
+      var retryFailed = false;
+      if (retryRemaining <= 0) {
+        console.log("[explain] no time left before the MAX_TOKENS deadline — keeping the truncated reply");
+        retryFailed = true;
+      } else {
+        got = await callGemini(prompt, 4000, usedModel, Math.min(25000, retryRemaining), MAX_TOKENS_DEADLINE_MS);
+        if (!got.r || !got.r.ok) {
+          const g = got.error || { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
+          console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "MAX_TOKENS retry fail", g.code, Date.now() - started + "ms");
+          retryFailed = true;
+        } else {
+          r = got.r;
+          usedModel = got.model;
+          data = await r.json();
+          cand = data.candidates && data.candidates[0];
+          finishReason = cand && cand.finishReason;
+          console.log("[explain] retry finishReason:", finishReason || "(none)");
+        }
+      }
+      if (retryFailed) {
+        // No usable retry: keep the truncated first reply (non-JSON
+        // modes) instead of answering 502 MODEL_ERROR for an answer we
+        // already have. JSON modes fall through to the normal error path
+        // below via `got` still holding the failed retry.
+        if (!spec.json && firstText.trim()) {
+          console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "ok-truncated", usedModel, Date.now() - started + "ms");
+          if (req.aborted !== true && !(req.socket && req.socket.destroyed)) await dailyCount(uid, req.ip);
+          return res.json({ explanation: firstText, model: usedModel, truncated: true });
+        }
+        const g = (got && got.error) || { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
         console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "fail", g.code, Date.now() - started + "ms");
         return res.status(g.status).json({ error: g.error, code: g.code });
       }
-      r = got.r;
-      usedModel = got.model;
-      data = await r.json();
-      cand = data.candidates && data.candidates[0];
-      finishReason = cand && cand.finishReason;
-      console.log("[explain] retry finishReason:", finishReason || "(none)");
     }
     const parts = cand && cand.content && cand.content.parts;
     const text = parts ? parts.map((p) => p.text || "").join("") : "";
@@ -512,7 +553,11 @@ app.post("/api/explain", async (req, res) => {
     // Success only — every error return above leaves the cap untouched.
     // A MAX_TOKENS retry is still one request, so it counts once here.
     // Awaited: the count must be durable (Firestore) before answering.
-    await dailyCount(uid, req.ip);
+    // P1-23: if the client already disconnected (aborted fetch), the
+    // answer is never delivered — do not burn a daily-cap answer for it,
+    // or the client's retry pays twice for one delivered answer.
+    if (req.aborted !== true && !(req.socket && req.socket.destroyed)) await dailyCount(uid, req.ip);
+    else console.log("[ai] client disconnected before delivery — daily cap not counted");
     res.json(out);
   } catch (e) {
     console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "fail", "TIMEOUT", Date.now() - started + "ms");

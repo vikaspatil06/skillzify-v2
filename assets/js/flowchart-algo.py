@@ -187,16 +187,29 @@ class AlgoBuilder:
                 i += 1
                 continue
             if u.startswith("ELSE"):
-                break
+                raise ValueError("ELSE without IF")
             if u.startswith("START") or u.startswith("BEGIN"):
                 i += 1
                 continue
-            if u.startswith("END FUNCTION") or u.startswith("END IF") or u.startswith("END WHILE") \
-                    or u.startswith("END FOR") or u.startswith("UNTIL"):
-                break
+            if (u.startswith("END FUNCTION") or u.startswith("ENDFUNCTION")
+                    or u.startswith("END IF") or u.startswith("ENDIF")
+                    or u.startswith("END WHILE") or u.startswith("ENDWHILE")
+                    or u.startswith("END FOR") or u.startswith("ENDFOR")
+                    or u.startswith("UNTIL")):
+                if u.startswith("END FUNCTION") or u.startswith("ENDFUNCTION"):
+                    raise ValueError("END FUNCTION without FUNCTION")
+                if u.startswith("END IF") or u.startswith("ENDIF"):
+                    raise ValueError("END IF without IF")
+                if u.startswith("END WHILE") or u.startswith("ENDWHILE"):
+                    raise ValueError("END WHILE without WHILE")
+                if u.startswith("END FOR") or u.startswith("ENDFOR"):
+                    raise ValueError("END FOR without FOR")
+                raise ValueError("UNTIL without REPEAT")
 
             # ---- IF ----
             m = re.match(r"IF\s+(.+?)\s+THEN\s*$", text, re.I)
+            if (u.startswith("IF ") or u.startswith("IF(") or u == "IF") and not m:
+                raise ValueError("IF needs THEN \u2014 write IF <condition> THEN")
             if m:
                 end_idx = self._find_end(lines, i, "IF")
                 if end_idx == -1:
@@ -237,6 +250,8 @@ class AlgoBuilder:
 
             # ---- WHILE ----
             m = re.match(r"WHILE\s+(.+?)(?:\s+DO)?\s*$", text, re.I)
+            if (u.startswith("WHILE ") or u == "WHILE") and not m:
+                raise ValueError("WHILE needs a condition \u2014 write WHILE <condition> [DO]")
             if m:
                 end_idx = self._find_end(lines, i, "WHILE")
                 if end_idx == -1:
@@ -261,6 +276,8 @@ class AlgoBuilder:
                 r"FOR\s+(\w+)\s+(?:FROM\s+(.+?)\s+TO\s+(.+?)(?:\s+STEP\s+(.+?))?"
                 r"|=\s*(.+?)\s+TO\s+(.+?)(?:\s+STEP\s+(.+?))?"
                 r"|IN\s+(.+?))\s*$", text, re.I)
+            if (u.startswith("FOR ") or u == "FOR") and not m:
+                raise ValueError("Invalid FOR header \u2014 write FOR i FROM a TO b, FOR i = a TO b, or FOR item IN items")
             if m:
                 end_idx = self._find_end(lines, i, "FOR")
                 if end_idx == -1:

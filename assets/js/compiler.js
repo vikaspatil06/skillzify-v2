@@ -423,6 +423,7 @@
   var stdinResolver = null;
   var runOut = [];        // batched stdout of the active run
   var killTimer = null;
+  var hadOutput = false;  // any stdout/stderr batch arrived during the active run (P1-31)
 
   function drainOut() {
     runOut.forEach(function (l) { printLine(l); });
@@ -491,6 +492,17 @@
     }
   }
 
+  /* P1-31: the watchdog measures silence, not wall-clock run time.
+     Every stdout/stderr batch re-arms it, so a program that keeps
+     printing is never killed for "no output". It only re-arms
+     while a run is actually being watched (killTimer armed): a
+     batch arriving after the run finished must not arm a stray
+     timer that could "kill" the next idle 15s. */
+  function noteOutput(s) {
+    runOut.push(s);
+    hadOutput = true;
+    if (killTimer) restartKillTimer();
+  }
   function restartKillTimer() {
     if (killTimer) clearTimeout(killTimer);
     var my = runToken;
@@ -499,7 +511,9 @@
       runToken++;
       cancelStdin();
       drainOut();
-      printLine("⏱ Stopped: ran over 15s with no output — likely an infinite loop.", "err");
+      printLine(hadOutput
+        ? "⏱ Stopped: no output for 15s — likely an infinite loop."
+        : "⏱ Stopped: ran over 15s with no output — likely an infinite loop.", "err");
       pushOutHist(false, 15000);
       recordRun(false, 15000);
       setRunUI(false);
@@ -599,8 +613,9 @@
     } catch (e) {}
 
     runOut = [];
-    pyodide.setStdout({ batched: function (s) { runOut.push(s); } });
-    pyodide.setStderr({ batched: function (s) { runOut.push(s); } });
+    hadOutput = false;
+    pyodide.setStdout({ batched: noteOutput });
+    pyodide.setStderr({ batched: noteOutput });
     // sys.stdin reads (not via input()) get immediate EOF; input() is interactive
     try { pyodide.setStdin({ stdin: function () { return null; } }); } catch (e) {}
 

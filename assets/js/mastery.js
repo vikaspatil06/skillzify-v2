@@ -51,6 +51,14 @@
     var p = storeGet(PROG_KEY, {});
     return (p && typeof p === "object" && !Array.isArray(p)) ? p : {};
   }
+  // Raw review map, unsanitised: entries that fail sanitizeEntry
+  // (e.g. a due date with no updatedAt) are still visible here. Only
+  // the P1-07 rust fallback reads it; everything else uses reviewMap().
+  function reviewRawMap() {
+    var raw = storeGet(REV_KEY, {});
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    return raw;
+  }
   // Review map, sanitised exactly like review.js sanitizeEntry().
   function reviewMap() {
     var raw = storeGet(REV_KEY, {});
@@ -90,12 +98,15 @@
   }
 
   /* ---------------- quality + bands (spec §4a) ---------------- */
-  // Per-exercise quality q. "First try" is derived: attempts === 1 at
-  // solve time (attempts increments once per try in practice.js).
-  // Spec refinement: a clean solve that took >1 attempt scores 0.7, the
-  // same as a hinted solve — it was not first-try, but no help was needed.
+  // Per-exercise quality q. Frozen at solve time (P1-04): practice.js
+  // snapshots the quality onto the attempt record as `solveQuality`
+  // the moment solved flips true, and quality() reads the snapshot —
+  // later re-solves and post-solve reveals must not degrade the score.
+  // Legacy records without a snapshot use the old live derivation:
+  // revealed 0.4; hinted or >1 attempt 0.7; clean first-try 1.0.
   function quality(att) {
     if (!att || !att.solved) return 0;
+    if (typeof att.solveQuality === "number" && isFinite(att.solveQuality)) return att.solveQuality;
     if (att.revealed) return 0.4;
     if (att.hintsUsed > 0 || num(att.attempts) > 1) return 0.7;
     return 1.0;
@@ -168,16 +179,23 @@
         score = Math.round(100 * (done / total) * retention);
       }
       // Section rust: last review activity on its done lessons.
-      var lastMs = 0;
+      // Fallback (P1-07): a done lesson whose review is overdue
+      // (due <= now) but which has no recorded review activity (no
+      // updatedAt — the sanitised entry is invisible to reviewEntry)
+      // is rusty; its due date is the only activity signal we have.
+      var lastMs = 0, overdue = false;
+      var rawRev = reviewRawMap();
       doneList.forEach(function (l) {
         var e = reviewEntry(l.id);
         if (e && num(e.updatedAt) > lastMs) lastMs = num(e.updatedAt);
+        var r = rawRev[l.id];
+        if (r && typeof r === "object" && num(r.due) > 0 && num(r.due) <= Date.now() && !num(r.updatedAt)) overdue = true;
       });
       return {
         section: s.id, name: s.name, icon: s.icon || "",
         score: score, band: band(score, done > 0),
         done: done, total: total, retention: retention,
-        rusty: isRusty(lastMs)
+        rusty: isRusty(lastMs) || overdue
       };
     });
   }
@@ -195,8 +213,19 @@
     var LC = learnCore();
     if (!LC || !Array.isArray(LC.SECTIONS)) return null;
     var prog = progress();
-    for (var i = 0; i < LC.SECTIONS.length; i++) {
-      var s = LC.SECTIONS[i];
+    var sections = LC.SECTIONS;
+    // Placement: scan the placed-or-later sections first — a placed
+    // learner's next lesson is at/after their placement, never Base Camp
+    // (P1-01). Earlier sections are the fallback once everything at/after
+    // the placement is done.
+    var placed = (typeof LC.placedSection === "function") ? LC.placedSection() : null;
+    if (placed) {
+      var ids = sections.map(function (x) { return x.id; });
+      var pi = ids.indexOf(placed);
+      if (pi > 0) sections = sections.slice(pi).concat(sections.slice(0, pi));
+    }
+    for (var i = 0; i < sections.length; i++) {
+      var s = sections[i];
       if (typeof LC.sectionUnlocked === "function" && !LC.sectionUnlocked(s.id)) continue;
       var lessons = (typeof LC.sectionLessons === "function") ? LC.sectionLessons(s.id) : [];
       for (var j = 0; j < lessons.length; j++) {

@@ -135,16 +135,40 @@
       var drills = getDrills();
       var dcur = drills[id] || drillDefaults();
       var wasSolved = dcur.solved;
-      Object.keys(patch).forEach(function (k) { dcur[k] = patch[k]; });
+      // P1-04: once solved, the record is frozen for quality purposes —
+      // re-solves must not raise attempts and a post-solve reveal must
+      // not set revealed (the solve-time quality snapshot below is what
+      // mastery scores). Other fields still apply.
+      var dp = patch;
+      if (wasSolved) {
+        dp = {};
+        Object.keys(patch).forEach(function (k) {
+          if (k === "attempts" || k === "revealed") return;
+          dp[k] = patch[k];
+        });
+      }
+      Object.keys(dp).forEach(function (k) { dcur[k] = dp[k]; });
       dcur.lastTry = Date.now();
-      if (patch.solved && !wasSolved) dcur.at = Date.now();
+      if (dp.solved && !wasSolved) { dcur.at = Date.now(); dcur.solveQuality = solveQualityFor(dcur); }
       drills[id] = dcur; saveDrills(drills);
       return dcur;
     }
     var all = getAttempts();
     var cur = all[id] || { attempts: 0, solved: false, hintsUsed: 0, revealed: false, bestMs: 0, lastTry: 0, xpEarned: 0 };
-    Object.keys(patch).forEach(function (k) { cur[k] = patch[k]; });
+    var wasSolvedEx = cur.solved;
+    // P1-04: same freeze as the drill branch above — a solved record
+    // never takes a higher attempts count or a post-solve revealed flag.
+    var ep = patch;
+    if (wasSolvedEx) {
+      ep = {};
+      Object.keys(patch).forEach(function (k) {
+        if (k === "attempts" || k === "revealed") return;
+        ep[k] = patch[k];
+      });
+    }
+    Object.keys(ep).forEach(function (k) { cur[k] = ep[k]; });
     cur.lastTry = Date.now();
+    if (ep.solved && !wasSolvedEx) cur.solveQuality = solveQualityFor(cur);
     all[id] = cur; saveAttempts(all);
     if (window.SkillzifySync) window.SkillzifySync.markDirty();
     return cur;
@@ -161,6 +185,15 @@
     try { var d = getDrafts(); delete d[id]; localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch (e) {}
   }
 
+  /* P1-04: quality frozen at solve time. Snapshot from the merged
+     record the moment solved flips false -> true: revealed 0.4,
+     hinted or >1 attempt 0.7, clean first-try 1.0. mastery.js reads
+     `solveQuality` and ignores later mutations of the record. */
+  function solveQualityFor(a) {
+    if (a.revealed) return 0.4;
+    if ((a.hintsUsed || 0) > 0 || (a.attempts || 0) > 1) return 0.7;
+    return 1.0;
+  }
   /* XP award: no-hint bonus (1.25x), revealed solution halves it */
   function xpForSolve(ex, a) {
     var gain = ex.xp;
@@ -192,7 +225,9 @@
   /* ---------------- Test runner ---------------- */
   function runCodeTests(ex, code, done) {
     ensurePyodide(function (ok) {
-      if (!ok) { done({ error: "Python runtime failed to load. Check your connection and try again." }); return; }
+      // P1-08: flag a runtime-load failure so submitCode can tell it
+      // apart from a real failed attempt — it must not count.
+      if (!ok) { done({ error: "Python runtime failed to load. Check your connection and try again.", runtime: true }); return; }
       var results = [];
       try {
         for (var i = 0; i < ex.tests.length; i++) {
@@ -712,8 +747,15 @@
     Object.keys(drills).forEach(function (id) {
       if (drills[id] && drills[id].solved) {
         drillSolved++;
-        var def = defs[id];
-        if (def && typeof def === "object" && typeof def.xp === "number") drillXP += def.xp;
+        // P1-09: report the XP actually awarded (quality-adjusted,
+        // stored as xpEarned on the drill record) — def.xp is only the
+        // fallback for legacy records that predate xpEarned.
+        var earned = drills[id] && drills[id].xpEarned;
+        if (typeof earned === "number") drillXP += earned;
+        else {
+          var def = defs[id];
+          if (def && typeof def === "object" && typeof def.xp === "number") drillXP += def.xp;
+        }
       }
     });
     host.innerHTML =
@@ -996,7 +1038,10 @@
       if (out.error) {
         lastFailInfo = out.error;
         resBox.innerHTML = '<p class="fail">⚠️ ' + esc(out.error) + '</p>';
-        setAtt(ex.id, { attempts: attFor(ex.id).attempts + 1 });
+        // P1-08: a runtime-load failure is not an attempt — don't
+        // increment attempts and don't touch lastTry. Only count an
+        // attempt once the tests actually ran.
+        if (!out.runtime) setAtt(ex.id, { attempts: attFor(ex.id).attempts + 1 });
         return;
       }
       var passed = out.results.filter(function (r) { return r.pass; }).length;
@@ -1025,7 +1070,9 @@
           S.toast("+" + gain + " XP! 🎉" + (a.hintsUsed === 0 && !a.revealed ? " (no-hint bonus)" : ""), "success");
           if (A && A.log) A.log("practice", "Solved exercise: " + ex.title);
         } else {
-          setAtt(ex.id, { attempts: a.attempts + 1 });
+          // P1-04: re-solving a solved exercise must not raise attempts
+          // (the solve-time snapshot stands); only lastTry refreshes.
+          setAtt(ex.id, {});
         }
         showCompare();
         renderAll();
@@ -1045,7 +1092,9 @@
   function revealSolution(auto) {
     var ex = cur;
     var a = attFor(ex.id);
-    if (!a.revealed) setAtt(ex.id, { revealed: true });
+    // P1-04: revealing after solving must not taint the record — the
+    // solution still shows, but the solved quality snapshot stands.
+    if (!a.solved && !a.revealed) setAtt(ex.id, { revealed: true });
     $("solution-box").innerHTML =
       '<h4>👁 Model solution ' + (a.solved ? '' : '<span class="hint">(revealing halves the XP for this exercise)</span>') + '</h4>' +
       '<pre class="code">' + esc(ex.solution) + '</pre>' +

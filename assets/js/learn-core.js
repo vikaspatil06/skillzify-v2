@@ -838,22 +838,61 @@
       awardBonus(100, "🎓 " + sec.name + " section complete!");
     });
   }
+  // One enrolled path's steps, all done? Built-in steps are
+  // {t: "lesson"|"ex", id}; custom steps are {lessonId, why} (the
+  // {t, id} shape is accepted too). A step with no identifiable
+  // lesson/exercise id counts as not done — never pay on malformed data.
+  function pathStepsDone(steps, progress, atts) {
+    return steps.every(function (s) {
+      if (!s || typeof s !== "object") return false;
+      var lid = s.lessonId || (s.t === "lesson" && s.id) || null;
+      if (lid) return !!progress[lid];
+      if (s.t === "ex" && s.id) return !!(atts[s.id] && atts[s.id].solved);
+      return false;
+    });
+  }
+  // Enrolled path ids, from the enrollment map (object form
+  // {id: {enrolled}} or legacy array form). Mirrors paths-data.js.
+  function enrolledPathIds() {
+    var ids = {};
+    try {
+      var v = window.Skillzify.storeGet("skillzify_enrolled_paths", null);
+      if (Array.isArray(v)) v.forEach(function (id) { ids[id] = true; });
+      else if (v && typeof v === "object") Object.keys(v).forEach(function (k) {
+        if (v[k] && v[k].enrolled) ids[k] = true;
+      });
+    } catch (e) {}
+    return ids;
+  }
   function checkPathBonuses() {
     var paths = window.SkillzifyPaths || [];
-    if (!paths.length) return;
     var progress = getProgress();
     var atts = {};
     try { atts = window.Skillzify.storeGet("skillzify_exercise_attempts", {}) || {}; } catch (e) {}
     paths.forEach(function (p) {
       if (!p.steps || !p.steps.length) return;
-      var allDone = p.steps.every(function (s) {
-        return s.t === "lesson" ? !!progress[s.id] : !!(atts[s.id] && atts[s.id].solved);
-      });
-      if (!allDone) return;
+      if (!pathStepsDone(p.steps, progress, atts)) return;
       if (bonusAwarded(PATH_BONUS_KEY, p.id)) return;
       markBonusAwarded(PATH_BONUS_KEY, p.id);
       awardBonus(150, "🗺️ Path complete: " + p.title + "!");
     });
+    // P1-03: custom ("Build my path") paths earn the same +150 bonus.
+    // Definitions live in skillzify_custom_paths; only enrolled ones
+    // pay out, with the same per-id flag in skillzify_path_bonus
+    // (custom ids are `custom-<ts>-<rand>`, so they cannot collide
+    // with built-in path ids).
+    try {
+      var enrolled = enrolledPathIds();
+      var saved = window.Skillzify.storeGet("skillzify_custom_paths", []);
+      if (Array.isArray(saved)) saved.forEach(function (cp) {
+        if (!cp || typeof cp !== "object" || !cp.id || !Array.isArray(cp.steps) || !cp.steps.length) return;
+        if (!enrolled[cp.id]) return;
+        if (!pathStepsDone(cp.steps, progress, atts)) return;
+        if (bonusAwarded(PATH_BONUS_KEY, cp.id)) return;
+        markBonusAwarded(PATH_BONUS_KEY, cp.id);
+        awardBonus(150, "🗺️ Path complete: " + (cp.title || "Custom path") + "!");
+      });
+    } catch (e) {}
   }
 
   /* ============ Extended catalog (250 lessons) ============
@@ -1023,8 +1062,23 @@
     return ls.length ? Math.round(done / ls.length * 100) : 0;
   }
   function currentIdx() {
-    for (var i = 0; i < LESSONS.length; i++) {
-      if (isUnlocked(i) && !isDone(LESSONS[i].id)) return i;
+    // Placement: a placed learner resumes at/after their placement — the
+    // first undone, unlocked lesson in the placed-or-later sections. The
+    // old scan returned Base Camp lesson 1 for every placed learner
+    // (P1-01). When everything at/after the placement is done, fall
+    // through to the global scan (earlier sections still undone).
+    var placed = placedSection();
+    if (placed) {
+      var ids = SECTIONS.map(function (x) { return x.id; });
+      var pi = ids.indexOf(placed);
+      if (pi >= 0) {
+        for (var i = 0; i < LESSONS.length; i++) {
+          if (ids.indexOf(LESSONS[i].section) >= pi && isUnlocked(i) && !isDone(LESSONS[i].id)) return i;
+        }
+      }
+    }
+    for (var j = 0; j < LESSONS.length; j++) {
+      if (isUnlocked(j) && !isDone(LESSONS[j].id)) return j;
     }
     return -1;
   }

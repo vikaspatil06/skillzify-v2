@@ -49,7 +49,11 @@ service cloud.firestore {
         && request.resource.data.title.size() >= 5
         && request.resource.data.title.size() <= 140
         && request.resource.data.body is string && request.resource.data.body.size() <= 4000
-        && request.resource.data.code is string && request.resource.data.code.size() <= 20000;
+        && request.resource.data.code is string && request.resource.data.code.size() <= 20000
+        // P1-27: a question is born open, unanswered, with no answers.
+        && request.resource.data.status == "open"
+        && request.resource.data.bestAnswerId == null
+        && request.resource.data.answerCount == 0;
       allow update: if request.auth != null && (
         // the asker marks a best answer (status / bestAnswerId only)
         (resource.data.authorUid == request.auth.uid
@@ -88,17 +92,44 @@ service cloud.firestore {
         && request.resource.data.title.size() <= 100
         && request.resource.data.desc is string && request.resource.data.desc.size() <= 2000
         && request.resource.data.code is string
-        && request.resource.data.code.size() >= 1 && request.resource.data.code.size() <= 20000;
+        && request.resource.data.code.size() >= 1 && request.resource.data.code.size() <= 20000
+        // P1-27: a showcase post is born unstarred.
+        && request.resource.data.stars == {}
+        && request.resource.data.starCount == 0;
+      // P1-17: only the caller's own star may change. The diff of the
+      // stars map must touch no key but the caller's uid, and that entry
+      // may only be true (starring) or absent (unstarring) — so nobody
+      // can fabricate stars for other uids, including on their own post.
+      // starCount must still match the map size.
       allow update: if request.auth != null
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stars', 'starCount'])
-        && request.resource.data.starCount == request.resource.data.stars.size();
+        && request.resource.data.starCount == request.resource.data.stars.size()
+        && request.resource.data.stars.diff(resource.data.get('stars', {})).affectedKeys().hasOnly([request.auth.uid])
+        && (request.resource.data.stars.get(request.auth.uid, null) == true || !(request.auth.uid in request.resource.data.stars));
       allow delete: if request.auth != null && resource.data.authorUid == request.auth.uid;
     }
 
     // Public profiles: anyone can read; only the owner writes their own.
+    // P1-28: validate ranges/types at minimum. This does NOT prove the
+    // stats: the doc is still client-written and there is no server-side
+    // source in this stack (no Cloud Functions), so treat public stats
+    // as unverified until System 3 derives them server-side.
     match /publicProfiles/{uid} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 100
+        && request.resource.data.xp is int
+        && request.resource.data.xp >= 0 && request.resource.data.xp <= 100000
+        && request.resource.data.lessonsDone is int
+        && request.resource.data.lessonsDone >= 0
+        && request.resource.data.lessonsTotal is int
+        && request.resource.data.lessonsTotal >= 1 && request.resource.data.lessonsTotal <= 500
+        && request.resource.data.lessonsDone <= request.resource.data.lessonsTotal
+        && request.resource.data.streak is int
+        && request.resource.data.streak >= 0 && request.resource.data.streak <= 1095
+        && request.resource.data.achievements is list
+        && request.resource.data.achievements.size() <= 32;
     }
 
     // XP grants: one per (question, answer), created only by the asker and

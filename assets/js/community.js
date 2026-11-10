@@ -26,6 +26,16 @@
     } catch (e) {}
     return Date.now();
   }
+  // FieldValue.increment sentinel when the Firestore SDK is present;
+  // null when it is not (e.g. the audit harness stub), so callers can
+  // fall back to a plain numeric update.
+  function incrementValue(n) {
+    try {
+      var FV = window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue;
+      if (FV && typeof FV.increment === "function") return FV.increment(n);
+    } catch (e) {}
+    return null;
+  }
   function currentUser() {
     try { return window.SkillzifyAuth ? window.SkillzifyAuth.currentUser() : null; } catch (e) { return null; }
   }
@@ -150,7 +160,15 @@
          shape (the harness asserts qs.length / qs[0].id). */
       out._cursor = cursor;
       out._hasMore = hasMore;
-      return out;
+      /* P1-14: the stored answerCount is client-writable (the rules can
+         only check +1 per write), so the displayed count is recomputed
+         from the answers query instead of trusting the stored value.
+         The stored counter is still bumped on post (P1-15) for compat;
+         if a count query fails, that question keeps its stored value. */
+      var counts = out.map(function (q) {
+        return countAnswers(q.id).then(function (n) { q.answerCount = n; }, function () {});
+      });
+      return Promise.all(counts).then(function () { return out; });
     });
   }
   function getQuestion(id) {
@@ -170,6 +188,16 @@
       return out;
     });
   }
+  /* P1-14: the true answer count, counted from the answers query. */
+  function countAnswers(questionId) {
+    var d = db();
+    if (!d) return Promise.reject(new Error("Community is unavailable right now."));
+    return d.collection("answers").where("questionId", "==", questionId).limit(100).get().then(function (snap) {
+      var n = 0;
+      snap.forEach(function () { n++; });
+      return n;
+    });
+  }
   function postAnswer(questionId, input) {
     input = input || {};
     if (!String(input.body || "").trim()) return Promise.reject(new Error("Write an answer first."));
@@ -185,7 +213,21 @@
       body: String(input.body), code: String(input.code || ""),
       createdAt: now, isBest: false
     }).then(function (ref) {
-      // best-effort answer count (the rules allow the counter fields only)
+      // P1-15: bump the stored counter atomically with
+      // FieldValue.increment(1). The old read-then-write (+1) raced:
+      // two answers landing at once both read N, both tried to write
+      // N+1, and the second write was denied by the rules, so the
+      // question permanently undercounted by one. The displayed count
+      // comes from the answers query (P1-14), so this counter is
+      // compat-only; a failed bump must never fail the post itself.
+      var inc = incrementValue(1);
+      if (inc !== null) {
+        return d.collection("questions").doc(questionId).update({
+          answerCount: inc, updatedAt: now
+        }).then(function () { return ref.id; }, function () { return ref.id; });
+      }
+      // No FieldValue available (e.g. the audit harness stub): fall back
+      // to the old read-then-write bump.
       return d.collection("questions").doc(questionId).get().then(function (doc) {
         if (!doc.exists) return ref.id;
         var q = doc.data() || {};
@@ -211,14 +253,37 @@
         if (a.questionId !== questionId) throw new Error("That answer belongs to a different question.");
         var wasBest = !!a.isBest; // capture before the updates below (doc.data() may alias the stored object)
         var now = ts();
-        var jobs = [d.collection("answers").doc(answerId).update({ isBest: true })];
-        if (q.bestAnswerId && q.bestAnswerId !== answerId) {
-          jobs.push(d.collection("answers").doc(q.bestAnswerId).update({ isBest: false }).catch(function () {}));
+        // P1-11: the three updates land or fail together in one batched
+        // write. The old Promise.all could leave bestAnswerId pointing
+        // at an answer whose isBest was false, and the old-best unmark
+        // failure was swallowed, leaving two "Best answer" badges. A
+        // failed batch now rejects, so the caller sees the failure
+        // instead of a silently corrupt best-answer state.
+        var batch = (typeof d.batch === "function") ? d.batch() : null;
+        var markDone;
+        if (batch) {
+          batch.update(d.collection("answers").doc(answerId), { isBest: true });
+          if (q.bestAnswerId && q.bestAnswerId !== answerId) {
+            batch.update(d.collection("answers").doc(q.bestAnswerId), { isBest: false });
+          }
+          batch.update(d.collection("questions").doc(questionId), {
+            status: "answered", bestAnswerId: answerId, updatedAt: now
+          });
+          markDone = batch.commit();
+        } else {
+          // No batch API (e.g. the audit harness stub): the same three
+          // updates, but a failure in any of them now rejects.
+          markDone = Promise.all([
+            d.collection("answers").doc(answerId).update({ isBest: true }),
+            (q.bestAnswerId && q.bestAnswerId !== answerId)
+              ? d.collection("answers").doc(q.bestAnswerId).update({ isBest: false })
+              : Promise.resolve(),
+            d.collection("questions").doc(questionId).update({
+              status: "answered", bestAnswerId: answerId, updatedAt: now
+            })
+          ]);
         }
-        jobs.push(d.collection("questions").doc(questionId).update({
-          status: "answered", bestAnswerId: answerId, updatedAt: now
-        }));
-        return Promise.all(jobs).then(function () {
+        return markDone.then(function () {
           // +10 XP for the answer author, via a grant they claim on their next visit
           // (a client can only write its own XP — see claimXpGrants).
           if (!wasBest && a.authorUid && a.authorUid !== u.uid) {
@@ -238,8 +303,12 @@
     });
   }
 
-  // Deleting a question leaves its answers orphaned (answers are only ever
-  // listed through their question, so they become unreachable, not visible).
+  // P1-16: deleting a question must delete its answers too. The old
+  // comment claimed orphaned answers were unreachable, but answers are
+  // publicly readable (allow read: if true) and listAnswers() queries by
+  // questionId, so anyone could still read every answer of a deleted
+  // question. Answers are deleted in the same batched write as the
+  // question (in 100-answer chunks when there are more than 100).
   function deleteQuestion(id) {
     var u = currentUser();
     if (!u) return Promise.reject(new Error("Sign in to delete."));
@@ -248,7 +317,28 @@
     return d.collection("questions").doc(id).get().then(function (doc) {
       if (!doc.exists) throw new Error("Question not found.");
       if ((doc.data() || {}).authorUid !== u.uid) throw new Error("Only the person who posted it can delete it.");
-      return d.collection("questions").doc(id).delete();
+      var qRef = d.collection("questions").doc(id);
+      function deleteChunk() {
+        return d.collection("answers").where("questionId", "==", id).limit(100).get().then(function (snap) {
+          var answerIds = [];
+          snap.forEach(function (a) { answerIds.push(a.id); });
+          var batch = (typeof d.batch === "function") ? d.batch() : null;
+          var done;
+          if (batch) {
+            answerIds.forEach(function (aid) { batch.delete(d.collection("answers").doc(aid)); });
+            if (answerIds.length < 100) batch.delete(qRef);
+            done = batch.commit();
+          } else {
+            var jobs = answerIds.map(function (aid) { return d.collection("answers").doc(aid).delete(); });
+            if (answerIds.length < 100) jobs.push(qRef.delete());
+            done = Promise.all(jobs);
+          }
+          // A full 100-answer chunk may mean more answers remain.
+          if (answerIds.length === 100) return done.then(deleteChunk);
+          return done;
+        });
+      }
+      return deleteChunk();
     });
   }
 
@@ -337,9 +427,17 @@
       var un = window.SkillzifyActivity ? window.SkillzifyActivity.unlocked() : null;
       achievements = un ? Object.keys(un) : [];
     } catch (e) {}
+    // P1-28: clamp to sane values before writing — the rules also reject
+    // out-of-range stats, but the doc is still client-written, so public
+    // stats stay unverified until a server-side source exists.
+    var total = Object.keys(LESSON_TITLES).length;
+    xp = Math.max(0, xp);
+    lessonsDone = Math.max(0, Math.min(lessonsDone, total));
+    streak = Math.max(0, streak);
+    achievements = (achievements || []).slice(0, 32);
     return d.collection("publicProfiles").doc(u.uid).set({
       displayName: u.name, xp: xp, lessonsDone: lessonsDone,
-      lessonsTotal: Object.keys(LESSON_TITLES).length,
+      lessonsTotal: total,
       streak: streak, achievements: achievements, updatedAt: ts()
     }, { merge: true }).catch(function () {});
   }
@@ -359,47 +457,76 @@
     if (!u) return Promise.resolve(0);
     var d = db();
     if (!d) return Promise.resolve(0);
-    return d.collection("xpGrants").where("toUid", "==", u.uid).where("claimed", "==", false).limit(20).get().then(function (snap) {
+    var query = d.collection("xpGrants").where("toUid", "==", u.uid).where("claimed", "==", false).limit(20);
+    function credit(result) {
+      var total = result && result.total ? result.total : 0;
+      var count = result && result.count ? result.count : 0;
+      if (!total) return 0;
+      try {
+        if (window.SkillzifyLearnCore && window.SkillzifyLearnCore.addXP) window.SkillzifyLearnCore.addXP(total);
+        else {
+          var xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0;
+          localStorage.setItem("skillzify_xp", String(xp + total));
+        }
+      } catch (e) {}
+      // Best-answer counter (feeds the Best Answer badge). Every grant
+      // here is a best-answer grant, so one count per grant claimed.
+      try {
+        var prev = parseInt(localStorage.getItem("skillzify_best_answers") || "0", 10) || 0;
+        localStorage.setItem("skillzify_best_answers", String(prev + count));
+        if (window.SkillzifyActivity && typeof window.SkillzifyActivity.checkAchievements === "function") window.SkillzifyActivity.checkAchievements();
+      } catch (e2) {}
+      return total;
+    }
+    // P1-10: claim inside one transaction (read unclaimed -> mark
+    // claimed -> return total). Two tabs/devices claiming at once can no
+    // longer double-credit the same grant, and a failed mark can no
+    // longer strand XP: if the transaction fails nothing is credited
+    // and the grants stay pending for a later retry.
+    if (typeof d.runTransaction === "function") {
+      return d.runTransaction(function (tx) {
+        return tx.get(query).then(function (snap) {
+          var pending = [];
+          snap.forEach(function (doc) {
+            var g = doc.data() || {};
+            if (g.amount > 0) pending.push({ id: doc.id, amount: g.amount });
+          });
+          if (!pending.length) return { total: 0, count: 0 };
+          var total = 0;
+          pending.forEach(function (g) {
+            total += g.amount;
+            tx.update(d.collection("xpGrants").doc(g.id), { claimed: true });
+          });
+          return { total: total, count: pending.length };
+        });
+      }).then(credit).catch(function () { return 0; });
+    }
+    // No transaction API: claim one grant at a time and credit each
+    // immediately after its own mark succeeds, so a failure can never
+    // lose already-marked XP (the old Promise.all batch did).
+    return query.get().then(function (snap) {
       var pending = [];
       snap.forEach(function (doc) {
         var g = doc.data() || {};
         if (g.amount > 0) pending.push({ id: doc.id, amount: g.amount });
       });
-      if (!pending.length) return 0;
-      var total = 0;
-      pending.forEach(function (g) { total += g.amount; });
-      /* Mark claimed FIRST, then credit XP only once the write lands.
-         The old order credited first and swallowed mark failures, so a
-         failed write re-paid the same grant on the next visit (P2-23).
-         If the mark fails, nothing is credited and the grant stays
-         pending for a later retry. */
-      var jobs = pending.map(function (g) {
-        return d.collection("xpGrants").doc(g.id).update({ claimed: true });
-      });
-      return Promise.all(jobs).then(function () {
-        try {
-          if (window.SkillzifyLearnCore && window.SkillzifyLearnCore.addXP) window.SkillzifyLearnCore.addXP(total);
-          else {
-            var xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0;
-            localStorage.setItem("skillzify_xp", String(xp + total));
-          }
-        } catch (e) {}
-        // Best-answer counter (feeds the Best Answer badge). Every grant
-        // here is a best-answer grant, so one count per grant claimed.
-        try {
-          var prev = parseInt(localStorage.getItem("skillzify_best_answers") || "0", 10) || 0;
-          localStorage.setItem("skillzify_best_answers", String(prev + pending.length));
-          if (window.SkillzifyActivity && typeof window.SkillzifyActivity.checkAchievements === "function") window.SkillzifyActivity.checkAchievements();
-        } catch (e2) {}
-        return total;
-      });
+      var total = 0, count = 0;
+      function next(i) {
+        if (i >= pending.length) return Promise.resolve({ total: total, count: count });
+        var g = pending[i];
+        return d.collection("xpGrants").doc(g.id).update({ claimed: true }).then(function () {
+          total += g.amount; count++;
+          return next(i + 1);
+        }, function () { return next(i + 1); });
+      }
+      return next(0).then(credit);
     }).catch(function () { return 0; });
   }
 
   window.SkillzifyCommunity = {
     currentUser: currentUser,
     askQuestion: askQuestion, listQuestions: listQuestions, getQuestion: getQuestion,
-    listAnswers: listAnswers, postAnswer: postAnswer, markBest: markBest,
+    listAnswers: listAnswers, countAnswers: countAnswers, postAnswer: postAnswer, markBest: markBest,
     deleteQuestion: deleteQuestion,
     listShowcase: listShowcase, postShowcase: postShowcase, toggleStar: toggleStar,
     deleteShowcase: deleteShowcase,

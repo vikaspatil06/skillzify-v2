@@ -451,7 +451,39 @@
     // Placement test result (placement.js / learn-core.js) — per-user,
     // local-only, wiped on logout so the next user doesn't inherit it.
     PLACEMENT: "skillzify_placement",
-    STREAK_BONUS: "skillzify_streak_bonus" // claimed 7/30-day bonus flags (activity.js)
+    STREAK_BONUS: "skillzify_streak_bonus", // claimed 7/30-day bonus flags (activity.js)
+    // P1-26: every other per-user key, so logout leaves a clean slate on
+    // a shared device. Device-level keys are deliberately NOT here:
+    // skillzify_theme, skillzify_accent, skillzify_coll_*, skillzify_cm_theme,
+    // skillzify_cm_font stay put (they describe the device, not the user).
+    // skillzify_ai_key IS wiped: it is the previous user's PERSONAL Gemini
+    // key — keeping it would hand the next signed-in user free AI on
+    // someone else's key and expose the key itself in Settings. A user who
+    // wants the key on a shared device re-enters it after signing in.
+    REVIEWS_DONE: "skillzify_reviews_done",
+    PLANS_DONE: "skillzify_plans_done",
+    BEST_ANSWERS: "skillzify_best_answers",
+    SHOWCASE_STARRED: "skillzify_showcase_starred",
+    FLOWCHARTS_DONE: "skillzify_flowcharts_done",
+    SECTION_BONUS: "skillzify_section_bonus",
+    PATH_BONUS: "skillzify_path_bonus",
+    DAILY_PLAN: "skillzify_daily_plan",
+    DAILY_CHALLENGE: "skillzify_daily_challenge",
+    DAILY_CHALLENGE_FAILED: "skillzify_daily_challenge_failed",
+    DRILLS: "skillzify_drills",
+    DRILL_DEFS: "skillzify_drill_defs",
+    VIVA_SESSION: "skillzify_viva_session",
+    VIVA_LAST: "skillzify_viva_last",
+    EXERCISE_DRAFTS: "skillzify_exercise_drafts",
+    PROJECTS_DONE: "skillzify_projects_done",
+    LESSON_STATE: "skillzify_lesson_state",
+    RUNS: "skillzify_runs",
+    WS_BACKUP: "skillzify_ws_backup",
+    WS_BACKUP_AT: "skillzify_ws_backup_at",
+    COMPILER_CODE: "skillzify_compiler_code",
+    CODE_HISTORY: "skillzify_code_history",
+    COMMUNITY_DRAFT: "skillzify_community_draft",
+    AI_KEY: "skillzify_ai_key"
   };
 
   function lsGet(key) {
@@ -644,105 +676,159 @@
   }
 
   /* ---------- core: pull -> merge -> push ---------- */
-  function syncCycle() {
-    var d, u, wsSkipped = false;
-    try { d = db(); u = uid(); } catch (e) { d = null; u = null; }
+  // buildMerged(data): merge one cloud snapshot against local state and
+  // build the push payload. Pure except for the stamp-if-changed lsSet
+  // calls (idempotent, so a retried transaction re-running it is safe).
+  // It never writes merged state locally — the caller does that only
+  // AFTER the cloud write commits, so a failed/aborted transaction
+  // leaves local state untouched.
+  function buildMerged(data) {
+    data = data || {};
+    var cloud = [data.profile || null, data.progress || null, data.exercises || null, data.paths || null, data.customPaths || null, data.workspace || null, data.reviews || null];
+    var mergedProfile = mergeProfile(readLocalProfile(), cloud[0]);
+    var mergedProgress = mergeProgress(readLocalProgress(), cloud[1]);
+    var mergedExercises = mergeExercises(readLocalExercises(), cloud[2]);
+    var mergedPaths = mergePaths(readLocalPaths(), cloud[3]);
+    var mergedCustomPaths = mergeCustomPaths(readLocalCustomPaths(), cloud[4]);
+    var mergedWorkspace = mergeWorkspace(readLocalWorkspace(), cloud[5]);
+    var mergedReviews = mergeReviews(readLocalReviews(), cloud[6]);
+    // Profile and customPaths are whole-document last-write-wins by
+    // updatedAt, so ONLY stamp them when this device actually contributed
+    // a change — re-stamping an unchanged doc let an idle device's old
+    // content win over a genuinely newer edit from another device.
+    // progress/exercises/paths merge per-item, so their timestamps can't
+    // clobber anything.
+    var now = Date.now();
+    if (contentChanged(mergedProfile, cloud[0])) {
+      mergedProfile.updatedAt = now;
+      lsSet(LS.PROFILE_TS, String(now));
+    } else {
+      mergedProfile.updatedAt = (cloud[0] && cloud[0].updatedAt) || mergedProfile.updatedAt || 0;
+    }
+    if (contentChanged(mergedCustomPaths, cloud[4])) {
+      mergedCustomPaths.updatedAt = now;
+      lsSet(LS.CUSTOM_PATHS_TS, String(now));
+    } else {
+      mergedCustomPaths.updatedAt = (cloud[4] && cloud[4].updatedAt) || mergedCustomPaths.updatedAt || 0;
+    }
+    // Workspace: same stamp-if-changed rule — but an empty merge
+    // (neither side has files NOR tombstones) must never be stamped
+    // or pushed, or a fresh device would poison the cloud with an
+    // empty workspace carrying a fresh timestamp. A delete-all
+    // (no files, but tombstones) DOES count as information.
+    var wsHasFiles = Object.keys(mergedWorkspace.files || {}).length > 0 ||
+                     Object.keys(mergedWorkspace.deleted || {}).length > 0;
+    if (wsHasFiles && contentChanged(mergedWorkspace, cloud[5])) {
+      mergedWorkspace.updatedAt = now;
+      lsSet(LS.WORKSPACE_TS, String(now));
+    } else {
+      mergedWorkspace.updatedAt = (cloud[5] && cloud[5].updatedAt) || mergedWorkspace.updatedAt || 0;
+    }
+    // Reviews: same stamp-if-changed rule as the workspace — an
+    // empty merge (no scheduled reviews anywhere) must never be
+    // stamped or pushed, or a fresh device would poison the cloud
+    // with an empty reviews map carrying a fresh timestamp.
+    var rvHasItems = Object.keys(mergedReviews.items || {}).length > 0;
+    if (rvHasItems && contentChanged(mergedReviews, cloud[6])) {
+      mergedReviews.updatedAt = now;
+      lsSet(LS.REVIEWS_TS, String(now));
+    } else {
+      mergedReviews.updatedAt = (cloud[6] && cloud[6].updatedAt) || mergedReviews.updatedAt || 0;
+    }
+    mergedProgress.updatedAt = now;
+    mergedExercises.updatedAt = now;
+    mergedPaths.updatedAt = now;
+    // NOTE: `paths` is pushed FLAT ({ <pathId>: {enrolled, at}, updatedAt })
+    // to match the Android app — the old nested { paths: {...} } shape is
+    // what broke cross-device enrollment sync (each side read the shape
+    // the other never wrote). mergePaths still reads both shapes.
+    var flatPaths = Object.assign({}, mergedPaths.paths, { updatedAt: now });
+    var payload = { profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises, paths: flatPaths, customPaths: mergedCustomPaths };
+    var wsSkipped = false;
+    if (wsHasFiles && !workspaceTooBig(mergedWorkspace)) {
+      payload.workspace = mergedWorkspace;
+    } else if (wsHasFiles) {
+      wsSkipped = true; // too large for the 1 MiB doc limit: keep cloud's copy
+    }
+    if (rvHasItems && !reviewsTooBig(mergedReviews)) payload.reviews = mergedReviews;
+    return {
+      profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises,
+      paths: mergedPaths, customPaths: mergedCustomPaths, workspace: mergedWorkspace,
+      reviews: mergedReviews, payload: payload, wsSkipped: wsSkipped
+    };
+  }
+  // Write a merged result locally + report success. Runs only after the
+  // cloud write has committed.
+  function applyMerged(m) {
+    writeLocalProfile(m.profile);
+    writeLocalProgress(m.progress);
+    writeLocalExercises(m.exercises);
+    writeLocalPaths(m.paths);
+    writeLocalCustomPaths(m.customPaths);
+    writeLocalWorkspace(m.workspace);
+    writeLocalReviews(m.reviews);
+    if (m.wsSkipped) setStatus("Workspace too large to sync (700 KB limit)");
+    else setStatus("Synced \u2713 " + fmtTime(Date.now()));
+    try {
+      if (typeof CustomEvent === "function")
+        window.dispatchEvent(new CustomEvent("skillzify-sync", { detail: { at: Date.now() } }));
+    } catch (e) {}
+    return true;
+  }
+  // P1-29: syncCycle runs the read-merge-write inside ONE Firestore
+  // transaction (same precedent as community.js toggleStar) whenever the
+  // SDK offers runTransaction, so a concurrent write from another device
+  // cannot be silently dropped by a stale read-then-write. The
+  // transaction re-runs its function on contention, re-reading and
+  // re-merging against the newest cloud doc each time; local state is
+  // written only after the transaction commits.
+  // P1-25: the resolved value REPORTS the push — true only when the cloud
+  // write committed, false on any failure (previously the set() error was
+  // swallowed with .catch(function () {}) and syncCycle resolved true
+  // regardless, so handleLogout wiped unsynced progress on offline logout).
+  function syncCycleWith(d, u) {
     if (!d || !u) { setStatus("Sync offline"); return Promise.resolve(false); }
-    setStatus("Syncing…");
+    setStatus("Syncing\u2026");
     var ref;
     try { ref = userDoc(d, u); } catch (e) { setStatus("Sync offline"); return Promise.resolve(false); }
+    if (d.runTransaction && typeof d.runTransaction === "function") {
+      return d.runTransaction(function (tx) {
+        return tx.get(ref).then(function (snap) {
+          var data = (snap && snap.exists) ? snap.data() : {};
+          var m = buildMerged(data);
+          tx.set(ref, m.payload, { merge: true });
+          return m;
+        });
+      }).then(function (m) {
+        return applyMerged(m);
+      }).catch(function () {
+        setStatus("Sync offline");
+        return false;
+      });
+    }
+    // Fallback when the SDK has no runTransaction: re-read before writing
+    // and re-merge if the doc changed between the first read and the
+    // write, so a concurrent edit is merged in instead of overwritten.
     return ref.get()
       .then(function (snap) {
         var data = (snap && snap.exists) ? snap.data() : {};
-        var cloud = [data.profile || null, data.progress || null, data.exercises || null, data.paths || null, data.customPaths || null, data.workspace || null, data.reviews || null];
-        var mergedProfile = mergeProfile(readLocalProfile(), cloud[0]);
-        var mergedProgress = mergeProgress(readLocalProgress(), cloud[1]);
-        var mergedExercises = mergeExercises(readLocalExercises(), cloud[2]);
-        var mergedPaths = mergePaths(readLocalPaths(), cloud[3]);
-        var mergedCustomPaths = mergeCustomPaths(readLocalCustomPaths(), cloud[4]);
-        var mergedWorkspace = mergeWorkspace(readLocalWorkspace(), cloud[5]);
-        var mergedReviews = mergeReviews(readLocalReviews(), cloud[6]);
-        // write merged state locally…
-        writeLocalProfile(mergedProfile);
-        writeLocalProgress(mergedProgress);
-        writeLocalExercises(mergedExercises);
-        writeLocalPaths(mergedPaths);
-        writeLocalCustomPaths(mergedCustomPaths);
-        writeLocalWorkspace(mergedWorkspace);
-        writeLocalReviews(mergedReviews);
-        // …and push the merged doc to the cloud. Profile and customPaths
-        // are whole-document last-write-wins by updatedAt, so ONLY stamp
-        // them when this device actually contributed a change — re-stamping
-        // an unchanged doc let an idle device's old content win over a
-        // genuinely newer edit from another device. progress/exercises/
-        // paths merge per-item, so their timestamps can't clobber anything.
-        var now = Date.now();
-        if (contentChanged(mergedProfile, cloud[0])) {
-          mergedProfile.updatedAt = now;
-          lsSet(LS.PROFILE_TS, String(now));
-        } else {
-          mergedProfile.updatedAt = (cloud[0] && cloud[0].updatedAt) || mergedProfile.updatedAt || 0;
-        }
-        if (contentChanged(mergedCustomPaths, cloud[4])) {
-          mergedCustomPaths.updatedAt = now;
-          lsSet(LS.CUSTOM_PATHS_TS, String(now));
-        } else {
-          mergedCustomPaths.updatedAt = (cloud[4] && cloud[4].updatedAt) || mergedCustomPaths.updatedAt || 0;
-        }
-        // Workspace: same stamp-if-changed rule — but an empty merge
-        // (neither side has files NOR tombstones) must never be stamped
-        // or pushed, or a fresh device would poison the cloud with an
-        // empty workspace carrying a fresh timestamp. A delete-all
-        // (no files, but tombstones) DOES count as information.
-        var wsHasFiles = Object.keys(mergedWorkspace.files || {}).length > 0 ||
-                         Object.keys(mergedWorkspace.deleted || {}).length > 0;
-        if (wsHasFiles && contentChanged(mergedWorkspace, cloud[5])) {
-          mergedWorkspace.updatedAt = now;
-          lsSet(LS.WORKSPACE_TS, String(now));
-        } else {
-          mergedWorkspace.updatedAt = (cloud[5] && cloud[5].updatedAt) || mergedWorkspace.updatedAt || 0;
-        }
-        // Reviews: same stamp-if-changed rule as the workspace — an
-        // empty merge (no scheduled reviews anywhere) must never be
-        // stamped or pushed, or a fresh device would poison the cloud
-        // with an empty reviews map carrying a fresh timestamp.
-        var rvHasItems = Object.keys(mergedReviews.items || {}).length > 0;
-        if (rvHasItems && contentChanged(mergedReviews, cloud[6])) {
-          mergedReviews.updatedAt = now;
-          lsSet(LS.REVIEWS_TS, String(now));
-        } else {
-          mergedReviews.updatedAt = (cloud[6] && cloud[6].updatedAt) || mergedReviews.updatedAt || 0;
-        }
-        mergedProgress.updatedAt = now;
-        mergedExercises.updatedAt = now;
-        mergedPaths.updatedAt = now;
-        // NOTE: `paths` is pushed FLAT ({ <pathId>: {enrolled, at}, updatedAt })
-        // to match the Android app — the old nested { paths: {...} } shape is
-        // what broke cross-device enrollment sync (each side read the shape
-        // the other never wrote). mergePaths still reads both shapes.
-        var flatPaths = Object.assign({}, mergedPaths.paths, { updatedAt: now });
-        var payload = { profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises, paths: flatPaths, customPaths: mergedCustomPaths };
-        if (wsHasFiles && !workspaceTooBig(mergedWorkspace)) {
-          payload.workspace = mergedWorkspace;
-        } else if (wsHasFiles) {
-          wsSkipped = true; // too large for the 1 MiB doc limit: keep cloud's copy
-        }
-        if (rvHasItems && !reviewsTooBig(mergedReviews)) payload.reviews = mergedReviews;
-        return ref.set(payload, { merge: true }).catch(function () {});
+        var m = buildMerged(data);
+        return ref.get().then(function (snap2) {
+          var data2 = (snap2 && snap2.exists) ? snap2.data() : {};
+          if (!deepEq(data, data2)) m = buildMerged(data2);
+          return ref.set(m.payload, { merge: true }).then(function () { return m; });
+        });
       })
-      .then(function () {
-        if (wsSkipped) setStatus("Workspace too large to sync (700 KB limit)");
-        else setStatus("Synced ✓ " + fmtTime(Date.now()));
-        try {
-          if (typeof CustomEvent === "function")
-            window.dispatchEvent(new CustomEvent("skillzify-sync", { detail: { at: Date.now() } }));
-        } catch (e) {}
-        return true;
-      })
+      .then(function (m) { return applyMerged(m); })
       .catch(function () {
         setStatus("Sync offline");
         return false;
       });
+  }
+  function syncCycle() {
+    var d, u;
+    try { d = db(); u = uid(); } catch (e) { d = null; u = null; }
+    return syncCycleWith(d, u);
   }
 
   /* ---------- debounced push after local mutations ---------- */
@@ -797,25 +883,59 @@
      Called BEFORE signOut so nothing is lost. The auth-state listener below
      also wipes as a safety net if logout happens another way. */
   function clearLocalUserData() {
+    // P1-26: every per-user key in the LS map above — the previous list
+    // missed the counters, bonus flags, daily plan/challenge, drills,
+    // viva, drafts, lesson state, runs, workspace backup, compiler /
+    // community handoff state, and the personal Gemini key, so the next
+    // user on a shared device inherited them. Device-level keys (theme,
+    // accent, collapsibles, concept-map theme/font) are NOT in the map
+    // and survive, by design.
     [LS.PROGRESS, LS.XP, LS.STREAK, LS.ATTEMPTS, LS.PROFILE, LS.PROFILE_TS, LS.PATHS, LS.CUSTOM_PATHS, LS.CUSTOM_PATHS_TS,
      LS.WORKSPACE, LS.WORKSPACE_TS, LS.REVIEWS, LS.REVIEWS_TS, LS.LAST_UID,
-     LS.ACTIVITY_DAYS, LS.ACTIVITY_FEED, LS.ACHIEVEMENTS, LS.PINS, LS.STARS, LS.SNIPPETS, LS.RUN_COUNT, LS.STREAK_BONUS, LS.PLACEMENT].forEach(function (k) {
+     LS.ACTIVITY_DAYS, LS.ACTIVITY_FEED, LS.ACHIEVEMENTS, LS.PINS, LS.STARS, LS.SNIPPETS, LS.RUN_COUNT, LS.STREAK_BONUS, LS.PLACEMENT,
+     LS.REVIEWS_DONE, LS.PLANS_DONE, LS.BEST_ANSWERS, LS.SHOWCASE_STARRED, LS.FLOWCHARTS_DONE,
+     LS.SECTION_BONUS, LS.PATH_BONUS, LS.DAILY_PLAN, LS.DAILY_CHALLENGE, LS.DAILY_CHALLENGE_FAILED,
+     LS.DRILLS, LS.DRILL_DEFS, LS.VIVA_SESSION, LS.VIVA_LAST, LS.EXERCISE_DRAFTS, LS.PROJECTS_DONE,
+     LS.LESSON_STATE, LS.RUNS, LS.WS_BACKUP, LS.WS_BACKUP_AT, LS.COMPILER_CODE, LS.CODE_HISTORY,
+     LS.COMMUNITY_DRAFT, LS.AI_KEY].forEach(function (k) {
       try { localStorage.removeItem(k); } catch (e) {}
     });
   }
+  // P1-25: the final push's result decides the wipe. Resolves true only
+  // when the cloud write committed and local data was wiped; false when
+  // the push failed (or could not be attempted) — in that case local data
+  // is KEPT and the user is warned, instead of wiping unsynced progress
+  // on an offline logout. The kept data (and the LAST_UID marker, which
+  // the wipe would have removed) retries its push on the next sign-in /
+  // auth-state null, so a later successful sync still cleans up.
   function handleLogout() {
     stopListener();
     if (pushTimer) { try { clearTimeout(pushTimer); } catch (e) {} pushTimer = null; }
     var d, u;
     try { d = db(); u = uid(); } catch (e) { d = null; u = null; }
-    if (!d || !u) { clearLocalUserData(); setStatus("Sync offline"); return Promise.resolve(); }
+    if (!d || !u) {
+      // No push is possible (signed out already / SDK missing): keep the
+      // data rather than deleting progress that was never uploaded.
+      setStatus("Sync failed \u2014 progress kept on this device");
+      try { if (typeof alert === "function") alert("Couldn't sync your progress (you may be offline). Your progress has been kept on this device — sign in again when you're back online to sync it."); } catch (e) {}
+      return Promise.resolve(false);
+    }
     try {
-      return syncCycle().then(function () {
-        clearLocalUserData(); setStatus("Sync offline");
+      return syncCycle().then(function (ok) {
+        if (ok) { clearLocalUserData(); setStatus("Sync offline"); }
+        else {
+          setStatus("Sync failed \u2014 progress kept on this device");
+          try { if (typeof alert === "function") alert("Couldn't sync your progress (you may be offline). Your progress has been kept on this device — sign in again when you're back online to sync it."); } catch (e) {}
+        }
+        return !!ok;
       }).catch(function () {
-        clearLocalUserData(); setStatus("Sync offline");
+        setStatus("Sync failed \u2014 progress kept on this device");
+        return false;
       });
-    } catch (e) { clearLocalUserData(); setStatus("Sync offline"); return Promise.resolve(); }
+    } catch (e) {
+      setStatus("Sync failed \u2014 progress kept on this device");
+      return Promise.resolve(false);
+    }
   }
 
   /* ---------- public API ---------- */
@@ -836,7 +956,27 @@
             // Wipe only if a previous signed-in session is recorded (a
             // real logout / revoked session). The initial null for an
             // anonymous visitor must NOT wipe their local progress.
-            if (lsGet(LS.LAST_UID)) clearLocalUserData();
+            // P1-25: a revoked/expired session used to wipe with NO push
+            // attempt at all — offline, that deleted unsynced progress
+            // outright. Try one last push first, using the recorded uid
+            // (currentUser is already null here, so uid() cannot supply
+            // it). Wipe only when the push succeeds; on failure keep the
+            // data (and the LAST_UID marker) so a later sign-in retries
+            // the push instead of losing the progress.
+            if (lsGet(LS.LAST_UID)) {
+              var lastUid = lsGet(LS.LAST_UID), dd = db();
+              if (dd) {
+                syncCycleWith(dd, lastUid).then(function (ok) {
+                  if (ok) clearLocalUserData();
+                  else setStatus("Sync failed \u2014 progress kept on this device");
+                });
+              } else {
+                // No Firestore handle at all, so no push can be attempted
+                // (in production a signed-in session always has one);
+                // wipe as before rather than stranding the data.
+                clearLocalUserData();
+              }
+            }
             setStatus("Sync offline"); // stop syncing; keep cloud data
           }
         } catch (e) { setStatus("Sync offline"); }

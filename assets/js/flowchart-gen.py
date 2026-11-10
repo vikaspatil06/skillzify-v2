@@ -248,6 +248,19 @@ class FlowchartBuilder:
             self._connect(entries, nid)
             return [nid]
 
+        # ---- class def: subroutine node only, body NOT charted ----
+        # A class definition does not execute its body (methods run only
+        # when called); flattening the whole body into one process label
+        # claimed otherwise. Mirror the FunctionDef branch.
+        if isinstance(s, ast.ClassDef):
+            nid = self.add_node(
+                "subroutine",
+                _cap("class " + s.name, MAX_DECISION_LABEL))
+            if not nid:
+                return []
+            self._connect(entries, nid)
+            return [nid]
+
         # ---- match / case: decision chain ----
         if isinstance(s, ast.Match):
             subj = self.add_node(
@@ -342,15 +355,17 @@ def flowchart_json(code, budget=NODE_BUDGET):
         tails = b.walk_body(tree.body, [start]) if start else []
         # Reserve the End slot: the body walk may have consumed the budget.
         b.budget += 1
+        # Capture the last charted node BEFORE adding End: once End is
+        # appended, b.nodes[-1] IS End, so the fallback below could never
+        # fire and a truncated diagram ended with an orphan End node.
+        prev = b.nodes[-1] if b.nodes else None
         end = b.add_node("end", "End")
         if end:
             b._connect(tails + b._exits, end)
-            if not tails and not b._exits and b.nodes:
+            if not tails and not b._exits and prev is not None:
                 # Every path died inside the walk (budget cut): end the
                 # diagram at the last charted node instead of an orphan End.
-                last = b.nodes[-1]
-                if last["id"] != end:
-                    b.add_edge(last["id"], end)
+                b.add_edge(prev["id"], end)
         return json.dumps({
             "nodes": b.nodes,
             "edges": b.edges,

@@ -406,7 +406,7 @@
       '<label>Answer<textarea id="ans-body" rows="4" placeholder="Explain it like you would to a friend — code alone rarely helps."></textarea></label>' +
       '<label>Code (optional)<textarea id="ans-code" rows="5" class="code-editor" placeholder="Paste a working example if it helps"></textarea></label>' +
       '<p class="comm-form-error" id="ans-error" hidden></p>' +
-      '<div class="comm-actions"><button class="btn btn-primary" type="submit">Post answer</button></div>' +
+      '<div class="comm-actions"><button class="btn btn-primary" type="submit" id="ans-submit">Post answer</button></div>' +
       "</form></div>";
     var form = $("comm-answer-form");
     if (form) form.addEventListener("submit", function (e) {
@@ -419,10 +419,17 @@
         return;
       }
       if (errEl) errEl.hidden = true;
+      // P1-15: disable the Post button while the request is in flight,
+      // so a double-click cannot post the same answer twice.
+      var submitBtn = $("ans-submit");
+      if (submitBtn) submitBtn.disabled = true;
       C.postAnswer(q.id, { body: body, code: code }).then(function () {
         toast("Answer posted", "success");
         showQuestion(q.id);
-      }).catch(onApiError);
+      }).catch(function () {
+        if (submitBtn) submitBtn.disabled = false;
+        onApiError();
+      });
     });
   }
   // Copy / Open-in-Studio buttons inside a rendered block. The question's
