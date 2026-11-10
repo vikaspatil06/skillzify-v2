@@ -7,8 +7,10 @@ An advanced, browser-first Python learning platform for students — a modern mu
 ## ✨ Features
 
 - **Landing page** (`index.html`) — hero, feature cards, animated stats, testimonials, dark/light theme toggle
-- **Python learning journey** (`learn.html`) — **250 lessons** across **7 journey sections** (🌱 Base Camp, 🧱 Tool Shed, 🏯 Object Castle, 🧠 Algorithm Arena, ⚡ Power Lab, 📊 Data Lab, 🚀 Launch Pad) rendered as a Duolingo-style visual journey: lesson nodes on a winding animated SVG path (locked 🔒 / current ✨ / completed ✓), sequential unlocking. Each lesson opens on its own page (`lesson.html?id=`) with a rich explanation, key takeaways, syntax-highlighted code (Copy + "Try in compiler" handoff), a quiz with instant feedback (3 questions picked at random from the lesson's question pool), and a mini coding challenge (predict-the-output or fill-the-blank). Completing both triggers confetti, XP gain popup, and streak update. **XP & levels** (Novice → Python Master) persist to `localStorage` and sync across devices via Firebase. Keyboard: `Esc` closes, `←/→` navigate lessons. Respects `prefers-reduced-motion`.
+- **Python learning journey** (`learn.html`) — **250 lessons** across **7 journey sections** (🌱 Base Camp, 🧱 Tool Shed, 🏯 Object Castle, 🧠 Algorithm Arena, ⚡ Power Lab, 📊 Data Lab, 🚀 Launch Pad) rendered as a Duolingo-style visual journey: lesson nodes on a winding animated SVG path (locked 🔒 / current ✨ / completed ✓), sequential unlocking. Each lesson opens on its own page (`lesson.html?id=`) with a rich explanation, key takeaways, syntax-highlighted code (Copy + "Try in compiler" handoff), a quiz with instant feedback (3 questions picked at random from the lesson's question pool), and a mini coding challenge (predict-the-output or fill-the-blank). Completing both triggers confetti, XP gain popup, and streak update. **XP & levels** (Novice → Grandmaster, 11 levels up to 11,000 XP, plus once-only bonuses for section/path completion, reviews, and streak milestones) persist to `localStorage` and sync across devices via Firebase. Keyboard: `Esc` closes, `←/→` navigate lessons. Respects `prefers-reduced-motion`.
 - **Spaced repetition** (`assets/js/review.js`) — SM-2-lite review scheduling (intervals 1 → 3 → 7 → 14 → 30 → 60 days, reset on a miss). A review section on the Learn page, a due-count nudge on the Dashboard, and review state that syncs across devices.
+- **Mastery Engine** (`assets/js/mastery.js`) — a 0–100 mastery score per topic and per section, derived from your solves and reviews (quality frozen at solve time, so practising more never lowers it). Powers the **Next Up** card on Learn and Dashboard, a **~15-minute daily plan** (due reviews + weakest-topic exercise + one new lesson, +10 XP once a day for finishing it), mastery bars and 🍂 rusty badges on Dashboard/Profile, and an AI daily challenge led by your weakest topic.
+- **Placement test** (`placement.html`) — a 3-minute, 10-question adaptive diagnostic that places you at the right section of the 7-section journey and unlocks everything before it, so you skip what you already know. Placement is a pointer, never progress: no XP, no lessons marked done. A wrong answer in the review gets an "✨ Explain why" AI explanation.
 - **Practice Mode** (`practice.html` + `assets/js/practice.js` + `assets/js/practice-data.js`) — **150 exercises** across 17 topics (variables, strings, collections, loops, functions, OOP, exceptions, DSA, recursion, sorting, trees & graphs, dynamic programming, data science, web, files, testing, async) in 3 formats: ✍️ write-code (hidden tests executed in Pyodide), 🔮 predict-output, 🐞 fix-the-bug. Features: per-test pass/fail results, **3-level progressive hints**, ⏱ timed mode with personal bests, 📅 daily challenge (deterministic by date), 🔁 spaced-repetition review queue, solution walkthroughs, 🐍 pythonic-coach notes, your-code-vs-model **solution comparison**, and a **Socratic AI Tutor** (guides without revealing the answer). Solved exercises award XP into the shared system.
 - **Learning Paths** (`paths.html`) — 6 guided sequences (Python Fundamentals, DSA with Python, Automation & Scripting, Data Analysis Basics, Interview Prep, Web Development with Python) mixing lessons and exercises with per-path progress bars. Enrolling in a path unlocks all of its lessons.
 - **Projects** (`projects.html`) — 14 guided real-world builds (File Organizer, Weather API Client, Web Scraper, CSV Data Analyzer, and more) — each with milestones and starter code.
@@ -18,8 +20,8 @@ An advanced, browser-first Python learning platform for students — a modern mu
   - A "🆘 Stuck?" button that drafts your code and error into a community question
 - **Flowchart Lab** (`flowchart.html`) — draw a program's flow as a diagram, explain it with AI, or turn a flowchart into code
 - **Skillzify Circle** (`community.html`) — the learner community: public profiles (verified progress), anchored Q&A (ask from a lesson, exercise, or error, with code attached; best answers earn XP), and a project showcase (share a build, star others, fork into the compiler). An "✨ Ask AI" button gives a Socratic hint on any question.
-- **Dashboard** (`dashboard.html`) — overall % ring, per-section progress bars, day streak 🔥, recent run history, next-lesson hint, **exercise accuracy by topic with weak-spot flags**, today's challenge, review queue, and downloadable **section-completion certificates** (canvas-rendered PNG)
-- **Profile** (`profile.html`) — GitHub-style identity: identicon avatar, editable name/bio (syncs to Firebase), pinned items, achievements, activity feed, and a shareable public profile (`profile.html?uid=`)
+- **Dashboard** (`dashboard.html`) — overall % ring, per-section progress bars, day streak 🔥, recent run history, **Next Up** card (mastery-ranked), **~15-minute daily plan**, **exercise accuracy by topic with weak-spot flags**, today's challenge, review queue, and downloadable **section-completion certificates** (canvas-rendered PNG)
+- **Profile** (`profile.html`) — GitHub-style identity: identicon avatar, editable name/bio (syncs to Firebase), pinned items, **32 achievements** (with progress bars on locked badges), activity feed, and a shareable public profile (`profile.html?uid=`)
 - **Python Reference** (`reference.html`) — W3Schools-style reference with **127 entries**, each with parameters, return values, common pitfalls, a verified example output, and a link to the lesson that teaches it — plus an overview page, an inline "▶ Run here" runner, search, favourites, and recently viewed
 - **Firebase Authentication** (`auth.html` + `assets/js/auth.js`) — real Email/Password auth on Firebase project `skillzify-1d0f2` (same as the Android app); one account works across devices; nav shows your name. Progress, exercises, paths, and workspace sync through one Firestore document per user.
 - **AI system** (`server.js` + `assets/js/ai.js`) — 15 AI modes behind one client: Socratic lesson tutor, adaptive drills, trace & narrate, context-aware error explainer, project review, build-my-path, mock viva, fresh quizzes, daily challenge, and flowchart explain / flowchart → code. Daily caps (50 calls signed-in, 10 anonymous), Gemini model failover across 6 models, and optional key rotation.
@@ -28,6 +30,7 @@ An advanced, browser-first Python learning platform for students — a modern mu
 - **About / Contact** — contact form opens the visitor's email app pre-addressed to skillzifyind2024@gmail.com (mailto fallback)
 - **Analytics** — Google Analytics 4 on all pages
 - **Security** — `SECURITY.md` policy + private vulnerability reporting enabled
+- **Quality** — full-site audit (Nov 2026): all 2 P0 and 31 P1 findings fixed and verified, with a 577-check automated harness (`audit-harness.cjs`) plus live browser checks
 - **Theming** — dark mode default, CSS variables, responsive down to phones
 
 ## 🚀 How to run
@@ -88,6 +91,7 @@ skillzify-v2/
 ├── index.html          # Landing page
 ├── learn.html          # Learning journey: 7 sections, 250 lessons
 ├── lesson.html         # Single-lesson page (?id=)
+├── placement.html      # 3-minute adaptive placement test
 ├── practice.html       # Practice Mode (exercises + tests)
 ├── paths.html          # Guided learning paths (6)
 ├── projects.html       # Real-world guided projects (14)
@@ -113,6 +117,9 @@ skillzify-v2/
 │   ├── js/lessons-a.js     # Advanced lessons (a11–a90)
 │   ├── js/quiz-extra.js    # Extra quiz questions per lesson
 │   ├── js/learn.js     # Learn page rendering (sections + review)
+│   ├── js/mastery.js   # Mastery Engine (0–100 scores, Next Up, daily plan)
+│   ├── js/placement.js # Placement test engine (adaptive diagnostic)
+│   ├── js/placement-page.js # Placement test page
 │   ├── js/lesson.js    # Single-lesson page + AI tutor
 │   ├── js/review.js    # Spaced repetition (SM-2-lite)
 │   ├── js/practice.js  # Practice engine: test runner, hints, timed mode
@@ -121,6 +128,8 @@ skillzify-v2/
 │   ├── js/paths.js     # Path rendering + enrollment
 │   ├── js/projects-data.js # 14 guided projects
 │   ├── js/compiler.js  # Pyodide runner + workspace + AI explainer
+│   ├── js/flowchart-gen.py  # Flowchart generator (Python → diagram JSON)
+│   ├── js/flowchart-algo.py # Flowchart generator (pseudocode → diagram JSON)
 │   ├── js/dashboard.js # Dashboard rendering + analytics + certificates
 │   ├── js/profile.js   # Profile rendering (Firebase-synced name)
 │   ├── js/community.js # Community API (Q&A, showcase, profiles)
@@ -153,6 +162,9 @@ skillzify-v2/
 - [x] Google Analytics 4
 - [x] Spaced-repetition scheduling (SM-2) for the review queue
 - [x] Community (Skillzify Circle): profiles, Q&A, showcase
+- [x] Mastery Engine: 0–100 mastery, Next Up card, daily plan
+- [x] Placement test: adaptive diagnostic + unlock-before-placement
+- [x] Achievements upgrade: 32 badges with progress bars
 - [x] Multi-file compiler workspace
 - [ ] Phase 2: 250 → 500 lessons (new Data Science, Web, ML/AI, Interview tracks)
 - [ ] Shareable code snippets (URL-encoded)
