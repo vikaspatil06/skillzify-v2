@@ -10,6 +10,32 @@ rules_version = '2';
 // bypasses rules, so they need no rule here.
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helpers for the community trust checks (P0-2, 10 Nov 2026): a grant
+    // may only follow a real best answer, so the rules read the answer and
+    // its question. Each helper is one get() call; the create rule below
+    // uses 7 in total, under the 10-per-evaluation limit. && short-circuits,
+    // so .data is only read when the document exists.
+    function answerDoc(answerId) {
+      return get(/databases/$(database)/documents/answers/$(answerId));
+    }
+    function questionDoc(questionId) {
+      return get(/databases/$(database)/documents/questions/$(questionId));
+    }
+    // True when the named answer is marked best on the named question and
+    // belongs to the grant recipient.
+    function isBestAnswer(answerId, questionId, toUid) {
+      return answerDoc(answerId).exists
+        && answerDoc(answerId).data.isBest == true
+        && answerDoc(answerId).data.authorUid == toUid
+        && answerDoc(answerId).data.questionId == questionId;
+    }
+    // True when the caller asked the question and marked this answer best.
+    function questionMarkedBest(questionId, answerId, uid) {
+      return questionDoc(questionId).exists
+        && questionDoc(questionId).data.authorUid == uid
+        && questionDoc(questionId).data.bestAnswerId == answerId;
+    }
+
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
@@ -42,8 +68,13 @@ service cloud.firestore {
         && request.resource.data.questionId is string
         && request.resource.data.body is string && request.resource.data.body.size() <= 4000
         && request.resource.data.code is string && request.resource.data.code.size() <= 20000;
+      // Only the person who asked the question may (un)mark its best answer.
+      // (P0-2: without this, anyone could flip isBest and the grant check below
+      // would be meaningless.)
       allow update: if request.auth != null
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isBest']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isBest'])
+        && questionDoc(resource.data.questionId).exists
+        && questionDoc(resource.data.questionId).data.authorUid == request.auth.uid;
       allow delete: if request.auth != null && resource.data.authorUid == request.auth.uid;
     }
 
@@ -70,16 +101,25 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == uid;
     }
 
-    // XP grants: created by anyone signed in (max 10 XP, never to yourself);
-    // only the recipient reads them and marks them claimed.
-    match /xpGrants/{id} {
+    // XP grants: one per (question, answer), created only by the asker and
+    // only for a real best answer. The doc id is deterministic
+    // (questionId_answerId), so create fails once the grant exists — no
+    // second grant for the same answer, ever (also kills toggle farming).
+    // Only the recipient reads them and marks them claimed.
+    match /xpGrants/{grantId} {
       allow read: if request.auth != null && resource.data.toUid == request.auth.uid;
       allow create: if request.auth != null
-        && request.resource.data.amount is number
-        && request.resource.data.amount > 0 && request.resource.data.amount <= 10
+        && grantId == request.resource.data.questionId + "_" + request.resource.data.answerId
+        && request.resource.data.keys().hasOnly(['toUid', 'amount', 'reason', 'questionId', 'answerId', 'createdAt', 'claimed'])
+        && request.resource.data.amount == 10
+        && request.resource.data.reason == "best-answer"
+        && request.resource.data.claimed == false
+        && request.resource.data.toUid is string
         && request.resource.data.toUid != request.auth.uid
         && request.resource.data.questionId is string
-        && request.resource.data.answerId is string;
+        && request.resource.data.answerId is string
+        && isBestAnswer(request.resource.data.answerId, request.resource.data.questionId, request.resource.data.toUid)
+        && questionMarkedBest(request.resource.data.questionId, request.resource.data.answerId, request.auth.uid);
       allow update: if request.auth != null && resource.data.toUid == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['claimed']);
     }

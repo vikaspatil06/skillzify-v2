@@ -82,6 +82,37 @@ const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "200kb" }));
 
+/* ---- CORS: the API is called cross-origin from GitHub Pages ----
+   (P0-1, 10 Nov 2026 audit: without this every AI call from Pages is
+   browser-blocked and AI only works same-origin from Render.) The API
+   takes no cookies or credentials, so an allow-listed Origin plus the
+   standard preflight headers are enough. Preflight OPTIONS is answered
+   here, before the rate limiter, so it never burns budget. */
+var CORS_ORIGINS = [
+  "https://vikaspatil06.github.io",
+  "https://skillzify-v2.onrender.com",
+  "https://skillzify-v2-staging.onrender.com"
+];
+function corsOrigin(origin) {
+  if (!origin) return null;
+  if (CORS_ORIGINS.indexOf(origin) !== -1) return origin;
+  // Local dev: the site served from localhost / 127.0.0.1 on any port.
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return origin;
+  return null;
+}
+app.use(function (req, res, next) {
+  var allowed = corsOrigin(req.headers.origin);
+  if (allowed) {
+    res.setHeader("Access-Control-Allow-Origin", allowed);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Access-Control-Max-Age", "86400");
+  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 /* ---- tiny in-memory rate limit: 30 AI req/min per IP ---- */
 const hits = new Map();
 app.use("/api/", (req, res, next) => {

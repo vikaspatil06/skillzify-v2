@@ -222,7 +222,12 @@
           // +10 XP for the answer author, via a grant they claim on their next visit
           // (a client can only write its own XP — see claimXpGrants).
           if (!wasBest && a.authorUid && a.authorUid !== u.uid) {
-            return d.collection("xpGrants").add({
+            // Deterministic grant id (questionId_answerId): one grant per
+            // answer, ever. The rules only allow create when the answer is
+            // actually marked best by the asker, and a re-mark's set() is
+            // denied as an update (swallowed below) — so toggle farming
+            // cannot mint a second grant (P0-2 / P1-12).
+            return d.collection("xpGrants").doc(questionId + "_" + answerId).set({
               toUid: a.authorUid, amount: 10, reason: "best-answer",
               questionId: questionId, answerId: answerId,
               createdAt: now, claimed: false
