@@ -906,6 +906,20 @@
   function isUnlocked(gi) {
     if (gi <= 0) return true;
     if (isDone(LESSONS[gi - 1].id)) return true;
+    // Placement: every lesson in a section BEFORE the placed one is open.
+    // The test already proved that knowledge, so the learner can jump to
+    // any of them freely. Nothing is marked done — progress, XP, section
+    // bonuses and badges stay untouched; placement remains a pointer, not
+    // progress. The placed section itself still unlocks sequentially from
+    // its first lesson (the rule below), and sections after it are
+    // unaffected.
+    var placed = placedSection();
+    if (placed) {
+      var ids = SECTIONS.map(function (x) { return x.id; });
+      var li = ids.indexOf(LESSONS[gi].section);
+      var pi = ids.indexOf(placed);
+      if (li !== -1 && pi !== -1 && li < pi) return true;
+    }
     // The first lesson of an unlocked section is open. In the normal flow
     // this is already implied (the previous section is fully done, so the
     // previous lesson is done) — but a placement unlocks a section without
