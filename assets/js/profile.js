@@ -124,7 +124,42 @@
     });
   }
 
+  /* ---- Pending certificate: downloaded after sign-in ----
+     The Download button stays exactly as it is for everyone. A
+     signed-out click does NOT produce a PNG — it parks the intent and
+     sends the user to sign in; on return the certificate downloads
+     on its own (resumePendingCert, called from decideView). A parked
+     intent older than 24h is discarded. */
+  var PENDING_CERT_KEY = "skillzify_pending_cert";
+  var PENDING_CERT_TTL = 24 * 60 * 60 * 1000;
+  function resumePendingCert() {
+    var user = null;
+    try { user = (window.SkillzifyAuth && window.SkillzifyAuth.currentUser()) || null; } catch (e) {}
+    if (!user) return;
+    var raw = null;
+    try { raw = localStorage.getItem(PENDING_CERT_KEY); } catch (e) {}
+    if (!raw) return;
+    var rec = null;
+    try { rec = JSON.parse(raw); } catch (e) {}
+    if (!rec || !rec.section) { try { localStorage.removeItem(PENDING_CERT_KEY); } catch (e2) {} return; }
+    if (!rec.at || Date.now() - rec.at > PENDING_CERT_TTL) { try { localStorage.removeItem(PENDING_CERT_KEY); } catch (e2) {} return; }
+    try { localStorage.removeItem(PENDING_CERT_KEY); } catch (e2) {}
+    downloadCert(rec.section);
+    if (window.Skillzify) window.Skillzify.toast("Certificate downloading — if it doesn't start, use the Download button below. 🎓", "success");
+  }
+
   function downloadCert(unitId) {
+    // Signed out? Park the intent and go sign in — no PNG is produced
+    // in any path before sign-in. The toast gets ~700ms to be read,
+    // following auth.js's own toast-then-redirect pattern.
+    var signedIn = null;
+    try { signedIn = (window.SkillzifyAuth && window.SkillzifyAuth.currentUser()) || null; } catch (e) {}
+    if (!signedIn) {
+      try { localStorage.setItem(PENDING_CERT_KEY, JSON.stringify({ section: unitId, at: Date.now() })); } catch (e) {}
+      if (window.Skillzify) window.Skillzify.toast("Sign in and your certificate will download right after. 🎓", "success");
+      setTimeout(function () { location.href = "auth.html?next=profile.html"; }, 700);
+      return;
+    }
     var L = window.SkillzifyLearn;
     var t = ((L && (L.SECTIONS || []).filter(function (x) { return x.id === unitId; })[0])) ||
       ((L && (L.TRACKS || []).filter(function (x) { return x.id === unitId; })[0])) || { name: unitId };
@@ -301,6 +336,7 @@
       showOwnCards();
       A.checkAchievements();
       render();
+      resumePendingCert();
       try { if (window.SkillzifyCommunity) window.SkillzifyCommunity.publishPublicProfile(); } catch (e) {}
     }
     if (window.SkillzifyAuth && typeof window.SkillzifyAuth.onAuthChange === "function") {
@@ -364,4 +400,8 @@
       });
     });
   });
+
+  // Test seam (harness): the certificate entry points. The sign-in gate
+  // lives inside downloadCert itself, so calling it signed-out is safe.
+  window.SkillzifyProfile = { downloadCert: downloadCert, resumePendingCert: resumePendingCert };
 })();

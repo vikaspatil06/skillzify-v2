@@ -68,7 +68,7 @@
         // Cross-device sync: start Firestore sync once auth state is known.
         // Guarded — sync.js is a no-op if the SDK failed to load.
         try { if (window.SkillzifySync && window.SkillzifySync.init) window.SkillzifySync.init(); } catch (e) {}
-        if (fbUser && /auth\.html$/.test(location.pathname)) location.href = "dashboard.html";
+        if (fbUser && /auth\.html$/.test(location.pathname)) location.href = nextTarget() || "dashboard.html";
       });
     } else { ready = true; }
   } catch (e) { ready = true; }
@@ -103,6 +103,28 @@
   }
 
   function validEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e || ""); }
+
+  /* Pending-auth return target: a validated ?next= so a user who signs
+     in mid-action lands back where they were. Same-site page only —
+     a relative *.html path with an optional safe query string. Anything
+     else returns null (never an open redirect). */
+  function nextTarget() {
+    var raw = "";
+    try {
+      var m = /[?&]next=([^&]*)/.exec(location.search || "");
+      raw = m ? decodeURIComponent(m[1]) : "";
+    } catch (e) { return null; }
+    if (!raw) return null;
+    if (/[\s\x00-\x1f\\]/.test(raw)) return null;
+    if (raw.indexOf("..") >= 0) return null;
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) return null;
+    if (raw.indexOf("//") === 0 || raw.charAt(0) === "/") return null;
+    var parts = raw.split("?");
+    if (parts.length > 2) return null;
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.html$/.test(parts[0])) return null;
+    if (parts[1] !== undefined && /[<>"]/.test(parts[1])) return null;
+    return raw;
+  }
 
   function registerUser(name, email, password) {
     name = (name || "").trim();
@@ -225,7 +247,7 @@
         setBusy(loginForm, false);
         if (r.ok) {
           toast("Welcome back, " + r.user.name.split(" ")[0] + "! \uD83C\uDF89", "success");
-          setTimeout(function () { location.href = "dashboard.html"; }, 700);
+          setTimeout(function () { location.href = nextTarget() || "dashboard.html"; }, 700);
         } else {
           toast(r.error, "error");
         }
@@ -243,7 +265,7 @@
         setBusy(regForm, false);
         if (r.ok) {
           toast("Account created — let's start learning! \uD83D\uDE80", "success");
-          setTimeout(function () { location.href = "learn.html"; }, 700);
+          setTimeout(function () { location.href = nextTarget() || "learn.html"; }, 700);
         } else {
           toast(r.error, "error");
         }
@@ -264,6 +286,7 @@
     onReady: onReady,
     onAuthChange: onAuthChange,
     refreshAccountUI: refreshAccountUI,
+    nextTarget: nextTarget,
     firebaseUser: function () { return fbUser; }
   };
 })();

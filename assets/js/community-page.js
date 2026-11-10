@@ -54,6 +54,70 @@
       return u ? u.uid : null;
     } catch (e) { return null; }
   }
+
+  /* ---- Pending post: typed while signed out, posted after sign-in ----
+     The composers stay open for everyone — the sign-in ask happens only
+     at submit, after validation. The draft is parked in localStorage,
+     the user signs in, and on return the post goes out on its own
+     (resumePendingPost, called from the onAuthChange handler below).
+     A parked post older than 24h is discarded. The record is cleared
+     BEFORE the API call, so a failed post cannot loop on the next
+     auth change. The API functions themselves still reject when signed
+     out — that stays as the backstop. */
+  var PENDING_POST_KEY = "skillzify_pending_post";
+  var PENDING_POST_TTL = 24 * 60 * 60 * 1000;
+  var pendingPostResumed = false; // one resume attempt per page load
+  function savePendingPost(rec) { try { localStorage.setItem(PENDING_POST_KEY, JSON.stringify(rec)); } catch (e) {} }
+  function readPendingPost() {
+    var raw = null;
+    try { raw = localStorage.getItem(PENDING_POST_KEY); } catch (e) { return null; }
+    if (!raw) return null;
+    var rec = null;
+    try { rec = JSON.parse(raw); } catch (e) { return null; }
+    if (!rec || typeof rec !== "object") return null;
+    if (rec.kind !== "question" && rec.kind !== "answer" && rec.kind !== "showcase") return null;
+    if (!rec.payload || typeof rec.payload !== "object") return null;
+    return rec;
+  }
+  function clearPendingPost() { try { localStorage.removeItem(PENDING_POST_KEY); } catch (e) {} }
+  // Park the post and go sign in. Returns true when the caller should
+  // stop (nothing was sent); false when signed in and the caller should
+  // carry on to the API call. returnTo is the page to come back to.
+  function interceptPost(kind, payload, questionId, returnTo) {
+    if (isSignedIn()) return false;
+    savePendingPost({ kind: kind, payload: payload, questionId: questionId || null, at: Date.now() });
+    toast("Sign in to post — your draft is saved and will post when you're back.", "success");
+    setTimeout(function () { location.href = "auth.html?next=" + encodeURIComponent(returnTo); }, 700);
+    return true;
+  }
+  function resumePendingPost() {
+    if (!isSignedIn() || !C) return;
+    if (pendingPostResumed) return;
+    var rec = readPendingPost();
+    if (!rec) return;
+    pendingPostResumed = true;
+    if (!rec.at || Date.now() - rec.at > PENDING_POST_TTL) { clearPendingPost(); return; }
+    clearPendingPost();
+    if (rec.kind === "question") {
+      C.askQuestion(rec.payload).then(function (id) {
+        toast("Your question is posted ✓", "success");
+        state.filter = "all";
+        setFilterPills("all");
+        showQuestion(id);
+      }).catch(onApiError);
+    } else if (rec.kind === "answer") {
+      C.postAnswer(rec.questionId, rec.payload).then(function () {
+        toast("Your answer is posted ✓", "success");
+        showQuestion(rec.questionId);
+      }).catch(onApiError);
+    } else if (rec.kind === "showcase") {
+      C.postShowcase(rec.payload).then(function () {
+        toast("Your project is shared ✓", "success");
+        loadShowcase();
+        if (state.tab !== "showcase") switchTab("showcase");
+      }).catch(onApiError);
+    }
+  }
   function gateHTML() {
     return '<div class="card comm-gate"><h3>Sign in to join in</h3>' +
       '<p class="hint">Sign in to ask, answer and share.</p>' +
@@ -415,10 +479,6 @@
 
     var zone = $("comm-answer-zone");
     if (!zone) return;
-    if (!isSignedIn()) {
-      zone.innerHTML = gateHTML();
-      return;
-    }
     zone.innerHTML = '<div class="card comm-form"><h3>Your answer</h3>' +
       '<form id="comm-answer-form">' +
       '<label>Answer<textarea id="ans-body" rows="4" placeholder="Explain it like you would to a friend — code alone rarely helps."></textarea></label>' +
@@ -437,6 +497,7 @@
         return;
       }
       if (errEl) errEl.hidden = true;
+      if (interceptPost("answer", { body: body, code: code }, q.id, "community.html?q=" + q.id)) return;
       // P1-15: disable the Post button while the request is in flight,
       // so a double-click cannot post the same answer twice.
       var submitBtn = $("ans-submit");
@@ -484,11 +545,6 @@
   function openAskForm() {
     var wrap = $("comm-ask-wrap"), gate = $("comm-ask-gate");
     if (!wrap) return;
-    if (!isSignedIn()) {
-      wrap.hidden = true;
-      if (gate) { gate.hidden = false; gate.innerHTML = gateHTML(); }
-      return;
-    }
     if (gate) gate.hidden = true;
     wrap.hidden = false;
     var t = $("ask-title");
@@ -513,11 +569,17 @@
       return;
     }
     if (errEl) errEl.hidden = true;
+    var qExId = pendingDraft ? (pendingDraft.exId || null) : null;
+    var qErr = pendingDraft ? (pendingDraft.error || null) : null;
+    if (interceptPost("question", {
+      title: title, body: body, code: code,
+      lessonId: lessonId || null, exId: qExId, error: qErr
+    }, null, "community.html")) { pendingDraft = null; return; }
     C.askQuestion({
       title: title, body: body, code: code,
       lessonId: lessonId || null,
-      exId: pendingDraft ? (pendingDraft.exId || null) : null,
-      error: pendingDraft ? (pendingDraft.error || null) : null
+      exId: qExId,
+      error: qErr
     }).then(function (id) {
       pendingDraft = null;
       var form = $("comm-ask-form");
@@ -655,11 +717,6 @@
   function openShareForm() {
     var wrap = $("comm-share-wrap"), gate = $("comm-share-gate");
     if (!wrap) return;
-    if (!isSignedIn()) {
-      wrap.hidden = true;
-      if (gate) { gate.hidden = false; gate.innerHTML = gateHTML(); }
-      return;
-    }
     if (gate) gate.hidden = true;
     wrap.hidden = false;
     var t = $("share-title");
@@ -680,6 +737,7 @@
       return;
     }
     if (errEl) errEl.hidden = true;
+    if (interceptPost("showcase", { title: title, desc: desc, code: code, projectId: projectId || null }, null, "community.html?tab=showcase")) return;
     C.postShowcase({ title: title, desc: desc, code: code, projectId: projectId || null }).then(function () {
       var form = $("comm-share-form");
       if (form) form.reset();
@@ -795,14 +853,14 @@
     var shareForm = $("comm-share-form");
     if (shareForm) shareForm.addEventListener("submit", submitShare);
 
-    // Re-render sign-in gates when Firebase auth resolves or changes.
+    // Re-render on Firebase auth resolve/change. The composers stay
+    // open whatever the auth state is — sign-in is asked at submit,
+    // not at the door — so nothing is hidden here. A post parked while
+    // signed out goes out now that sign-in has landed.
     try {
       if (window.SkillzifyAuth && typeof window.SkillzifyAuth.onAuthChange === "function") {
         window.SkillzifyAuth.onAuthChange(function () {
-          var aw = $("comm-ask-wrap"), ag = $("comm-ask-gate");
-          if (aw && !aw.hidden && !isSignedIn()) { aw.hidden = true; if (ag) { ag.hidden = false; ag.innerHTML = gateHTML(); } }
-          var sw = $("comm-share-wrap"), sg = $("comm-share-gate");
-          if (sw && !sw.hidden && !isSignedIn()) { sw.hidden = true; if (sg) { sg.hidden = false; sg.innerHTML = gateHTML(); } }
+          resumePendingPost();
           if (state.tab === "questions" && !state.qid) loadQuestions();
           if (state.tab === "showcase" && state.showcaseLoaded) loadShowcase();
         });
