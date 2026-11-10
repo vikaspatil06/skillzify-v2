@@ -69,8 +69,41 @@
     writeMap(m);
     return m[id];
   }
-  // Record one recall outcome. Correct advances the interval
-  // (1->3->7->14->30->60, capped at 60); incorrect resets to 1 day.
+  // P2-19 helpers — the two-tab guards for the review +5 XP.
+  function localDay(d) {
+    d = d || new Date();
+    var m = d.getMonth() + 1, day = d.getDate();
+    return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day);
+  }
+  // Claim the +5 XP for (lesson, day): first caller wins. The token
+  // re-read is the atomicity: two tabs racing both read "unclaimed",
+  // both write, but only the tab whose token survives the re-read pays.
+  // Returns true when this call holds the claim.
+  function claimReviewXp(id, t) {
+    var key = "skillzify_review_xp_" + id + "_" + localDay(new Date(t));
+    try {
+      if (localStorage.getItem(key)) return false;
+      var token = String(t) + "-" + Math.random().toString(36).slice(2);
+      localStorage.setItem(key, token);
+      return localStorage.getItem(key) === token;
+    } catch (e) { return true; }
+  }
+  // Freshness re-check: re-read the review map and require this call's
+  // write to still be the latest entry for the lesson. If another tab
+  // recorded the same lesson after our write, its updatedAt wins and
+  // this call pays nothing. (A correct review pushes the due date at
+  // least 3 days out, so the same lesson can't pay twice in a day.)
+  function freshWriteStillCurrent(id, t) {
+    try {
+      var e = readMap()[id];
+      return !!e && e.updatedAt === t;
+    } catch (err) { return true; }
+  }
+  // Record one recall outcome. Correct advances the interval to the
+  // SMALLEST interval strictly greater than the current one (P2-12),
+  // capped at 60; incorrect resets to 1 day. A legacy/cloud interval
+  // that is not on the ladder (e.g. 2, 5, 45) therefore advances to
+  // 3, 7, 60 — never backwards to 3.
   function recordResult(id, correct) {
     if (!id || typeof id !== "string") return null;
     var m = readMap();
@@ -78,23 +111,37 @@
     var t = now();
     var next;
     if (correct) {
-      var i = INTERVALS.indexOf(e.interval);
-      next = INTERVALS[Math.min((i < 0 ? 0 : i) + 1, INTERVALS.length - 1)];
+      next = INTERVALS[INTERVALS.length - 1];
+      for (var i = 0; i < INTERVALS.length; i++) {
+        if (INTERVALS[i] > e.interval) { next = INTERVALS[i]; break; }
+      }
     } else {
       next = 1;
     }
     m[id] = { interval: next, due: t + next * DAY, updatedAt: t };
     writeMap(m);
-    // Reviews-done counter (feeds the review achievements). One count per
-    // lesson reviewed in a session, correct or not.
+    // P2-19 (two-tab race on the +5 XP): the award below pays only if
+    // this call wins the per-lesson-per-day claim AND its write is
+    // still the latest stored entry when re-read — a second tab that
+    // recorded the same lesson first (or overwrote us in between)
+    // pays nothing. The interval above is still recorded either way:
+    // the claim guards the XP/counter only, never the recall itself.
+    // Reviews-done counter (feeds the review achievements). One count
+    // per lesson reviewed in a session, correct or not — unchanged by
+    // P2-19: only the XP below is two-tab guarded, the counter still
+    // records every recall outcome exactly as before.
     try {
       var rc = parseInt(localStorage.getItem("skillzify_reviews_done") || "0", 10) || 0;
       localStorage.setItem("skillzify_reviews_done", String(rc + 1));
     } catch (e) {}
-    // Correct recall earns +5 XP. This runs once per lesson reviewed in
-    // a session — and a correct review pushes the next due date at
-    // least 3 days out, so the same lesson can't pay twice in a day.
+    // Correct recall earns +5 XP — but only when this call wins the
+    // per-lesson-per-day claim and its write is still current (P2-19,
+    // see the guards above).
+    var payXP = false;
     if (correct) {
+      payXP = claimReviewXp(id, t) && freshWriteStillCurrent(id, t);
+    }
+    if (payXP) {
       var awarded = false;
       try {
         if (window.SkillzifyLearnCore && typeof window.SkillzifyLearnCore.addXP === "function") {
@@ -113,7 +160,7 @@
     try {
       if (window.SkillzifyActivity && typeof window.SkillzifyActivity.log === "function") {
         var l = lessonById(id);
-        window.SkillzifyActivity.log("review", "Reviewed: " + (l ? l.title : id) + (correct ? " (+5 XP)" : ""));
+        window.SkillzifyActivity.log("review", "Reviewed: " + (l ? l.title : id) + (payXP ? " (+5 XP)" : ""));
       }
     } catch (e) {}
     return m[id];
@@ -205,9 +252,14 @@
     if (session.qsFor !== lesson.id) { session.qs = shuffled(qs); session.qsFor = lesson.id; }
     qs = session.qs;
     if (!qs.length || session.qi >= qs.length) {
-      // lesson finished: record the outcome, move on
-      recordResult(lesson.id, session.allCorrect);
-      session.done++;
+      // Lesson finished: record the outcome, move on. P2-11: a lesson
+      // with NO quiz questions is never recorded — with zero recall
+      // there is nothing to score, so no interval advance, no
+      // reviews-done count and no +5 XP. It still leaves the queue.
+      if (qs.length) {
+        recordResult(lesson.id, session.allCorrect);
+        session.done++;
+      }
       session.li++;
       session.qi = 0;
       session.allCorrect = true;

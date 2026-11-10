@@ -10,7 +10,7 @@
     var prof = A.profile();
     var user = null;
     try { user = (window.SkillzifyAuth && window.SkillzifyAuth.currentUser()) || null; } catch (e) {}
-    var name = prof.name || (user && user.name) || "Vikas";
+    var name = prof.name || (user && user.name) || "Skillzify Learner";
     var seed = (user && user.email) || name;
 
     document.getElementById("profile-avatar").innerHTML = A.identicon(seed, 96);
@@ -18,8 +18,19 @@
     document.getElementById("profile-bio").textContent = prof.bio || "Add a bio so future-you remembers why you started.";
     var xp = 0, done = 0, exSolved = 0, exTotal = 0;
     try { xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0; } catch (e) {}
-    try { done = Object.keys(JSON.parse(localStorage.getItem("skillzify_progress") || "{}")).length; } catch (e) {}
     var totalLessons = (window.SkillzifyLearn && window.SkillzifyLearn.totalLessons) || 250;
+    // P2-15: count only lessons that exist in the catalog — a stale /
+    // removed lesson id lingering in skillzify_progress must not
+    // inflate "lessons done" (or the stats card below). Same filter as
+    // the dashboard and activity.js gatherState().
+    try {
+      var progIds = JSON.parse(localStorage.getItem("skillzify_progress") || "{}");
+      var catalogIds = {};
+      var catLessons = (window.SkillzifyLearnCore && window.SkillzifyLearnCore.LESSONS) ||
+        (window.SkillzifyLearn && window.SkillzifyLearn.LESSONS) || [];
+      catLessons.forEach(function (l) { catalogIds[l.id] = true; });
+      done = Object.keys(progIds).filter(function (id) { return !catLessons.length || catalogIds[id]; }).length;
+    } catch (e) {}
     try {
       var EXD = window.SkillzifyPracticeData || [];
       exTotal = EXD.length;
@@ -74,7 +85,7 @@
     }).join("");
 
     var feed = A.feed(15);
-    var icons = { lesson: "📚", run: "▶️", snippet: "📝", achievement: "🏆", star: "⭐" };
+    var icons = { lesson: "📚", run: "▶️", snippet: "📝", achievement: "🏆", star: "⭐", xp: "⚡", practice: "✍️", review: "🔁" };
     document.getElementById("profile-feed").innerHTML = feed.length ? feed.map(function (e) {
       return '<div class="feed-item"><span>' + (icons[e.type] || "•") + '</span><span>' + esc(e.text) + '</span><time class="muted small">' + new Date(e.t).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) + '</time></div>';
     }).join("") : '<p class="muted">No activity yet — complete a lesson or run some code.</p>';
@@ -116,7 +127,7 @@
   function downloadCert(unitId) {
     var L = window.SkillzifyLearn;
     var t = ((L && (L.SECTIONS || []).filter(function (x) { return x.id === unitId; })[0])) ||
-      ((L && L.TRACKS.filter(function (x) { return x.id === unitId; })[0])) || { name: unitId };
+      ((L && (L.TRACKS || []).filter(function (x) { return x.id === unitId; })[0])) || { name: unitId };
     var isSection = !!(L && (L.SECTIONS || []).some(function (x) { return x.id === unitId; }));
     var user = (window.SkillzifyAuth && window.SkillzifyAuth.currentUser()) || null;
     var prof = (window.SkillzifyActivity && window.SkillzifyActivity.profile()) || {};
@@ -162,11 +173,18 @@
     try {
       var L = window.SkillzifyLearn;
       var prog = JSON.parse(localStorage.getItem("skillzify_progress") || "{}");
-      var tracks = [["base-camp", "Base Camp", "#6c7bff"], ["tool-shed", "Tool Shed", "#22d3ee"], ["object-castle", "Object Castle", "#f0a35e"], ["algorithm-arena", "Algorithm Arena", "#9d6bff"], ["power-lab", "Power Lab", "#f59e0b"], ["data-lab", "Data Lab", "#34d399"], ["launch-pad", "Launch Pad", "#f472b6"]];
-      var counts = tracks.map(function (t) {
-        var lessons = L ? L.LESSONS.filter(function (l) { return l.section === t[0]; }) : [];
+      // P2-22: section names/order come from SkillzifyLearnCore.SECTIONS
+      // (single source — a rename there now flows here). Colours are
+      // NOT in SECTIONS (learn-core.js carries no colour field, and it
+      // is outside this batch), so the small id->colour map below is
+      // presentation only; unknown sections fall back to grey.
+      var SECTION_COLORS = { "base-camp": "#6c7bff", "tool-shed": "#22d3ee", "object-castle": "#f0a35e", "algorithm-arena": "#9d6bff", "power-lab": "#f59e0b", "data-lab": "#34d399", "launch-pad": "#f472b6" };
+      var secs = (window.SkillzifyLearnCore && window.SkillzifyLearnCore.SECTIONS) ||
+        (L && L.SECTIONS) || [];
+      var counts = secs.map(function (sec) {
+        var lessons = L ? L.LESSONS.filter(function (l) { return l.section === sec.id; }) : [];
         var done = lessons.filter(function (l) { return prog[l.id]; }).length;
-        return { name: t[1], color: t[2], done: done, total: lessons.length };
+        return { name: sec.name, color: SECTION_COLORS[sec.id] || "#94a3b8", done: done, total: lessons.length };
       });
       var tot = counts.reduce(function (s, c) { return s + c.done; }, 0) || 1;
       bar.innerHTML = counts.map(function (c) {

@@ -1786,7 +1786,7 @@ var LESSONS_NEW_ADVANCED = [
     challenge: { type: "predict", prompt: "What will this print?",
       code: 'from sklearn.model_selection import train_test_split\nX = list(range(8))\nX_train, X_test = train_test_split(X, test_size=0.25, random_state=1)\nprint(len(X_test))',
       options: ["2", "6", "4", "1"], answer: 0,
-      hint: "A quarter of 8 rows is 2, whatever random_state you pick." }
+      hint: "A quarter of 8 rows is 2, whatever random_state you pick.", localOnly: true }
   },
   {
     id: "a59", section: "data-lab", track: "advanced", title: "ML: scikit-learn First Model",
@@ -1807,7 +1807,7 @@ var LESSONS_NEW_ADVANCED = [
     challenge: { type: "predict", prompt: "What will this print?",
       code: 'from sklearn.linear_model import LinearRegression\nm = LinearRegression()\nm.fit([[0], [1]], [1, 3])\nprint(m.predict([[2]]))',
       options: ["[4.]", "[5.]", "[3.]", "Error"], answer: 1,
-      hint: "The two points lie on y = 2x + 1, so at x = 2 the model predicts 5." }
+      hint: "The two points lie on y = 2x + 1, so at x = 2 the model predicts 5.", localOnly: true }
   },
   {
     id: "a60", section: "data-lab", track: "advanced", title: "ML: Classification vs Regression",
@@ -1828,7 +1828,7 @@ var LESSONS_NEW_ADVANCED = [
     challenge: { type: "predict", prompt: "What will this print?",
       code: 'from sklearn.tree import DecisionTreeClassifier\nm = DecisionTreeClassifier(random_state=0)\nm.fit([[0], [10]], ["a", "b"])\nprint(m.predict([[0]]))',
       options: ["['b']", "['a']", "[0]", "Error"], answer: 1,
-      hint: "Input 0 was trained with label 'a', and a tree memorises its training points." }
+      hint: "Input 0 was trained with label 'a', and a tree memorises its training points.", localOnly: true }
   },
   {
     id: "a61", section: "data-lab", track: "advanced", title: "ML: Feature Engineering Basics",
@@ -1870,7 +1870,7 @@ var LESSONS_NEW_ADVANCED = [
     challenge: { type: "predict", prompt: "What will this print?",
       code: 'from sklearn.metrics import accuracy_score\nprint(round(accuracy_score([1, 1, 0], [1, 0, 0]), 2))',
       options: ["0.33", "1.0", "0.67", "0.5"], answer: 2,
-      hint: "Two of the three predictions match, and 2/3 rounds to 0.67." }
+      hint: "Two of the three predictions match, and 2/3 rounds to 0.67.", localOnly: true }
   },
   {
     id: "a63", section: "launch-pad", track: "advanced", title: "Web: HTTP Basics for Python Devs",
@@ -1912,7 +1912,7 @@ var LESSONS_NEW_ADVANCED = [
     challenge: { type: "predict", prompt: "What will this print?",
       code: 'from flask import Flask\napp = Flask(__name__)\n@app.route("/hi")\ndef hi():\n    return "Hi Ava"\nprint(app.test_client().get("/hi").data.decode())',
       options: ["Hi Ava", "Hi", "404", "Error"], answer: 0,
-      hint: "The /hi route returns the string 'Hi Ava' as the response body." }
+      hint: "The /hi route returns the string 'Hi Ava' as the response body.", localOnly: true }
   },
   {
     id: "a65", section: "launch-pad", track: "advanced", title: "Web: Flask Routing & Templates",
@@ -1933,7 +1933,7 @@ var LESSONS_NEW_ADVANCED = [
     challenge: { type: "predict", prompt: "What will this print?",
       code: 'from flask import Flask\napp = Flask(__name__)\n@app.route("/square/<int:n>")\ndef square(n):\n    return str(n * n)\nprint(app.test_client().get("/square/5").data.decode())',
       options: ["5", "10", "25", "Error"], answer: 2,
-      hint: "<int:n> converts 5 to the integer 5, and 5 squared is 25." }
+      hint: "<int:n> converts 5 to the integer 5, and 5 squared is 25.", localOnly: true }
   },
   {
     id: "a66", section: "launch-pad", track: "advanced", title: "Web: Flask Forms & Validation",
@@ -1954,7 +1954,7 @@ var LESSONS_NEW_ADVANCED = [
     challenge: { type: "predict", prompt: "What will this print?",
       code: 'from flask import Flask, request\napp = Flask(__name__)\n@app.route("/signup", methods=["POST"])\ndef signup():\n    name = request.form.get("name", "").strip()\n    if not name:\n        return "Name is required", 400\n    return "Welcome, " + name\nprint(app.test_client().post("/signup", data={"name": " Bo "}).data.decode())',
       options: ["Welcome, Bo", "Welcome,  Bo ", "Name is required", "Error"], answer: 0,
-      hint: "strip() removes the spaces around Bo before the greeting is built." }
+      hint: "strip() removes the spaces around Bo before the greeting is built.", localOnly: true }
   },
   {
     id: "a67", section: "launch-pad", track: "advanced", title: "Web: REST APIs with Flask",
@@ -1975,7 +1975,7 @@ var LESSONS_NEW_ADVANCED = [
     challenge: { type: "predict", prompt: "What will this print?",
       code: 'from flask import Flask, jsonify, request\napp = Flask(__name__)\n@app.route("/api/echo", methods=["POST"])\ndef echo():\n    return jsonify(request.get_json())\nprint(app.test_client().post("/api/echo", json={"x": 3}).get_json())',
       options: ["{'x': '3'}", "{'x': 3}", "None", "Error"], answer: 1,
-      hint: "The JSON body round-trips: 3 stays the number 3, not the string '3'." }
+      hint: "The JSON body round-trips: 3 stays the number 3, not the string '3'.", localOnly: true }
   },
   {
     id: "a68", section: "launch-pad", track: "advanced", title: "Web: FastAPI First App",
@@ -1996,7 +1996,7 @@ var LESSONS_NEW_ADVANCED = [
     challenge: { type: "predict", prompt: "What will this print?",
       code: 'from fastapi import FastAPI\nfrom fastapi.testclient import TestClient\napp = FastAPI()\n@app.get("/square/{n}")\ndef square(n: int):\n    return {"result": n * n}\nprint(TestClient(app).get("/square/6").json())',
       options: ["{'result': 36}", "{'result': '36'}", "{'result': 6}", "Error"], answer: 0,
-      hint: "The path parameter n: int converts '6' to 6, and 6 squared is 36." }
+      hint: "The path parameter n: int converts '6' to 6, and 6 squared is 36.", localOnly: true }
   },
   {
     id: "a69", section: "launch-pad", track: "advanced", title: "Web: Authentication Basics (Sessions & Tokens)",
@@ -2038,7 +2038,7 @@ var LESSONS_NEW_ADVANCED = [
     challenge: { type: "predict", prompt: "What will this print?",
       code: 'from sqlalchemy import Column, Integer, String, create_engine, select\nfrom sqlalchemy.orm import declarative_base, Session\nBase = declarative_base()\nclass User(Base):\n    __tablename__ = "users"\n    id = Column(Integer, primary_key=True)\n    name = Column(String)\nengine = create_engine("sqlite:///:memory:")\nBase.metadata.create_all(engine)\nwith Session(engine) as s:\n    s.add_all([User(name="Ava"), User(name="Bo")])\n    s.commit()\n    print(len(s.execute(select(User)).scalars().all()))',
       options: ["1", "0", "2", "Error"], answer: 2,
-      hint: "Two users are added and committed, so the query returns two rows." }
+      hint: "Two users are added and committed, so the query returns two rows.", localOnly: true }
   },
 {
     id: "a71", section: "launch-pad", track: "advanced", title: "Automation: Scripting Your OS with os & shutil",
@@ -2298,7 +2298,7 @@ var LESSONS_NEW_ADVANCED = [
     ],
     challenge: { type: "predict", prompt: "What will this print?",
       code: 'from flask import Flask, jsonify\napp = Flask(__name__)\n\n@app.route("/ping")\ndef ping():\n    return jsonify({"status": "ok"})\n\nclient = app.test_client()\nprint(client.get("/ping").status_code)\nprint(client.get("/ping").get_json())', options: ["404\n{}", "200\nok", "Error", "200\n{'status': 'ok'}"], answer: 3,
-      hint: "The route exists, and jsonify turns the dict into a JSON response." }
+      hint: "The route exists, and jsonify turns the dict into a JSON response.", localOnly: true }
   },
   {
     id: "a84", section: "data-lab", track: "advanced", title: "Capstone: Data Analysis Project (Real Dataset)",
@@ -2338,7 +2338,7 @@ var LESSONS_NEW_ADVANCED = [
     ],
     challenge: { type: "predict", prompt: "What will this print?",
       code: 'from flask import Flask\napp = Flask(__name__)\n\n@app.route("/hello/<name>")\ndef hello(name):\n    return "Hello, " + name + "!"\n\nclient = app.test_client()\nprint(client.get("/hello/Ava").data.decode())', options: ["Hello, name!", "404", "Error", "Hello, Ava!"], answer: 3,
-      hint: "The <name> part of the URL is captured and passed to the function." }
+      hint: "The <name> part of the URL is captured and passed to the function.", localOnly: true }
   },
   {
     id: "a86", section: "launch-pad", track: "advanced", title: "Asyncio: Web Scraping at Scale",
@@ -2378,7 +2378,7 @@ var LESSONS_NEW_ADVANCED = [
     ],
     challenge: { type: "predict", prompt: "What will this print?",
       code: 'from sklearn.feature_extraction.text import CountVectorizer\nfrom sklearn.naive_bayes import MultinomialNB\ntexts = ["I love this course", "great lesson, loved it", "boring and confusing", "waste of time, awful"]\nlabels = ["pos", "pos", "neg", "neg"]\nvec = CountVectorizer()\nmodel = MultinomialNB()\nmodel.fit(vec.fit_transform(texts), labels)\nprint(model.predict(vec.transform(["great course"]))[0])', options: ["great", "Error", "pos", "neg"], answer: 2,
-      hint: "The word great appeared only in a positive example." }
+      hint: "The word great appeared only in a positive example.", localOnly: true }
   },
   {
     id: "a88", section: "launch-pad", track: "advanced", title: "Web: Deploying a Flask App",
@@ -2398,7 +2398,7 @@ var LESSONS_NEW_ADVANCED = [
     ],
     challenge: { type: "predict", prompt: "What will this print?",
       code: 'from flask import Flask\napp = Flask(__name__)\n\n@app.route("/health")\ndef health():\n    return {"status": "ok"}\n\nclient = app.test_client()\nprint(client.get("/health").get_json()["status"])', options: ["ok", "200", "healthy", "Error"], answer: 0,
-      hint: "get_json() gives a dict; take its status value." }
+      hint: "get_json() gives a dict; take its status value.", localOnly: true }
   },
   {
     id: "a89", section: "data-lab", track: "advanced", title: "Data Science: Time Series Basics",

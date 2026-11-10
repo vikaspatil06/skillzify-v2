@@ -402,7 +402,7 @@
       '<div class="path-hero" style="--pc:' + c + '">' +
       '<div class="path-tile lg">' + p.icon + "</div>" +
       '<div><span class="badge path-level">' + esc(p.level || "") + "</span>" +
-      '<h1 class="section-title" style="margin:8px 0">' + esc(p.title) + "</h1>" +
+      '<h2 class="section-title" style="margin:8px 0">' + esc(p.title) + "</h2>" +
       "<p>" + esc(p.desc) + "</p>" +
       '<p class="hint">📖 ' + st.lessons + " lessons · 🏋️ " + st.exs + " exercises · " + fmtMins(st.mins) +
       " · " + st.done + "/" + st.total + " steps (" + st.pct + "%)</p>" +

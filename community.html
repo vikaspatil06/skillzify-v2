@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify Circle — ask questions, get answers, and share what you built with fellow Python learners.">
   <title>Community — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=25">
+  <link rel="stylesheet" href="assets/css/style.css?v=26">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -98,7 +98,7 @@
             <button class="pill" data-filter="unanswered" type="button">Unanswered</button>
             <button class="pill" data-filter="mine" type="button">My questions</button>
           </div>
-          <input type="search" class="comm-search" id="comm-q-search" placeholder="🔍 Search questions…" autocomplete="off">
+          <input type="search" class="comm-search" id="comm-q-search" placeholder="🔍 Search questions…" autocomplete="off" aria-label="Search questions">
           <button class="btn btn-primary" id="comm-ask-btn" type="button">Ask a question</button>
         </div>
 
@@ -106,7 +106,7 @@
 
         <div id="comm-ask-wrap" hidden>
           <div class="card comm-form">
-            <h3>Ask a question</h3>
+            <h2>Ask a question</h2>
             <form id="comm-ask-form">
               <label>Title
                 <input type="text" id="ask-title" maxlength="140" placeholder="What's the problem, in one line?" autocomplete="off">
@@ -146,7 +146,7 @@
 
         <div id="comm-share-wrap" hidden>
           <div class="card comm-form">
-            <h3>Share your project</h3>
+            <h2>Share your project</h2>
             <form id="comm-share-form">
               <label>Title
                 <input type="text" id="share-title" maxlength="140" placeholder="What did you build?" autocomplete="off">
@@ -181,15 +181,15 @@
 <script src="assets/js/nav.js"></script>
 <script src="assets/js/footer.js"></script>
 <script src="assets/js/app.js?v=5"></script>
-<script src="assets/js/activity.js?v=8"></script>
+<script src="assets/js/activity.js?v=9"></script>
 <script src="assets/js/palette.js?v=2"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
-<script src="assets/js/auth.js?v=5"></script>
-<script src="assets/js/sync.js?v=14"></script>
-<script src="assets/js/ai.js?v=16"></script>
-<script src="assets/js/community.js?v=10"></script>
-<script src="assets/js/community-page.js?v=9"></script>
+<script src="assets/js/auth.js?v=6"></script>
+<script src="assets/js/sync.js?v=15"></script>
+<script src="assets/js/ai.js?v=17"></script>
+<script src="assets/js/community.js?v=11"></script>
+<script src="assets/js/community-page.js?v=10"></script>
 </body>
 </html>

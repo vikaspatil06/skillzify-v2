@@ -120,9 +120,12 @@
     var out = {};
     Object.keys(ids).forEach(function (id) {
       var a = la[id] || {}, b = ca[id] || {};
-      var bests = [a.bestMs || 0, b.bestMs || 0].filter(function (v) { return v > 0; });
+      // P2-51: num() guards, like the neighbouring fields — a malformed
+      // attempts: "abc" used to give Math.max("abc", 0) -> NaN, which
+      // JSON.stringify writes as null into localStorage and Firestore.
+      var bests = [num(a.bestMs), num(b.bestMs)].filter(function (v) { return v > 0; });
       out[id] = {
-        attempts: Math.max(a.attempts || 0, b.attempts || 0),
+        attempts: Math.max(num(a.attempts), num(b.attempts)),
         solved: !!(a.solved || b.solved),
         hintsUsed: Math.max(num(a.hintsUsed), num(b.hintsUsed)),
         revealed: !!(a.revealed || b.revealed),

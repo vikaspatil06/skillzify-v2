@@ -14,7 +14,7 @@
   <meta name="description" content="Your Skillzify learning dashboard — progress, streaks and run history.">
   <title>Dashboard — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=25">
+  <link rel="stylesheet" href="assets/css/style.css?v=26">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -51,13 +51,13 @@
         </div>
       </div>
       <div class="dash-card" id="dash-plan-card" style="margin-top:20px">
-        <h3>📋 Today's plan</h3>
+        <h2>📋 Today's plan</h2>
         <p class="hint" id="dash-plan-sub" style="margin:4px 0 0">About 15 minutes.</p>
         <div id="dash-plan" style="margin-top:8px"></div>
       </div>
       <div class="dash-grid">
         <div class="dash-card">
-          <h3>Overall progress</h3>
+          <h2>Overall progress</h2>
           <div class="ring-wrap" style="margin-top:12px">
             <svg width="96" height="96" viewBox="0 0 96 96">
               <circle cx="48" cy="48" r="42" fill="none" stroke="var(--bg-soft)" stroke-width="10"/>
@@ -75,14 +75,14 @@
           </div>
         </div>
         <div class="dash-card">
-          <h3>🔥 Day streak</h3>
+          <h2>🔥 Day streak</h2>
           <div class="big" id="dash-streak" style="margin-top:12px">0🔥</div>
           <p class="hint" id="dash-streak-best" style="margin:4px 0 0"></p>
           <p class="hint">Learn, practise or run code on consecutive days to grow your streak.</p>
           <a href="compiler.html" class="btn btn-sm" style="margin-top:10px">Keep it going →</a>
         </div>
         <div class="dash-card">
-          <h3>⚡ Level</h3>
+          <h2>⚡ Level</h2>
           <div class="big" id="dash-level-name" style="margin-top:12px">Novice</div>
           <p class="hint" id="dash-level-sub">0 XP</p>
           <div class="bar" style="margin-top:10px"><span id="dash-level-bar" style="width:0%"></span></div>
@@ -91,22 +91,22 @@
 
       <div class="dash-grid-2">
         <div class="dash-card">
-          <h3>📅 Today's challenge</h3>
+          <h2>📅 Today's challenge</h2>
           <div id="dash-daily"></div>
         </div>
         <div class="dash-card">
-          <h3>🔁 Review queue</h3>
+          <h2>🔁 Review queue</h2>
           <div id="dash-revision"></div>
         </div>
       </div>
       <div class="dash-grid-2">
         <div class="dash-card">
-          <h3>🎯 Weak spots</h3>
+          <h2>🎯 Weak spots</h2>
           <p class="muted small">Exercise accuracy by topic — low scores need a revisit.</p>
           <div id="dash-topic-acc" style="margin-top:8px"></div>
         </div>
         <div class="dash-card">
-          <h3>Progress by section</h3>
+          <h2>Progress by section</h2>
           <div id="dash-tracks" style="margin-top:8px"></div>
         </div>
       </div>
@@ -120,7 +120,7 @@
         </div>
       </div>
       <div class="dash-card" style="margin-top:20px">
-        <h3>🏆 Latest achievements</h3>
+        <h2>🏆 Latest achievements</h2>
         <div id="dash-achievements" class="ach-grid"></div>
       </div>
     </div>
@@ -132,22 +132,22 @@
 <script src="assets/js/nav.js"></script>
 <script src="assets/js/footer.js"></script>
 <script src="assets/js/app.js?v=5"></script>
-<script src="assets/js/activity.js?v=8"></script>
+<script src="assets/js/activity.js?v=9"></script>
 <script src="assets/js/palette.js?v=2"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
-<script src="assets/js/auth.js?v=5"></script>
-<script src="assets/js/sync.js?v=14"></script>
-<script src="assets/js/ai.js?v=16"></script>
+<script src="assets/js/auth.js?v=6"></script>
+<script src="assets/js/sync.js?v=15"></script>
+<script src="assets/js/ai.js?v=17"></script>
 <script src="assets/js/lessons-b.js?v=3"></script>
-<script src="assets/js/lessons-i.js?v=3"></script>
-<script src="assets/js/lessons-a.js?v=3"></script>
-<script src="assets/js/learn-core.js?v=9"></script>
-<script src="assets/js/review.js?v=7"></script>
-<script src="assets/js/mastery.js?v=3"></script>
+<script src="assets/js/lessons-i.js?v=4"></script>
+<script src="assets/js/lessons-a.js?v=4"></script>
+<script src="assets/js/learn-core.js?v=10"></script>
+<script src="assets/js/review.js?v=8"></script>
+<script src="assets/js/mastery.js?v=4"></script>
 <script src="assets/js/learn.js?v=14"></script>
 <script src="assets/js/practice-data.js?v=4"></script>
-<script src="assets/js/dashboard.js?v=18"></script>
+<script src="assets/js/dashboard.js?v=19"></script>
 </body>
 </html>

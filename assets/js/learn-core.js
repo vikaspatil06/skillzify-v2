@@ -100,7 +100,7 @@
           ],
           challenge: { type: "predict", prompt: "What will this print?",
             code: "x = 10\nif x > 5:\n    print(\"big\")\nif x > 8:\n    print(\"huge\")",
-            options: ["big", "huge", "big, then huge (two lines)", "nothing"],
+            options: ["big", "huge", "big\nhuge", "nothing"],
             answer: 2, hint: "These are two separate if statements — both conditions are True, so both run." }
         },
     {
@@ -191,7 +191,7 @@
               answer: 0, hint: "30 is greater than 25, so the first branch runs." }
           },
     {
-            id: "b9", section: "base-camp", track: "beginner", title: "Loops: for & while",
+            id: "b9", section: "base-camp", track: "beginner", title: "Loops: for & while — Practice",
             explain: "Loops let you repeat work without repeating code — the moment a program needs to do something a hundred times, you need them. for loops walk through collections and ranges, while while loops keep going until a condition changes. break and continue give you fine control over when to stop or skip.",
             takeaways: [
               "for i in range(n) loops n times with i going 0 to n-1.",
@@ -601,11 +601,11 @@
           ],
           challenge: { type: "predict", prompt: "What will this print?",
             code: 'from contextlib import contextmanager\n@contextmanager\ndef tag(name):\n    print(f"<{name}>")\n    yield\n    print(f"</{name}>")\n\nwith tag("b"):\n    print("hi")',
-            options: ["<b>, then hi, then </b> (3 lines)", "hi only", "</b>, then hi, then <b>", "Error"],
+            options: ["<b>\nhi\n</b>", "hi only", "</b>, then hi, then <b>", "Error"],
             answer: 0, hint: "Entry prints <b>, the body prints hi, exit prints </b>." }
         },
     {
-            id: "a6", section: "power-lab", track: "advanced", title: "Decorators",
+            id: "a6", section: "power-lab", track: "advanced", title: "Decorators in Practice",
             explain: "A decorator is a function that wraps another function to add behavior — logging, timing, access checks — without touching its code. The @ syntax is just shorthand for passing your function through the decorator. Once you see the pattern, you will spot decorators everywhere in real Python projects.",
             takeaways: [
               "@decorator above def is shorthand for func = decorator(func).",
@@ -645,7 +645,7 @@
             ],
             challenge: { type: "predict", prompt: "What will this print?",
               code: 'def gen():\n    yield 1\n    yield 2\ng = gen()\nprint(next(g))\nprint(next(g))',
-              options: ["1 then 1", "1 then 2", "2 then 2", "Error"],
+              options: ["1 then 1", "1\n2", "2 then 2", "Error"],
               answer: 1, hint: "Each next() call resumes where the generator paused." }
           },
     {
@@ -667,7 +667,7 @@
             ],
             challenge: { type: "predict", prompt: "What will this print?",
               code: 'def countdown(n):\n    if n <= 0:\n        return\n    print(n)\n    countdown(n - 1)\ncountdown(2)',
-              options: ["2 then 1", "1 then 2", "2 then 1 then 0", "Error"],
+              options: ["2\n1", "1 then 2", "2 then 1 then 0", "Error"],
               answer: 0, hint: "Each call prints, then recurses with n - 1 — until 0 stops it silently." }
           },
     {
@@ -717,7 +717,8 @@
   ];
 
   /* Quiz bank expansion: merge extra questions (quiz-extra.js) when present.
-     Each lesson goes from 2 to 5 questions; the lesson page picks 3 at random. */
+     Only 32 lessons reach 5 questions (the 32 with a 2-question base quiz);
+     the other 218 stay at 3. The lesson page picks 3 at random. */
   try {
     var __qx = window.SkillzifyQuizExtra || {};
     LESSONS.forEach(function (l) {
@@ -761,9 +762,9 @@
   /* ================= Storage ================= */
   function getProgress() { return window.Skillzify.storeGet(PROGRESS_KEY, {}); }
   function saveProgress(p) { window.Skillzify.storeSet(PROGRESS_KEY, p); }
-  function getXP() { return window.Skillzify.storeGet(XP_KEY, 0) || 0; }
+  function getXP() { return Number(window.Skillzify.storeGet(XP_KEY, 0)) || 0; }
   function addXP(n) {
-    var xp = getXP() + n;
+    var xp = getXP() + (Number(n) || 0);
     window.Skillzify.storeSet(XP_KEY, xp);
     return xp;
   }
@@ -817,10 +818,10 @@
   var SECTION_BONUS_KEY = "skillzify_section_bonus"; // {sectionId: true}
   var PATH_BONUS_KEY = "skillzify_path_bonus";       // {pathId: true}
   function bonusAwarded(key, id) {
-    try { var m = window.Skillzify.storeGet(key, {}); return !!(m && m[id]); } catch (e) { return false; }
+    try { var m = window.Skillzify.storeGet(key, {}); if (!m || typeof m !== "object" || Array.isArray(m)) return false; return !!m[id]; } catch (e) { return false; }
   }
   function markBonusAwarded(key, id) {
-    try { var m = window.Skillzify.storeGet(key, {}) || {}; m[id] = true; window.Skillzify.storeSet(key, m); } catch (e) {}
+    try { var m = window.Skillzify.storeGet(key, {}); if (!m || typeof m !== "object" || Array.isArray(m)) m = {}; m[id] = true; window.Skillzify.storeSet(key, m); } catch (e) {}
   }
   function awardBonus(n, label) {
     var xp = addXP(n);
@@ -943,6 +944,7 @@
   function idxOf(id) { for (var i = 0; i < LESSONS.length; i++) if (LESSONS[i].id === id) return i; return -1; }
   function isDone(id) { return !!getProgress()[id]; }
   function isUnlocked(gi) {
+    if (gi < 0 || gi >= LESSONS.length) return false;
     if (gi <= 0) return true;
     if (isDone(LESSONS[gi - 1].id)) return true;
     // Placement: every lesson in a section BEFORE the placed one is open.
@@ -975,7 +977,7 @@
     return !!pathUnlockMap()[LESSONS[gi].id];
   }
   // lessonId -> pathId for lessons unlocked ONLY via an enrolled path
-  function pathUnlockMap() {
+  function _computePathUnlockMap() {
     try {
       var P = window.SkillzifyPaths;
       if (!P) return {};
@@ -1013,9 +1015,40 @@
       return map;
     } catch (e) { return {}; }
   }
+  // P2-08: memoize the enrollment map per enrollment state. isUnlocked()
+  // is called ~500x per Learn render; re-parsing the enrollment store on
+  // every call was the cost. The fingerprint is the raw stored strings,
+  // so any enroll/leave (or custom-path edit, or a cross-tab change)
+  // yields a fresh map on the next call, while unchanged state reuses
+  // the identical map object.
+  var _pathUnlockCache = null, _pathUnlockCacheKey = null;
+  function pathUnlockMap() {
+    var fp = null;
+    try { fp = (localStorage.getItem("skillzify_enrolled_paths") || "") + "|" + (localStorage.getItem("skillzify_custom_paths") || ""); } catch (e) {}
+    if (_pathUnlockCache && _pathUnlockCacheKey === fp) return _pathUnlockCache;
+    var map = _computePathUnlockMap();
+    _pathUnlockCache = map; _pathUnlockCacheKey = fp;
+    return map;
+  }
   // true when this lesson is unlocked solely because of a path enrollment
   function isPathOnlyUnlocked(gi) {
+    if (gi < 0 || gi >= LESSONS.length) return false;
     if (gi <= 0 || isDone(LESSONS[gi - 1].id)) return false;
+    // P2-04: a lesson already open by placement or by the sequential
+    // chain (incl. the first lesson of an unlocked section) is not
+    // "path-only" — the path badge must not claim it.
+    var placed = placedSection();
+    if (placed) {
+      var ids = SECTIONS.map(function (x) { return x.id; });
+      var li = ids.indexOf(LESSONS[gi].section);
+      var pi = ids.indexOf(placed);
+      if (li !== -1 && pi !== -1 && li < pi) return false;
+    }
+    var sec = LESSONS[gi].section;
+    if (sec) {
+      var first = sectionLessons(sec)[0];
+      if (first && first.id === LESSONS[gi].id && sectionUnlocked(sec)) return false;
+    }
     return !!pathUnlockMap()[LESSONS[gi].id];
   }
   function trackLessons(trackId) { return LESSONS.filter(function (l) { return l.track === trackId; }); }
@@ -1045,7 +1078,8 @@
   }
   function sectionUnlocked(sectionId) {
     var s = SECTIONS.filter(function (x) { return x.id === sectionId; })[0];
-    if (!s || !s.needs) return true;
+    if (!s) return false;
+    if (!s.needs) return true;
     // Placement overrides the needs-chain: every section at or before
     // the placed one is open (spec §5). Sections after it still unlock
     // normally, by finishing the previous section.

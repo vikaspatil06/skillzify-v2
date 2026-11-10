@@ -13,7 +13,11 @@
   var ATT_KEY = "skillzify_exercise_attempts";
 
   var TOPICS = ["variables", "strings", "collections", "loops", "functions", "oop", "exceptions", "dsa", "recursion", "sorting", "trees-graphs", "dynamic-programming", "data-science", "web", "files", "testing", "async"];
-  var TOPIC_LABEL = { variables: "Variables", strings: "Strings", collections: "Collections", loops: "Loops", functions: "Functions", oop: "OOP", exceptions: "Exceptions", dsa: "Algorithms", recursion: "Recursion", sorting: "Sorting", "trees-graphs": "Trees & Graphs", "dynamic-programming": "Dynamic Programming", "data-science": "Data Science", web: "Web", files: "Files", testing: "Testing", async: "Async" };
+  // P2-22: labels come from the canonical copy in mastery.js
+  // (SkillzifyMastery.TOPIC_LABELS — mastery.js loads before this file
+  // on practice.html). The {} fallback only covers a failed mastery.js
+  // load; every label lookup below falls back to the topic id itself.
+  var TOPIC_LABEL = (window.SkillzifyMastery && window.SkillzifyMastery.TOPIC_LABELS) || {};
   var KIND_LABEL = { code: "✍️ Write code", predict: "🔮 Predict output", fix: "🐞 Fix the bug" };
 
   function esc(s) { return S.esc(s == null ? "" : String(s)); }
@@ -228,6 +232,10 @@
       // P1-08: flag a runtime-load failure so submitCode can tell it
       // apart from a real failed attempt — it must not count.
       if (!ok) { done({ error: "Python runtime failed to load. Check your connection and try again.", runtime: true }); return; }
+      // P2-13: the solve clock starts HERE, once Pyodide is ready —
+      // not before runCodeTests, so a 30s+ cold load never counts
+      // toward "best time". Passed to done() as the 2nd argument.
+      var tStart = Date.now();
       var results = [];
       try {
         for (var i = 0; i < ex.tests.length; i++) {
@@ -245,10 +253,10 @@
           results.push({ pass: pass, got: got, expect: String(t.expectError != null ? t.expectError : t.expect), run: t.run, error: isErr ? got.slice(6) : null });
         }
       } catch (e) {
-        done({ error: "Your code crashed before the tests could run: " + String(e).split("\n").pop() });
+        done({ error: "Your code crashed before the tests could run: " + String(e).split("\n").pop() }, tStart);
         return;
       }
-      done({ results: results });
+      done({ results: results }, tStart);
     });
   }
 
@@ -518,10 +526,17 @@
       n.textContent = "Today's AI challenge wasn't available — pick an exercise below.";
     }
   }
-  /* Plain-text weak-spot summary for the AI daily challenge prompt:
-     weakest topic first, unsolved exercises, untried topics.
-     (Dashboard has its own copy; this one reads the same stores.) */
+  /* Plain-text weak-spot summary for the AI daily challenge prompt.
+     P2-22: the canonical implementation lives in mastery.js
+     (SkillzifyMastery.weakSpotsSummary) — this is a thin delegate.
+     The solve-rate-only fallback below runs only when mastery.js
+     failed to load; it uses the same topicRows math the dashboard
+     fallback uses, never the mastery weak/strong lines. */
   function weakSpotsSummary() {
+    try {
+      var M = window.SkillzifyMastery;
+      if (M && typeof M.weakSpotsSummary === "function") return M.weakSpotsSummary(EX, getAttempts());
+    } catch (e) {}
     var atts = getAttempts();
     var rows = TOPICS.map(function (t) {
       var tried = 0, solved = 0;
@@ -538,19 +553,7 @@
     var untried = rows.filter(function (r) { return r.tried === 0; });
     var unsolved = EX.filter(function (ex) { var a = atts[ex.id]; return a && a.attempts > 0 && !a.solved; });
     var parts = [];
-    var mWeak = null, mStrong = null;
-    try {
-      var M = window.SkillzifyMastery;
-      if (M && typeof M.topicMastery === "function") {
-        var mrows = M.topicMastery().filter(function (r) { return r.tried > 0 && r.score != null; })
-          .sort(function (a, b) { return a.score - b.score; });
-        if (mrows.length) { mWeak = mrows[0]; mStrong = mrows[mrows.length - 1]; }
-      }
-    } catch (e) {}
-    if (mWeak) {
-      parts.push("Weakest topic: " + mWeak.label + " (mastery " + mWeak.score + "% \u2014 " + mWeak.band + (mWeak.rusty ? ", rusty" : "") + ").");
-      if (mStrong && mStrong.topic !== mWeak.topic) parts.push("Strongest topic: " + mStrong.label + " (mastery " + mStrong.score + "% \u2014 " + mStrong.band + ").");
-    } else if (triedRows.length) {
+    if (triedRows.length) {
       parts.push("Weakest topic: " + triedRows[0].label + " (" + triedRows[0].pct + "% of " + triedRows[0].tried + " tried).");
       if (triedRows.length > 1) parts.push("Strongest topic: " + triedRows[triedRows.length - 1].label + " (" + triedRows[triedRows.length - 1].pct + "%).");
     }
@@ -739,7 +742,11 @@
     var atts = getAttempts(), totalXP = 0;
     EX.forEach(function (ex) {
       var a = atts[ex.id];
-      if (a && a.solved) totalXP += a.xpEarned || Math.round(ex.xp * (a.revealed ? 0.5 : 1));
+      // P2-14: legacy solved records without xpEarned are valued like
+      // xpForSolve values a live solve: a no-hint, unrevealed,
+      // single-attempt solve earns 1.25x; a reveal halves it.
+      if (a && a.solved) totalXP += a.xpEarned || Math.round(ex.xp *
+        (a.revealed ? 0.5 : (a.revealed === false && a.hintsUsed === 0 && a.attempts === 1 ? 1.25 : 1)));
     });
     // AI drills solved: N · +X XP (from the drills attempts store and
     // the saved drill definitions — never merged into the 150-exercise counts).
@@ -793,7 +800,7 @@
       var s = tp[t], pct = s.total ? Math.round(s.solved / s.total * 100) : 0;
       var done = s.total > 0 && s.solved === s.total;
       return '<div class="tp-row">' +
-        '<span class="tp-label"><span class="tp-dot" style="background:' + topicColor(t) + '"></span>' + esc(TOPIC_LABEL[t]) +
+        '<span class="tp-label"><span class="tp-dot" style="background:' + topicColor(t) + '"></span>' + esc(TOPIC_LABEL[t] || t) +
         (done ? ' <span class="badge badge-done">✓</span>' : '') + '</span>' +
         '<div class="bar"><span style="width:' + pct + '%;background:' + topicColor(t) + '"></span></div>' +
         '<span class="pct">' + s.solved + '/' + s.total + '</span></div>';
@@ -854,11 +861,20 @@
 
   function editorCode() { var t = $("ex-editor"); return t ? t.value : ""; }
 
+  // P2-54: the hint must not guess before Firebase resolves.
+  // currentUser() is null until the session restores, so an
+  // ungated check briefly mislabels signed-in users as signed-out.
+  // Until auth.js fires onReady, render NO hint; onReady (and every
+  // later auth change) refreshes it — same pattern as dashboard.js.
+  var authResolved = false;
   // Signed-out users get 10 AI answers/day (50 when signed in) —
   // one plain-text line under the tutor button, only when signed out.
   function signedOutCapHint() {
     try {
-      if (window.SkillzifyAuth && typeof window.SkillzifyAuth.currentUser === "function" && !window.SkillzifyAuth.currentUser()) {
+      var auth = window.SkillzifyAuth;
+      if (!auth || typeof auth.currentUser !== "function") return "";
+      if (typeof auth.onReady === "function" && !authResolved) return "";
+      if (!auth.currentUser()) {
         return '<p class="hint" id="tutor-cap-hint">Signed out? AI answers are 10/day — sign in for 50/day.</p>';
       }
     } catch (e) {}
@@ -1033,8 +1049,10 @@
     if (!code.trim()) { S.toast("Write some code first.", "error"); return; }
     var resBox = $("ex-results");
     resBox.innerHTML = '<p class="hint">Running ' + ex.tests.length + ' tests…</p>';
-    var t0 = Date.now();
-    runCodeTests(ex, code, function (out) {
+    // P2-13: no clock here — runCodeTests passes the start time (set
+    // inside its ensurePyodide callback) as the 2nd argument, so
+    // bestMs measures solving, not the Pyodide cold load.
+    runCodeTests(ex, code, function (out, tStart) {
       if (out.error) {
         lastFailInfo = out.error;
         resBox.innerHTML = '<p class="fail">⚠️ ' + esc(out.error) + '</p>';
@@ -1055,7 +1073,7 @@
           '</div>';
       });
       html += '</div>';
-      var ms = Date.now() - t0;
+      var ms = tStart ? Date.now() - tStart : 0;
       if (passed === total) {
         stopTimer();
         var a = attFor(ex.id);
@@ -1173,13 +1191,22 @@
       else fetch("api/health", { method: "GET", cache: "no-store" }).catch(function () {});
     } catch (e) {}
     initFilters();
+    // P2-54: resolve the auth state BEFORE the first render, so the
+    // cap hint never guesses: onReady fires at once when auth is
+    // already ready, otherwise when Firebase restores the session.
+    try {
+      var auth = window.SkillzifyAuth;
+      if (auth && typeof auth.onReady === "function") {
+        auth.onReady(function () { authResolved = true; refreshTutorCapHint(); });
+      }
+    } catch (e) {}
     window.addEventListener("hashchange", route);
     route();
     // M3: keep the tutor cap hint in step with sign-in/out (e.g. in
     // another tab). refreshTutorCapHint re-renders the hint line only.
     try {
       if (window.SkillzifyAuth && typeof window.SkillzifyAuth.onAuthChange === "function") {
-        window.SkillzifyAuth.onAuthChange(function () { refreshTutorCapHint(); });
+        window.SkillzifyAuth.onAuthChange(function () { authResolved = true; refreshTutorCapHint(); });
       }
     } catch (e) {}
     if (A && A.checkAchievements) { try { A.checkAchievements(); } catch (e) {} }

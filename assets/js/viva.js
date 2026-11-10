@@ -478,7 +478,13 @@
     btn.addEventListener("click", function () {
       var l = currentLesson();
       if (!l) {
-        open({ id: "__none__", title: "Lesson", explain: "", code: "" });
+        // P2-44: show the error WITHOUT calling open() — open() fires
+        // askQuestion() immediately, which would burn a daily-cap AI
+        // call for the fake "__none__" lesson and then overwrite this
+        // error with the AI's answer. Build the panel directly instead
+        // (showError needs the panel DOM, which open() used to build).
+        buildPanel();
+        overlay.style.display = "flex";
         showError("Couldn't find this lesson's data. Reload the page and try again.", "Close", close);
         return;
       }

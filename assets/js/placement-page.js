@@ -20,7 +20,6 @@
   "use strict";
 
   var STAGE_LABEL = { a: "Basics", b: "Core", c: "Advanced" };
-  var TOTAL = 10; // the full test; an early exit ends it sooner
 
   var P = null, sel = null, asked = [], answers = {}, idx = 0, done = false, result = null;
 
@@ -50,15 +49,29 @@
     if (!mount) return;
     if (done && result) { renderResult(mount); return; }
     var q = cur();
-    if (!q) { mount.innerHTML = '<p class="hint">Nothing to ask — try reloading the page.</p>'; return; }
+    if (!q) {
+      // P2-29: an empty stage A is a dead end without a way back — offer
+      // a retry that re-runs startTest() instead of telling the learner
+      // to reload the page.
+      mount.innerHTML = '<p class="hint">Nothing to ask — the test has no questions right now.</p>' +
+        '<p><button class="btn" id="plc-retry" type="button">Try again</button></p>';
+      var retry = $("plc-retry");
+      if (retry && !retry._plcWired) { retry._plcWired = true; retry.addEventListener("click", function () { startTest(); }); }
+      return;
+    }
     var picked = answers[q.id];
+    // P2-28: progress is per stage ("Question 2 of 3 (Basics)"), not
+    // "of 10" — an early exit after stage A never reaches 10 questions,
+    // so the full-test total misleads.
+    var stageQs = asked.filter(function (x) { return x.stage === stageOf(q); });
+    var posInStage = stageQs.indexOf(q) + 1;
     var lastOfStage = idx === asked.length - 1;
     var nextLabel = "Next →";
     if (lastOfStage) nextLabel = stageOf(q) === "c" ? "See my result →" : "Continue →";
     var html = "";
     html += '<div class="card" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">' +
       '<span class="badge">' + esc(STAGE_LABEL[stageOf(q)] || "") + '</span>' +
-      '<span class="hint" id="plc-progress">Question ' + (idx + 1) + " of " + TOTAL + "</span></div>" +
+      '<span class="hint" id="plc-progress">Question ' + posInStage + " of " + stageQs.length + " (" + esc(STAGE_LABEL[stageOf(q)] || "") + ")</span></div>" +
       '<h2 class="section-title" style="margin:12px 0 4px">' + esc(q.title) + "</h2>" +
       '<p style="margin:0 0 12px">' + esc(q.prompt || "What does this code print?") + "</p>" +
       '<pre class="code">' + esc(q.code) + "</pre>" +
@@ -183,6 +196,14 @@
      daily-cap call per click, never saved, rendered in place. The learner
      already knows the correct answer and the walkthrough, so the note
      asks the tutor to explain WHY — one hint, one follow-up. */
+  // P2-45: one in-flight explanation disables every Explain button, so
+  // rapid clicks across several wrong answers can't queue one
+  // cap-consuming call per click (cf. flowchart.html, which disables
+  // all six AI buttons together).
+  function setExplainButtons(disabled) {
+    document.querySelectorAll("#plc-mount .plc-explain-btn").forEach(function (b) { b.disabled = disabled; });
+  }
+
   function askExplain(q, btn, out) {
     var AI = window.SkillzifyAI;
     if (!AI || typeof AI.ask !== "function") {
@@ -191,6 +212,7 @@
       return;
     }
     btn.disabled = true;
+    setExplainButtons(true);
     btn.textContent = "AI is thinking…";
     out.hidden = false;
     out.innerHTML = '<p class="hint">Thinking…</p>';
@@ -200,7 +222,7 @@
     var ctx = note;
     try { if (AI.buildContext) ctx = AI.buildContext({ note: note }); } catch (e) {}
     AI.ask({ mode: "tutor-lesson", code: q.code || "", error: "", context: ctx }, function (err, res) {
-      btn.disabled = false;
+      setExplainButtons(false);
       btn.textContent = "✨ Explain why";
       if (err || !res || !res.text) {
         var capLink = (err && err.code === "DAILY_CAP" && AI.capLink) ? AI.capLink() : "";
@@ -228,6 +250,13 @@
     if (!mount) return;
     if (!P || !window.SkillzifyPracticeData) {
       mount.innerHTML = '<p class="hint">⚠️ The test could not load. Check your connection, then reload the page.</p>';
+      return;
+    }
+    // P2-29: at least one predict item must exist, or startTest() would
+    // select an empty stage A and strand the learner on the retry screen.
+    var hasPredict = (window.SkillzifyPracticeData || []).some(function (e) { return e && e.kind === "predict"; });
+    if (!hasPredict) {
+      mount.innerHTML = '<p class="hint">⚠️ The test could not load — no placement questions are available. Check your connection, then reload the page.</p>';
       return;
     }
     startTest();

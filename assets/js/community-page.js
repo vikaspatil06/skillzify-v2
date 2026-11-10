@@ -185,6 +185,17 @@
         }).catch(function () { b.disabled = false; onApiError(); });
       });
     });
+    // P2-31: author-only answer delete (deleteAnswer in community.js).
+    root.querySelectorAll("[data-del-a]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (!confirm("Delete this answer? This can't be undone.")) return;
+        b.disabled = true;
+        C.deleteAnswer(state.qid, b.getAttribute("data-del-a")).then(function () {
+          toast("Answer deleted", "success");
+          if (state.qid) showQuestion(state.qid);
+        }).catch(function () { b.disabled = false; onApiError(); });
+      });
+    });
     root.querySelectorAll("[data-del-s]").forEach(function (b) {
       b.addEventListener("click", function () {
         if (!confirm("Delete this project? This can't be undone.")) return;
@@ -330,7 +341,11 @@
         btn.disabled = false;
         btn.textContent = "✨ Ask AI for a hint";
         if (err || !res || !res.text) {
-          out.innerHTML = '<p class="comm-form-error">' + esc((err && err.message) || "The AI didn't answer — try again in a moment.") + "</p>";
+          // P2-30: DAILY_CAP errors append the sign-in link, mirroring
+          // placement's askExplain — a signed-out user who hits the
+          // 10/day cap gets a path to the 50/day cap.
+          var capLink = (err && err.code === "DAILY_CAP" && window.SkillzifyAI && window.SkillzifyAI.capLink) ? window.SkillzifyAI.capLink() : "";
+          out.innerHTML = '<p class="comm-form-error">' + esc((err && err.message) || "The AI didn't answer — try again in a moment.") + "</p>" + capLink;
           return;
         }
         out.innerHTML = '<p class="comm-ai-badge">✨ AI hint' + (res.cached ? " (cached)" : "") + (res.offline ? " (offline)" : "") + "</p>" +
@@ -372,6 +387,9 @@
           codeBlock(a.code, "a-" + a.id) +
           (isAuthor && !a.isBest
             ? '<div class="comm-actions"><button class="btn btn-sm" type="button" data-best="' + esc(a.id) + '">Mark as best answer</button></div>'
+            : "") +
+          (a.authorUid && uid === a.authorUid
+            ? '<div class="comm-actions"><button class="btn btn-sm btn-ghost" type="button" data-del-a="' + esc(a.id) + '">Delete</button></div>'
             : "") +
           "</article>";
       }).join("") : '<p class="hint">No answers yet — be the first to help.</p>') + "</div>" +
@@ -532,7 +550,16 @@
       // re-check achievements (the badge unlocks in checkAchievements).
       try {
         var me = currentUid();
-        if (me && (posts || []).some(function (pp) { return pp.authorUid === me && (pp.starCount || 0) > 0; })) {
+        // P2-34: the flag counts only stars from OTHER people — a
+        // self-star no longer unlocks your own "Starred" badge (and
+        // toggleStar now refuses self-stars outright). Posts without a
+        // stars map (legacy data) fall back to the stored starCount.
+        if (me && (posts || []).some(function (pp) {
+          if (pp.authorUid !== me) return false;
+          var stars = pp.stars || null;
+          if (stars) return Object.keys(stars).some(function (k) { return k !== me; });
+          return (pp.starCount || 0) > 0;
+        })) {
           try { localStorage.setItem("skillzify_showcase_starred", "1"); } catch (e2) {}
           if (window.SkillzifyActivity && typeof window.SkillzifyActivity.checkAchievements === "function") window.SkillzifyActivity.checkAchievements();
         }
@@ -697,6 +724,24 @@
     var tq = $("tab-questions"), ts = $("tab-showcase");
     if (tq) tq.addEventListener("click", function () { switchTab("questions"); });
     if (ts) ts.addEventListener("click", function () { switchTab("showcase"); });
+    // P2-66: ArrowLeft/ArrowRight + Home/End on the tab list (ARIA tabs
+    // keyboard pattern): move focus and activate the tab.
+    function onTabKey(e) {
+      var tabs = [tq, ts].filter(function (t) { return !!t; });
+      var t = (e && e.currentTarget) || this;
+      var i = tabs.indexOf(t);
+      if (i < 0) return;
+      var next = null;
+      if (e.key === "ArrowRight") next = tabs[(i + 1) % tabs.length];
+      else if (e.key === "ArrowLeft") next = tabs[(i - 1 + tabs.length) % tabs.length];
+      else if (e.key === "Home") next = tabs[0];
+      else if (e.key === "End") next = tabs[tabs.length - 1];
+      else return;
+      if (e.preventDefault) e.preventDefault();
+      if (next) { next.focus(); next.click(); }
+    }
+    if (tq) tq.addEventListener("keydown", onTabKey);
+    if (ts) ts.addEventListener("keydown", onTabKey);
 
     // Filters
     var filters = $("comm-q-filters");

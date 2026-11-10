@@ -203,8 +203,15 @@ img { max-width: 100%; }
 }
 .mode-btn.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
 
+/* Screen-reader-only heading (P2-63): pages whose visible title is
+   an h2 or is injected by JS still need a real <h1> in the outline. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
 /* ---------- Buttons ---------- */
-.btn {
+/* P2-61: .btn-primary is the alias of .btn — the 6 call sites use
+   "btn btn-primary", so primary actions keep the gradient even if
+   .btn is ever restyled neutral. */
+.btn, .btn-primary {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 12px 26px; border-radius: 12px; font-weight: 700; font-size: 0.98rem;
   border: none; cursor: pointer; transition: transform 0.15s ease, box-shadow 0.2s ease;
@@ -258,6 +265,9 @@ img { max-width: 100%; }
 .card:hover { transform: translateY(-6px); box-shadow: var(--shadow); }
 .card .icon { font-size: 2rem; margin-bottom: 14px; }
 .card h3 { font-size: 1.15rem; margin-bottom: 8px; }
+/* P2-63: the community form titles were promoted h3 -> h2; keep
+   their card-heading size. */
+.comm-form h2 { font-size: 1.15rem; margin-bottom: 8px; }
 .card p { color: var(--muted); font-size: 0.94rem; }
 .card .card-link { display: inline-block; margin-top: 14px; font-weight: 700; font-size: 0.9rem; }
 
@@ -477,7 +487,7 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 .drawer { position: absolute; top: 0; right: 0; height: 100dvh; width: min(400px, 94vw); background: var(--card); border-left: 1px solid var(--card-border); box-shadow: -18px 0 50px rgba(0,0,0,.45); transform: translateX(105%); transition: transform .3s cubic-bezier(.32,.72,.35,1); display: flex; flex-direction: column; }
 .drawer-backdrop.open .drawer { transform: none; }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--card-border); flex: none; }
-.drawer-head h3 { margin: 0; font-size: 1.1rem; }
+.drawer-head h3, .drawer-head h2 { margin: 0; font-size: 1.1rem; }
 .drawer-body { padding: 22px; overflow-y: auto; flex: 1; }
 .drawer-section { margin-bottom: 28px; }
 .drawer-section:last-child { margin-bottom: 0; }
@@ -1002,7 +1012,7 @@ p.fail { color: #e74c3c; font-weight: 600; }
 .hint-box-p { background: var(--card); border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 8px 0; }
 .daily-inner { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .daily-inner h3 { margin: 6px 0; }
-.stat { text-align: center; padding: 14px 8px; }
+.stats-row .stat { text-align: center; padding: 14px 8px; }
 .stat-n { display: block; font-size: 1.6rem; font-weight: 800; }
 .stat-l { font-size: .8rem; color: var(--muted); }
 .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }

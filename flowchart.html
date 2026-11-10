@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify Flowchart Lab — turn Python code, algorithms, or questions into interactive flowcharts you can trace step by step.">
   <title>Flowchart Lab — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=25">
+  <link rel="stylesheet" href="assets/css/style.css?v=26">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -26,8 +26,6 @@
    because Mermaid's default theme renders light (both site themes). */
 
 
-               background: rgba(251,191,36,.15); color: var(--warning);
-               border: 1px solid rgba(251,191,36,.35); padding: 5px 14px; border-radius: 20px; }
 
   .fc-hero { padding: 34px max(20px,4vw) 10px; }
   .fc-hero h1 { font-size: clamp(1.6rem,3.4vw,2.4rem); font-weight: 800; letter-spacing: -.03em; }
@@ -212,7 +210,7 @@
     <div class="fc-card-head"><h2>✏️ Input</h2></div>
 
     <div class="fc-panel active" id="panel-code">
-      <textarea id="code-input" spellcheck="false">n = int(input("Enter n: "))
+      <textarea id="code-input" aria-label="Python code input" spellcheck="false">n = int(input("Enter n: "))
 total = 0
 for i in range(1, n + 1):
     if i % 2 == 0:
@@ -237,7 +235,7 @@ print("Result:", total)</textarea>
     </div>
 
     <div class="fc-panel" id="panel-algo">
-      <textarea id="algo-input" spellcheck="false">START
+      <textarea id="algo-input" aria-label="Algorithm steps input" spellcheck="false">START
 INPUT n
 SET total = 0
 FOR i FROM 1 TO n
@@ -275,13 +273,13 @@ END</textarea>
       </div>
       <div id="ai-preview">
         <p class="hint">AI-generated code:</p>
-        <textarea id="ai-code-text" readonly style="min-height:110px;font-size:.78rem;"></textarea>
+        <textarea id="ai-code-text" aria-label="AI-generated code" readonly style="min-height:110px;font-size:.78rem;"></textarea>
       </div>
     </div>
 
     <div id="explain-out" style="display:none;margin-top:12px;">
       <p class="hint">AI explanation:</p>
-      <textarea id="explain-text" readonly style="min-height:140px;font-size:.85rem;font-family:inherit;line-height:1.6;"></textarea>
+      <textarea id="explain-text" aria-label="AI explanation" readonly style="min-height:140px;font-size:.85rem;font-family:inherit;line-height:1.6;"></textarea>
     </div>
 
     <div id="status"></div>
@@ -349,16 +347,17 @@ END</textarea>
 <script src="assets/js/nav.js"></script>
 <script src="assets/js/footer.js"></script>
 <script src="assets/js/app.js?v=5"></script>
-<script src="assets/js/activity.js?v=8"></script>
+<script src="assets/js/activity.js?v=9"></script>
 <script src="assets/js/palette.js?v=2"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
-<script src="assets/js/auth.js?v=5"></script>
-<script src="assets/js/sync.js?v=14"></script>
-<script src="assets/js/ai.js?v=16"></script>
+<script src="assets/js/auth.js?v=6"></script>
+<script src="assets/js/sync.js?v=15"></script>
+<script src="assets/js/ai.js?v=17"></script>
 <script>
 let pyodide = null, currentGraph = null, currentSVG = null, currentMermaid = null, currentZoom = 1, currentSource = null;
+let shareHashError = false; // P2-35: a #fc= hash was present but undecodable (shown by init() once loaded)
 let engineFailed = false; // set when the Pyodide engine itself fails to load (P2-25)
 let generatorsFailed = false; // set when Pyodide loaded but a generator script failed to fetch or run (P1-22)
 /* Mermaid loads from the jsdelivr CDN (see <head>): if it fails, the bare
@@ -410,7 +409,7 @@ async function init() {
     /* Fetch both generator scripts independently: one 404 must not
        silently lose the other, and the failure must name its file (P2-26). */
     const results = await Promise.allSettled([
-      fetch('assets/js/flowchart-gen.py?v=1').then(r => { if (!r.ok) throw new Error('flowchart-gen.py: HTTP ' + r.status); return r.text(); }),
+      fetch('assets/js/flowchart-gen.py?v=2').then(r => { if (!r.ok) throw new Error('flowchart-gen.py: HTTP ' + r.status); return r.text(); }),
       fetch('assets/js/flowchart-algo.py?v=1').then(r => { if (!r.ok) throw new Error('flowchart-algo.py: HTTP ' + r.status); return r.text(); })
     ]);
     const failed = results.find(r => r.status === 'rejected');
@@ -419,6 +418,8 @@ async function init() {
     pyodide.runPython(gen); pyodide.runPython(algo);
     if (fromLink) {
       setStatus('✓ Shared flowchart loaded — hit Generate','ok');
+    } else if (shareHashError) {
+      setStatus('✗ That share link could not be opened — it may be truncated or corrupted.','err');
     } else {
       setStatus('✓ Ready — pick a mode and hit Generate', 'ok');
     }
@@ -580,8 +581,12 @@ function traceNext() {
     const no = outs.find(e => /no/i.test(e.label || ''));
     tracePending = { yes: yes || outs[0], no: no || outs[1] || outs[0] };
     document.getElementById('trace-label').textContent = '◆ ' + node.label + ' — which branch?';
-    document.getElementById('trace-yes').style.display = '';
-    document.getElementById('trace-no').style.display = '';
+    // P2-40: when no Yes/No labels exist (try handlers, match chains),
+    // the buttons show the actual edge labels instead of a misleading
+    // "Yes"/"No" on an arbitrary first edge.
+    const yesBtn = document.getElementById('trace-yes'), noBtn = document.getElementById('trace-no');
+    if (yesBtn) { yesBtn.textContent = (yes && no) ? '✓ Yes' : '→ ' + (tracePending.yes.label || 'Continue'); yesBtn.style.display = ''; }
+    if (noBtn) { noBtn.textContent = (yes && no) ? '✗ No' : '→ ' + (tracePending.no.label || 'Continue'); noBtn.style.display = ''; }
     return;
   }
   // avoid infinite loops: cap path length
@@ -589,12 +594,19 @@ function traceNext() {
   tracePath.push(outs[0].to); traceIdx++;
   updateTraceUI();
 }
+// P2-40: hide the branch buttons and restore their default Yes/No
+// captions (traceNext rewrites them with edge labels when no Yes/No
+// labels exist).
+function hideBranchButtons() {
+  const yesBtn = document.getElementById('trace-yes'), noBtn = document.getElementById('trace-no');
+  if (yesBtn) { yesBtn.style.display = 'none'; yesBtn.textContent = '✓ Yes'; }
+  if (noBtn) { noBtn.style.display = 'none'; noBtn.textContent = '✗ No'; }
+}
 function traceBranch(yes) {
   if (!tracePending) return;
   const pick = yes ? tracePending.yes : tracePending.no;
   tracePending = null;
-  document.getElementById('trace-yes').style.display = 'none';
-  document.getElementById('trace-no').style.display = 'none';
+  hideBranchButtons();
   if (tracePath.length > 200) { setStatus('Stopped: loop detected (200 steps) — this is a cycle in the chart.', 'err'); return; }
   tracePath = tracePath.slice(0, traceIdx+1); tracePath.push(pick.to); traceIdx++;
   updateTraceUI();
@@ -602,8 +614,7 @@ function traceBranch(yes) {
 function tracePrev() {
   if (!tracing || traceIdx <= 0) return;
   tracePending = null;
-  document.getElementById('trace-yes').style.display = 'none';
-  document.getElementById('trace-no').style.display = 'none';
+  hideBranchButtons();
   traceIdx--; updateTraceUI();
 }
 document.addEventListener('keydown', e => {
@@ -669,6 +680,9 @@ function fixViewBox(out) {
 }
 
 async function renderGraph(json, keepState) {
+  // P2-38: if Mermaid failed to load, say so plainly instead of letting
+  // mermaid.render throw "mermaid is not defined" over the clear error.
+  if (!mermaidReady) { setStatus(MERMAID_FAIL_MSG, 'err'); return; }
   const out = document.getElementById('flowchart-output');
   const stats = document.getElementById('graph-stats');
   if (!keepState) stopTrace();
@@ -704,24 +718,69 @@ document.addEventListener('click', e => {
 
 function downloadPNG() {
   if (!currentSVG) return;
+  // P2-37: Mermaid v10 writes width="100%" and NO height attribute
+  // (verified live: widthAttr "100%", heightAttr null, the real size
+  // lives in the viewBox), so the old parseFloat(width) read 100 and
+  // the height fell back to 600 — the PNG came out the wrong size.
+  // Derive the dimensions from the laid-out svg instead: its bounding
+  // rect is the displayed size (viewBox aspect, padding included), with
+  // getBBox as the fallback — the content box alone would drop the
+  // 8px padding fixViewBox adds and stretch the image ~7%. Then the
+  // viewBox, then the attributes (percentage values are meaningless
+  // here and are ignored).
+  let w = 0, h = 0;
+  const live = document.querySelector('#flowchart-output svg');
+  try {
+    if (live) {
+      const r = live.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) { w = r.width; h = r.height; }
+    }
+  } catch (e) { /* fall through to getBBox / viewBox / attributes */ }
+  try {
+    if ((!w || !h) && live && live.getBBox) {
+      const bb = live.getBBox();
+      if (bb.width > 0 && bb.height > 0) { w = bb.width; h = bb.height; }
+    }
+  } catch (e) { /* fall through to the viewBox / attributes */ }
   const svgEl = new DOMParser().parseFromString(currentSVG, 'image/svg+xml').querySelector('svg');
-  const w = parseFloat(svgEl.getAttribute('width')) || 800;
-  const h = parseFloat(svgEl.getAttribute('height')) || 600;
+  if ((!w || !h) && svgEl) {
+    const vb = (svgEl.getAttribute('viewBox') || '').split(/\s+/).map(Number);
+    if (vb.length === 4 && vb[2] > 0 && vb[3] > 0) { w = vb[2]; h = vb[3]; }
+  }
+  if ((!w || !h) && svgEl) {
+    const aw = svgEl.getAttribute('width'), ah = svgEl.getAttribute('height');
+    const pw = (aw && !/%/.test(aw)) ? parseFloat(aw) : 0;
+    const ph = (ah && !/%/.test(ah)) ? parseFloat(ah) : 0;
+    if (pw > 0 && ph > 0) { w = pw; h = ph; }
+  }
+  if (!w || !h) { w = 800; h = 600; }
   const scale = 2;
   const img = new Image();
   img.onload = () => {
     const canvas = document.createElement('canvas');
-    canvas.width = w * scale; canvas.height = h * scale;
+    canvas.width = Math.round(w * scale); canvas.height = Math.round(h * scale);
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.scale(scale, scale); ctx.drawImage(img, 0, 0);
+    ctx.scale(scale, scale);
+    // Draw scaled to the canvas size: the rasterised svg's natural size
+    // (viewBox at a default 300px wide) need not match w/h, so drawing
+    // at natural size would clip or leave blank bands.
+    ctx.drawImage(img, 0, 0, w, h);
     URL.revokeObjectURL(img.src);
-    canvas.toBlob(blob => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'flowchart.png'; a.click();
-      setStatus('✓ PNG exported','ok');
-    });
+    // P2-37: toBlob can hand back null (e.g. canvas too large) — the
+    // old code threw inside createObjectURL(null). It can also throw
+    // synchronously: Mermaid v10 labels use <foreignObject>, which
+    // taints the canvas in Chrome, so the export fails loudly here
+    // instead of as an uncaught page error (see report residual).
+    try {
+      canvas.toBlob(blob => {
+        if (!blob) { setStatus('✗ PNG export failed','err'); return; }
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'flowchart.png'; a.click();
+        setStatus('✓ PNG exported','ok');
+      });
+    } catch (e) { setStatus('✗ PNG export failed','err'); }
   };
   img.onerror = () => setStatus('✗ PNG export failed','err');
   img.src = URL.createObjectURL(new Blob([currentSVG], {type:'image/svg+xml;charset=utf-8'}));
@@ -731,7 +790,9 @@ function copyMermaid() {
   if (!currentMermaid) return;
   navigator.clipboard.writeText(currentMermaid)
     .then(() => setStatus('✓ Mermaid source copied — paste into Notion, docs, or mermaid.live','ok'))
-    .catch(() => setStatus('✗ Copy failed','err'));
+    // P2-36: fall back to the execCommand path (as shareLink does) when
+    // the clipboard API is unavailable or permission is denied.
+    .catch(() => copyTextFallback(currentMermaid, '✓ Mermaid source copied — paste into Notion, docs, or mermaid.live'));
 }
 
 function activeMode() { return document.querySelector('.mode-card.active').dataset.tab; }
@@ -754,6 +815,9 @@ function copyTextFallback(text, okMsg) {
 function shareLink() {
   try {
     const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ mode: activeMode(), input: activeInput() }))));
+    // P2-35: refuse absurdly long share links — a multi-KB #fc= payload
+    // exceeds practical URL limits and silently fails to open elsewhere.
+    if (payload.length > 2000) return setStatus('✗ Share link too long (' + payload.length + ' characters) — shorten the input, or export the flowchart instead', 'err');
     const url = location.origin + location.pathname + '#fc=' + payload;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(url)
@@ -768,7 +832,7 @@ function loadFromHash() {
   if (!location.hash.startsWith('#fc=')) return false;
   try {
     const d = JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(4)))));
-    if (!d || !d.input) return false;
+    if (!d || !d.input) throw new Error('bad share link');
     const tab = ['code','algo','question'].includes(d.mode) ? d.mode : 'code';
     document.querySelectorAll('.mode-card').forEach(x => x.classList.toggle('active', x.dataset.tab === tab));
     document.querySelectorAll('.fc-panel').forEach(x => x.classList.toggle('active', x.id === 'panel-' + tab));
@@ -776,7 +840,13 @@ function loadFromHash() {
     else if (tab === 'algo') document.getElementById('algo-input').value = d.input;
     else document.getElementById('question-input').value = d.input;
     return true;
-  } catch(e) { return false; }
+  } catch(e) {
+    // P2-35: a #fc= hash that is present but undecodable used to fail
+    // silently — flag it so init() shows the error once the engine has
+    // loaded (init overwrites the status line while loading).
+    shareHashError = true;
+    return false;
+  }
 }
 
 function toggleFullscreen() {
@@ -862,6 +932,10 @@ function flowchartToCode() {
   if (currentSource !== 'algo') return setStatus('Flowchart → code works from an algorithm — switch to the Algorithm tab and generate a flowchart first.', 'err');
   var algo = document.getElementById('algo-input').value.trim();
   if (!algo) return setStatus('Type the flowchart steps first', 'err');
+  // P2-39: same engineFailed/generatorsFailed guard as the other three
+  // generators — without it a failed engine load reads as "loading…"
+  // forever here.
+  if (engineFailed || generatorsFailed) return setStatus(generatorsFailed ? '✗ Flowchart generators failed to load — check your connection and reload' : '✗ Python engine failed to load — check your connection and reload', 'err', ' <button class="btn btn-sm" onclick="init()">↻ Retry</button>');
   if (!pyodide) return setStatus('Engine loading…', 'err');
   var AI = window.SkillzifyAI;
   if (!AI) return setStatus('AI module did not load — reload the page', 'err');
@@ -972,7 +1046,7 @@ INPUT n
 SET sum = 0
 REPEAT
     SET sum = sum + (n % 10)
-    SET n = n / 10
+    SET n = n // 10
 UNTIL n == 0
 PRINT sum
 END`

@@ -208,11 +208,22 @@
       var s = document.createElement("script");
       s.src = "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js";
       s.onload = function () {
-        window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/" }).then(function (py) {
-          pyodide = py;
-          try { py.runPython(CAPTURE_HELPER); } catch (e) {}
-          resolve(py);
-        }, reject);
+        // P2-57: a script that loads but doesn't define loadPyodide
+        // used to throw here, leaving the promise unsettled and the
+        // "▶ Run here" button stuck on "Loading Python…". Reject so
+        // the caller recovers, and reset the cached promise at once
+        // (the P2-35 .catch reset below would also do it, a microtask
+        // later) so a retry works immediately.
+        try {
+          window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/" }).then(function (py) {
+            pyodide = py;
+            try { py.runPython(CAPTURE_HELPER); } catch (e) {}
+            resolve(py);
+          }, reject);
+        } catch (e) {
+          pyodideLoading = null;
+          reject(e);
+        }
       };
       s.onerror = function () { reject(new Error("Could not load the Python runtime — check your connection.")); };
       document.head.appendChild(s);

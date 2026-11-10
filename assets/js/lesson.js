@@ -67,6 +67,11 @@
 
   function challengeHTML(ch) {
     var inner = '<h4>🎯 Mini challenge</h4><p class="ch-prompt">' + esc(ch.prompt) + "</p>";
+    // P2-74-render: a challenge that needs a library the browser
+    // compiler does not have says so up front (Group A marks those
+    // challenges with localOnly: true) — the learner runs it locally
+    // instead of fighting the in-browser runner.
+    if (ch.localOnly) inner += '<p class="hint">💻 run on your machine — the browser compiler doesn\'t have this library</p>';
     if (ch.code) inner += '<div class="code-window"><div class="cw-bar"><span class="cw-dot" style="background:#f87171"></span><span class="cw-dot" style="background:#fbbf24"></span><span class="cw-dot" style="background:#34d399"></span></div><pre><code>' + highlightPython(ch.code) + "</code></pre></div>";
     if (ch.type === "predict") {
       inner += ch.options.map(function (o, i) {
@@ -123,11 +128,22 @@
     var s = (SECTIONS.filter(function (t) { return t.id === lesson.section; })[0]) || { name: "Python" };
     return s.name;
   }
+  // P2-54: the hint must not guess before Firebase resolves.
+  // currentUser() is null until the session restores, so an ungated
+  // check briefly mislabels signed-in users as signed-out. Until
+  // auth.js fires onReady, render NO hint; onReady (and every later
+  // auth change) refreshes it — same pattern as dashboard.js.
+  var authResolved = false;
   // Signed-out users get 10 AI answers/day (50/day signed in) — the
   // tutor card says so, and only there. Guarded: no auth module, no hint.
   function capHintHtml() {
     var signedOut = false;
-    try { signedOut = !!(window.SkillzifyAuth && typeof window.SkillzifyAuth.currentUser === "function" && !window.SkillzifyAuth.currentUser()); } catch (e) { signedOut = false; }
+    try {
+      var auth = window.SkillzifyAuth;
+      if (!auth || typeof auth.currentUser !== "function") return "";
+      if (typeof auth.onReady === "function" && !authResolved) return "";
+      signedOut = !auth.currentUser();
+    } catch (e) { signedOut = false; }
     return signedOut ? '<p class="hint" style="margin-top:0">Signed out? AI answers are 10/day — sign in for 50/day.</p>' : "";
   }
   // M3: refresh the tutor cap hint when auth state changes (e.g.
@@ -509,12 +525,21 @@
     var gi = idxOf(id);
     if (gi < 0) { renderNotFound(); return; }
     if (!isUnlocked(gi)) { renderLocked(LESSONS[gi]); return; }
+    // P2-54: resolve the auth state BEFORE the first render, so the
+    // cap hint never guesses: onReady fires at once when auth is
+    // already ready, otherwise when Firebase restores the session.
+    try {
+      var auth = window.SkillzifyAuth;
+      if (auth && typeof auth.onReady === "function") {
+        auth.onReady(function () { authResolved = true; refreshCapHint(); });
+      }
+    } catch (e) {}
     renderLesson(gi);
     // M3: keep the tutor cap hint in step with sign-in/out (e.g. in
     // another tab). refreshCapHint re-renders the hint line only.
     try {
       if (window.SkillzifyAuth && typeof window.SkillzifyAuth.onAuthChange === "function") {
-        window.SkillzifyAuth.onAuthChange(function () { refreshCapHint(); });
+        window.SkillzifyAuth.onAuthChange(function () { authResolved = true; refreshCapHint(); });
       }
     } catch (e) {}
   })();

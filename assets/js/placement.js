@@ -15,9 +15,12 @@
      fallback when the strict pool is short: same difficulty, any topic ->
      solved items -> any predict item. A stage never asks the same
      question twice, and no question appears in two stages.
-   - Scoring uses stage FRACTIONS against the spec's cutoffs, so the §4
-     table reproduces exactly for full stages and still works when a stage
-     is short (heavy users who solved most of the bank).
+   - Scoring uses the §4 table's COUNTS when a stage asked its full
+     complement; a genuinely short stage is read as a fraction of the
+     FULL stage size (correct / fullN) — a conservative approximation,
+     since unasked questions count as unanswered (P2-26: the old
+     asked-total fraction inflated short stages — B 1/2 scored as
+     Object Castle instead of Tool Shed).
    - Result lives in localStorage `skillzify_placement`, local-only,
      wiped on logout (Phase 3 adds the wipe). Works signed-out.
 
@@ -122,8 +125,18 @@
         tier(def.difficulties, def.topics, true),
         tier(def.difficulties, null, true));
     }
-    tiers.push(all.filter(function (e) { return !solved.has(e.id); }),
-      all.filter(function (e) { return solved.has(e.id); }));
+    if (stageKey === "c") {
+      // Stage C final fallback stays at difficulty >= 2 (P2-27): a
+      // learner who solved every d2/d3 item is re-asked a solved d2/d3
+      // item rather than being handed d1 basics as an "Advanced"
+      // question. The d3/d2 tiers above already cover every d2/d3 item,
+      // solved or not, so these tiers only matter as a safety net.
+      tiers.push(all.filter(function (e) { return e.difficulty >= 2 && !solved.has(e.id); }),
+        all.filter(function (e) { return e.difficulty >= 2 && solved.has(e.id); }));
+    } else {
+      tiers.push(all.filter(function (e) { return !solved.has(e.id); }),
+        all.filter(function (e) { return solved.has(e.id); }));
+    }
     return tiers;
   }
 
@@ -140,6 +153,10 @@
         var q = {};
         for (var k in e) q[k] = e[k];
         q.stage = stageKey;
+        // P2-27: a stage C item the learner had already solved in
+        // practice is a repeat, not fresh evidence — score() notes the
+        // dilution in the result reason.
+        if (stageKey === "c" && solved.has(e.id)) q.reasked = true;
         out.push(q);
       });
     });
@@ -162,29 +179,45 @@
   }
 
   /* Score the questions actually asked (the UI asks stage by stage, so
-     unasked stages arrive with total 0). Fractions reproduce the §4 table
-     exactly for full stages: A 2/3 passes, B 1/2 -> Object Castle,
-     B 3/4 -> C, C 1/3 -> Power Lab, C 2/3 -> Data Lab, C 3/3 -> Launch Pad. */
+     unasked stages arrive with total 0). The §4 table is written in
+     COUNTS out of the full stage (A /3, B /4, C /3): a full stage applies
+     its count cutoff directly (A 2/3 passes, B 2/4 -> Object Castle,
+     B 3/4 -> C, C 1/3 -> Power Lab, C 2/3 -> Data Lab, C 3/3 ->
+     Launch Pad). A genuinely short stage reads the same cutoff as a
+     fraction of the FULL stage size (correct / fullN) — approximate and
+     conservative, since unasked questions count as unanswered: B 1/2
+     -> 1/4 -> Tool Shed, B 2/2 -> 2/4 -> Object Castle. The old
+     asked-total fraction inflated short stages (B 1/2 scored as Object
+     Castle, B 2/2 as Algorithm Arena). */
   function score(questions, answers) {
     answers = answers || {};
     var byStage = { a: [], b: [], c: [] };
     (questions || []).forEach(function (q) { if (byStage[q.stage]) byStage[q.stage].push(q); });
     var sa = stageScore(byStage.a, answers), sb = stageScore(byStage.b, answers), sc = stageScore(byStage.c, answers);
-    function frac(s) { return s.total > 0 ? s.correct / s.total : 0; }
+    // True when the stage's score is below the §4 count cutoff: for a
+    // full stage this is the count comparison; for a short stage it is
+    // the same cutoff read as a fraction of the full stage size.
+    function below(s, full, countCut) { return s.correct / full < countCut / full; }
     var section;
     if (sa.total === 0) section = "base-camp"; // nothing asked: safest start
-    else if (frac(sa) < 2 / 3) section = "base-camp";
+    else if (below(sa, 3, 2)) section = "base-camp";
     else if (sb.total === 0) section = "tool-shed"; // passed A, B untestable
-    else if (frac(sb) < 1 / 2) section = "tool-shed";
-    else if (frac(sb) < 3 / 4) section = "object-castle";
+    else if (below(sb, 4, 2)) section = "tool-shed";
+    else if (below(sb, 4, 3)) section = "object-castle";
     else if (sc.total === 0) section = "algorithm-arena"; // core solid, C untestable
-    else if (frac(sc) < 1 / 3) section = "algorithm-arena";
-    else if (frac(sc) < 2 / 3) section = "power-lab";
-    else if (frac(sc) < 1) section = "data-lab";
+    else if (below(sc, 3, 1)) section = "algorithm-arena";
+    else if (below(sc, 3, 2)) section = "power-lab";
+    else if (below(sc, 3, 3)) section = "data-lab";
     else section = "launch-pad";
     var total = sa.total + sb.total + sc.total, correct = sa.correct + sb.correct + sc.correct;
+    // P2-27: stage C may contain re-asked items (previously solved in
+    // practice), so a C-driven placement leans on familiar material —
+    // say so in the reason rather than presenting it as fresh evidence.
+    var reason = REASONS[section];
+    var reaskedC = sc.total > 0 && byStage.c.some(function (q) { return !!q.reasked; });
+    if (reaskedC) reason += " Some advanced questions were ones you had already solved in practice, so the advanced result is approximate.";
     return { section: section, score: correct, total: total,
-      stages: { a: sa, b: sb, c: sc }, reason: REASONS[section] };
+      stages: { a: sa, b: sb, c: sc }, reason: reason };
   }
 
   function save(result) {

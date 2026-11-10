@@ -367,7 +367,21 @@
       getSearchCursor: makeSearchCursor,
       lastLine: function () { return ta.value.split("\n").length - 1; },
       operation: function (fn) { fn(); },
-      setOption: function (k, v) { opts[k] = v; if (k === "lineWrapping") { try { ta.style.whiteSpace = v ? "pre-wrap" : "pre"; } catch (e) {} } },
+      /* P2-59: theme / font-size controls must work in fallback mode
+         too — apply them to the textarea (dark themes get a dark
+         textarea, light themes a light one). */
+      setOption: function (k, v) {
+        opts[k] = v;
+        if (k === "lineWrapping") { try { ta.style.whiteSpace = v ? "pre-wrap" : "pre"; } catch (e) {} }
+        if (k === "theme") {
+          try {
+            var light = /eclipse|light|default/i.test(String(v || ""));
+            ta.style.backgroundColor = light ? "#ffffff" : "#282a36";
+            ta.style.color = light ? "#1e1e1e" : "#f8f8f2";
+          } catch (e) {}
+        }
+        if (k === "fontSize") { try { ta.style.fontSize = (parseInt(v, 10) || 14) + "px"; } catch (e) {} }
+      },
       getOption: function (k) { return opts[k]; },
       refresh: function () {},
       on: function (ev, fn) { (handlers[ev] = handlers[ev] || []).push(fn); },
@@ -401,6 +415,10 @@
     var s = document.createElement("script");
     s.src = "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js";
     s.onload = function () {
+      // P2-57: a script that loads but doesn't define loadPyodide used
+      // to throw here, leaving pyodideLoading true forever and Run
+      // wedged on "still loading…". Guard it so a retry is possible.
+      try {
       window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/" }).then(function (py) {
         pyodide = py;
         pyodideLoading = false;
@@ -411,6 +429,10 @@
         pyodideLoading = false;
         printLine("❌ Could not load the Python runtime. Check your connection and reload.", "err");
       });
+      } catch (e) {
+        pyodideLoading = false;
+        printLine("❌ Could not load the Python runtime. Check your connection and reload.", "err");
+      }
     };
     s.onerror = function () { pyodideLoading = false; printLine("❌ Could not download Pyodide — internet required.", "err"); };
     document.head.appendChild(s);
@@ -920,6 +942,9 @@
     px = Math.max(10, Math.min(24, px));
     var cm = document.querySelector("#editor-host .CodeMirror");
     if (cm) cm.style.fontSize = px + "px";
+    // P2-59: no CodeMirror node in fallback mode — size the fallback
+    // textarea through its setOption instead.
+    else if (editor) { try { editor.setOption("fontSize", px); } catch (e) {} }
     if (editor) editor.refresh();
     try { localStorage.setItem(CM_FONT_KEY, String(px)); } catch (e) {}
     var fv = document.getElementById("fs-val");
@@ -954,6 +979,14 @@
     if (!ws.active) return;
     persistActiveFile(); saveWS();
     var payload = b64e(JSON.stringify({ files: ws.files, active: ws.active }));
+    // P2-68: a multi-file workspace easily exceeds the ~2,000-char URL
+    // limit many browsers / chat apps truncate at — a truncated link
+    // decodes to garbage. Warn and offer a download instead.
+    if (payload.length > 1500) {
+      toast("Share link would be " + payload.length + " characters — too long to share reliably. Download the file instead?", "error");
+      if (confirm("This workspace is too large for a share link (" + payload.length + " characters — links over ~1,500 often get truncated). Download the active file (" + ws.active + ") instead?")) downloadCode();
+      return;
+    }
     var url = location.href.split("#")[0] + "#ws=" + payload;
     try { history.replaceState(null, "", "#ws=" + payload); } catch (e) {}
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1015,6 +1048,14 @@
         return true;
       }
     } catch (e) {}
+    // P2-68: a #ws= hash was present but didn't decode (truncated link,
+    // bad paste) — say so LOUDLY instead of silently loading the old
+    // workspace as if nothing happened.
+    try {
+      toast("Share link couldn't be opened — it may be truncated or corrupted. Your previous workspace is unchanged.", "error");
+      printLine("❌ Share link couldn't be opened — it may be truncated or corrupted.", "err");
+    } catch (e2) {}
+    return false;
     // legacy single-file link
     var m2 = (location.hash || "").match(/^#code=(.+)$/);
     if (m2) {
@@ -1230,19 +1271,21 @@
     var shared = loadSharedWS();
     try {
       var handed = localStorage.getItem("skillzify_compiler_code");
-      if (handed && !shared) {
-        if (ws.files["main.py"] === DEFAULT_CODE) {
+      if (handed) {
+        if (!shared && ws.files["main.py"] === DEFAULT_CODE) {
           // untouched default: the lesson code takes its place, as before
           ws.files["main.py"] = handed;
           if (ws.tabs.indexOf("main.py") < 0) ws.tabs.unshift("main.py");
           ws.active = "main.py";
         } else {
-          // main.py holds the user's own code: open the lesson code as a
-          // new file instead of overwriting it
+          // P2-67: a share link (#ws=) is present too, or main.py holds
+          // the user's own code — open the handed code as its own file
+          // instead of silently dropping it (mirrors lesson.py).
           var ln = "lesson.py", li = 2;
           while (ws.files.hasOwnProperty(ln)) ln = "lesson" + (li++) + ".py";
           ws.files[ln] = handed;
           ws.tabs.push(ln); ws.active = ln;
+          if (shared) toast("Share link opened — the handed code was added as " + ln, "success");
         }
         if (!ws.mtimes) ws.mtimes = {};
         ws.mtimes[ws.active] = Date.now();
@@ -1252,6 +1295,17 @@
       }
     } catch (e) {}
 
+    /* P2-72: every wiring section below runs inside guard(), so one
+       throw (a missing element, a failed render) can't abort the
+       rest of init — the Run and Stuck? buttons must survive an
+       early failure. Failures are logged, never silent. */
+    function guard(label, fn) {
+      try { fn(); } catch (e) {
+        try { console.warn("[compiler] init section failed: " + label, e && e.message ? e.message : e); } catch (e2) {}
+      }
+    }
+
+    guard("editor", function () {
     if (window.CodeMirror) {
       var theme = "dracula", font = 14;
       try {
@@ -1292,11 +1346,19 @@
       });
       printLine("⚠ Code editor failed to load (CodeMirror CDN unreachable) — plain-text editor active. Code still runs.", "err");
       try { toast("Code editor failed to load — using plain-text editor", "error"); } catch (e) {}
+      // P2-59: the stored theme / font size apply to the fallback
+      // textarea too, via its setOption (theme/fontSize).
+      try { applyTheme(localStorage.getItem(CM_THEME_KEY) || "dracula"); } catch (e) {}
+      try { applyFont(parseInt(localStorage.getItem(CM_FONT_KEY) || "14", 10) || 14); } catch (e) {}
     }
+    });
 
+    guard("render", function () {
     renderExplorer(); renderTabs(); renderHistory(); updateStatusBar();
     initSnippets();
+    });
 
+    guard("activity-bar", function () {
     /* activity bar */
     document.querySelectorAll(".activity-bar button[data-view]").forEach(function (b) {
       b.addEventListener("click", function () { switchView(b.getAttribute("data-view")); });
@@ -1306,10 +1368,16 @@
     if (scb) scb.addEventListener("click", function () { setSidebarOpen(false); });
     var sbd = document.getElementById("sidebar-backdrop");
     if (sbd) sbd.addEventListener("click", function () { setSidebarOpen(false); });
+    });
+
+    guard("panel-tabs", function () {
     /* panel tabs */
     document.querySelectorAll(".ptab").forEach(function (b) {
       b.addEventListener("click", function () { switchPtab(b.getAttribute("data-ptab")); });
     });
+    });
+
+    guard("run-stop", function () {
     /* run / stop */
     document.getElementById("run-btn").addEventListener("click", runCode);
     document.getElementById("st-run").addEventListener("click", runCode);
@@ -1321,6 +1389,9 @@
       try { localStorage.setItem("skillzify_community_draft", JSON.stringify({ code: code, error: lastError || "" })); } catch (e) {}
       location.href = "community.html?ask=1";
     });
+    });
+
+    guard("files", function () {
     /* files */
     document.getElementById("new-file-btn").addEventListener("click", newFile);
     document.getElementById("welcome-new").addEventListener("click", newFile);
@@ -1360,6 +1431,9 @@
       if (editor) editor.setValue(ws.files["main.py"]);
       renderExplorer(); renderTabs(); updateStatusBar();
     });
+    });
+
+    guard("find", function () {
     /* find */
     document.getElementById("find-btn").addEventListener("click", function () { openFind(false); });
     document.getElementById("find-close").addEventListener("click", closeFind);
@@ -1372,6 +1446,9 @@
     });
     document.getElementById("replace-one").addEventListener("click", function () { doReplace(false); });
     document.getElementById("replace-all").addEventListener("click", function () { doReplace(true); });
+    });
+
+    guard("terminal", function () {
     /* terminal panel */
     document.getElementById("copy-out-btn").addEventListener("click", copyOutput);
     document.getElementById("clear-out-btn").addEventListener("click", function () { clearTerminal(); printLine("Terminal cleared.", "dim"); });
@@ -1385,6 +1462,9 @@
     var sIn = document.getElementById("search-input");
     var sT = null;
     sIn.addEventListener("input", function () { clearTimeout(sT); sT = setTimeout(function () { searchFiles(sIn.value); }, 250); });
+    });
+
+    guard("ai", function () {
     /* AI */
     document.getElementById("ai-generate-btn").addEventListener("click", function () {
       var d = prompt("Describe what you want the code to do:", "a function that checks if a number is prime");
@@ -1420,14 +1500,73 @@
       persistActiveFile();
       aiCall({ mode: "trace", code: ws.files[ws.active], error: lastError || "" }, "trace", null);
     });
+    /* P2-69: the Gemini key is a billable credential. "Remember" is an
+       opt-in toggle (default ON = today's behaviour: the key is stored
+       in this browser). When it is OFF the key lives only in memory
+       (memAiKey) for this page session and is never written to
+       storage. ai.js reads the key through window.Skillzify.storeGet
+       at call time, so a small wrapper answers that one key from
+       memory while a session-only key is held; every other key passes
+       through untouched. The preference itself is stored, not the
+       key. (skillzify_ai_key is still wiped on logout, P1-26.) */
+    var AI_KEY_REMEMBER = "skillzify_ai_key_remember";
+    var memAiKey = null;
+    function aiKeyRemembered() {
+      try {
+        var chk = document.getElementById("ai-remember");
+        if (chk) return chk.checked !== false;
+      } catch (e) {}
+      try { return window.Skillzify.storeGet(AI_KEY_REMEMBER, "1") !== "0"; } catch (e) { return true; }
+    }
+    (function () {
+      try {
+        var S = window.Skillzify;
+        if (!S || typeof S.storeGet !== "function" || S.__aiKeyMemHook) return;
+        var origGet = S.storeGet;
+        S.storeGet = function (k, fb) {
+          if (k === AI_KEY && memAiKey) return memAiKey;
+          return origGet(k, fb);
+        };
+        S.__aiKeyMemHook = true;
+      } catch (e) {}
+    })();
     document.getElementById("ai-save").addEventListener("click", function () {
       try {
         var v = document.getElementById("ai-key").value.trim();
-        window.Skillzify.storeSet(AI_KEY, v);
-        toast(v ? "API key saved 🔑" : "API key removed", "success");
+        if (aiKeyRemembered()) {
+          memAiKey = null;
+          window.Skillzify.storeSet(AI_KEY, v);
+          toast(v ? "API key saved in this browser 🔑" : "API key removed", "success");
+        } else {
+          memAiKey = v || null;
+          try { window.Skillzify.storeSet(AI_KEY, ""); } catch (e2) {}
+          toast(v ? "API key kept for this session only — it won't be stored 🔑" : "API key removed", "success");
+        }
       } catch (e) {}
     });
-    try { document.getElementById("ai-key").value = window.Skillzify.storeGet(AI_KEY, ""); } catch (e) {}
+    /* The toggle itself: initialise from the stored preference, and
+       move the key between storage and memory immediately on change. */
+    (function () {
+      var rem = document.getElementById("ai-remember");
+      if (!rem) return;
+      try { rem.checked = window.Skillzify.storeGet(AI_KEY_REMEMBER, "1") !== "0"; } catch (e) {}
+      rem.addEventListener("change", function () {
+        try { window.Skillzify.storeSet(AI_KEY_REMEMBER, rem.checked ? "1" : "0"); } catch (e) {}
+        try {
+          if (rem.checked) {
+            if (memAiKey) { window.Skillzify.storeSet(AI_KEY, memAiKey); memAiKey = null; }
+          } else {
+            var stored = window.Skillzify.storeGet(AI_KEY, "");
+            if (stored) memAiKey = stored;
+            window.Skillzify.storeSet(AI_KEY, "");
+          }
+        } catch (e) {}
+      });
+    })();
+    try { document.getElementById("ai-key").value = memAiKey || window.Skillzify.storeGet(AI_KEY, ""); } catch (e) {}
+    });
+
+    guard("settings", function () {
     /* settings */
     document.getElementById("theme-select").addEventListener("change", function () { applyTheme(this.value); });
     document.getElementById("st-theme").addEventListener("click", function () { switchView("settings"); });
@@ -1439,6 +1578,9 @@
       editor.setOption("lineWrapping", on);
       this.textContent = "Wrap: " + (on ? "on" : "off");
     });
+    });
+
+    guard("resize", function () {
     /* panel resize — pointer events (mouse + touch). The height goes
        through clampPanelHeight, so dragging can never push the panel
        (and the status bar below it) off the bottom of the screen. */
@@ -1460,6 +1602,9 @@
       handle.addEventListener("pointerup", endDrag);
       handle.addEventListener("pointercancel", endDrag);
     })();
+    });
+
+    guard("keyboard", function () {
     /* keyboard */
     document.addEventListener("keydown", function (e) {
       var mod = e.ctrlKey || e.metaKey;
@@ -1469,7 +1614,9 @@
       else if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); var sb = document.getElementById("sidebar"); setSidebarOpen(!sb.classList.contains("open")); }
       else if (e.key === "Escape") { closeFind(); setSidebarOpen(false); }
     });
+    });
 
+    guard("exit", function () {
     /* save on exit: never lose the last keystrokes inside the autosave window */
     window.addEventListener("beforeunload", function () { persistActiveFile(); saveWS(); });
     /* remote workspace: a newer copy from another device arrives via sync */
@@ -1479,7 +1626,9 @@
     if (rb) rb.addEventListener("click", restoreBackupWS);
     updateRestoreButton();
     updateSaveUI(true);
+    });
 
+    guard("warmup", function () {
     /* warm the AI backend + load runtime (via the shared client) */
     try {
       if (window.SkillzifyAI && window.SkillzifyAI.warmup) window.SkillzifyAI.warmup();
@@ -1487,5 +1636,6 @@
     } catch (e) {}
     setRunUI(false); // P1-9: Run + Check start disabled until Pyodide is ready
     loadPyodideRuntime();
+    });
   });
 })();

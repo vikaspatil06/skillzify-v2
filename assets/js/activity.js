@@ -96,6 +96,10 @@
     var s = get(STREAK_KEY, { last: null, count: 0 });
     var today = isoDay(new Date()), yest = isoDay(new Date(Date.now() - 864e5));
     var last = normDay(s.last);
+    // P2-24: a future-dated `last` (clock skew / timezone travel) is
+    // ignored, not treated as a broken streak — the count stands and
+    // today still counts as a continuation, never a reset to 1.
+    if (last && last > today) return s;
     if (last === today) return s; // already counted today
     s.count = (last === yest) ? (s.count || 0) + 1 : 1;
     s.last = today;
@@ -106,8 +110,14 @@
   function streak() {
     var c = streakCounter();
     var days = dayCounts(), longest = 0, run = 0;
-    // longest: scan all keys sorted
-    var keys = Object.keys(days).sort();
+    // longest: scan all keys sorted. P2-24: normalise keys first — a
+    // legacy toDateString() key sorts wrong lexicographically and
+    // breaks the run; unparseable keys are dropped, duplicates (two
+    // spellings of one day) collapse to one.
+    var keys = Object.keys(days).map(function (k) { return normDay(k); })
+      .filter(function (k) { return !!k; })
+      .filter(function (k, i, a) { return a.indexOf(k) === i; })
+      .sort();
     var prev = null;
     keys.forEach(function (k) {
       if (prev) {
@@ -169,6 +179,44 @@
     if (a) logFeed("achievement", "Unlocked achievement: " + a.icon + " " + a.name);
     return true;
   }
+  // P2-23: batched unlock for checkAchievements(). Collects newly
+  // unlocked ids against the in-memory map; the caller persists the
+  // map and writes the feed entries ONCE (one ACH_KEY write, one feed
+  // write), instead of one read+write pair per badge. Feed order is
+  // preserved: entries are prepended last-unlocked-first, exactly as
+  // the old per-unlock unshifts produced.
+  function unlockBatched(id, u, newly) {
+    if (u[id]) return false;
+    u[id] = Date.now();
+    newly.push(id);
+    return true;
+  }
+  function logFeedMany(ids) {
+    if (!ids.length) return;
+    var t = Date.now();
+    var entries = [];
+    ids.forEach(function (id) {
+      var a = ACHIEVEMENTS.filter(function (x) { return x.id === id; })[0];
+      if (a) entries.push({ t: t, type: "achievement", text: "Unlocked achievement: " + a.icon + " " + a.name });
+    });
+    if (!entries.length) return;
+    var feed = get(FEED_KEY, []);
+    set(FEED_KEY, entries.reverse().concat(feed).slice(0, 60));
+  }
+  // P2-15 helper: is this id a lesson in the current catalog?
+  // Uses LearnCore.LESSONS when loaded, else SkillzifyLearn.LESSONS;
+  // with no catalog available at all, fall back to counting the key
+  // (better than silently zeroing every achievement mid-load).
+  function isCatalogLesson(id) {
+    try {
+      var list = null;
+      if (window.SkillzifyLearnCore && Array.isArray(window.SkillzifyLearnCore.LESSONS)) list = window.SkillzifyLearnCore.LESSONS;
+      else if (window.SkillzifyLearn && Array.isArray(window.SkillzifyLearn.LESSONS)) list = window.SkillzifyLearn.LESSONS;
+      if (!list) return true;
+      for (var i = 0; i < list.length; i++) if (list[i].id === id) return true;
+      return false;
+    } catch (e) { return true; }
+  }
   /* Snapshot of everything achievements care about, read once so the
      unlock checks and the progress bars can never disagree. Pure reads —
      no unlocks, no XP, no writes. */
@@ -181,7 +229,11 @@
     try { st.xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0; } catch (e) {}
     var prog = {};
     try { prog = JSON.parse(localStorage.getItem("skillzify_progress") || "{}") || {}; } catch (e) {}
-    st.done = Object.keys(prog).length;
+    // P2-15: count only lessons that exist in the catalog — a stale /
+    // removed lesson id lingering in skillzify_progress must not
+    // inflate "lessons done" or unlock Scholar early. Same filter as
+    // the dashboard (which counts catalog lessons) and profile.js.
+    st.done = Object.keys(prog).filter(function (id) { return isCatalogLesson(id); }).length;
     st.totalLessons = (window.SkillzifyLearn && window.SkillzifyLearn.totalLessons) || 250;
     st.streak = streak();
     st.runs = runCount();
@@ -298,43 +350,52 @@
         if (window.Skillzify && typeof window.Skillzify.toast === "function") window.Skillzify.toast("🔥 30-day streak! +150 XP", "success");
       }
     } catch (e) {}
+    // P2-23: batch — one in-memory unlocked map for the whole
+    // check, persisted + feed-logged once at the end.
+    var u = unlocked();
+    var newly = [];
     // Lessons (+ the new 25/50/100 milestones) and Scholar
-    if (st.done >= 1) unlock("first_steps");
-    if (st.done >= 25) unlock("lessons_25");
-    if (st.done >= 50) unlock("lessons_50");
-    if (st.done >= 100) unlock("lessons_100");
-    if (st.done >= st.totalLessons) unlock("scholar");
+    if (st.done >= 1) unlockBatched("first_steps", u, newly);
+    if (st.done >= 25) unlockBatched("lessons_25", u, newly);
+    if (st.done >= 50) unlockBatched("lessons_50", u, newly);
+    if (st.done >= 100) unlockBatched("lessons_100", u, newly);
+    if (st.done >= st.totalLessons) unlockBatched("scholar", u, newly);
     // Exercises
-    if (st.exSolved >= 1) unlock("ex_first");
-    if (st.exSolved >= 10) unlock("ex_10");
-    if (st.exSolved >= 25) unlock("ex_25");
-    if (st.exTotal > 0 && st.exSolved >= st.exTotal) unlock("ex_all");
-    if (st.topicDone) unlock("topic_master");
+    if (st.exSolved >= 1) unlockBatched("ex_first", u, newly);
+    if (st.exSolved >= 10) unlockBatched("ex_10", u, newly);
+    if (st.exSolved >= 25) unlockBatched("ex_25", u, newly);
+    if (st.exTotal > 0 && st.exSolved >= st.exTotal) unlockBatched("ex_all", u, newly);
+    if (st.topicDone) unlockBatched("topic_master", u, newly);
     // XP (uses the local xp var — the milestone block above may have just
     // added +50/+150 to it, same as before)
-    if (xp >= 100) unlock("xp_100");
-    if (xp >= 500) unlock("xp_500");
-    if (xp >= 1000) unlock("xp_1000");
-    if (xp >= 5000) unlock("xp_5000");
-    if (xp >= 10000) unlock("xp_10000");
+    if (xp >= 100) unlockBatched("xp_100", u, newly);
+    if (xp >= 500) unlockBatched("xp_500", u, newly);
+    if (xp >= 1000) unlockBatched("xp_1000", u, newly);
+    if (xp >= 5000) unlockBatched("xp_5000", u, newly);
+    if (xp >= 10000) unlockBatched("xp_10000", u, newly);
     // Streaks: best-ever (current OR longest) — badges stay permanent by
     // design; a lapsed streak never revokes one (Vikas's call, 9 Nov).
-    if (s.current >= 3 || s.longest >= 3) unlock("streak_3");
-    if (s.current >= 7 || s.longest >= 7) unlock("streak_7");
-    if (s.current >= 30 || s.longest >= 30) unlock("streak_30");
-    if (st.runs >= 10) unlock("runner_10");
-    if (st.runs >= 50) unlock("runner_50");
-    if (st.snips >= 1) unlock("snippet_saver");
+    if (s.current >= 3 || s.longest >= 3) unlockBatched("streak_3", u, newly);
+    if (s.current >= 7 || s.longest >= 7) unlockBatched("streak_7", u, newly);
+    if (s.current >= 30 || s.longest >= 30) unlockBatched("streak_30", u, newly);
+    if (st.runs >= 10) unlockBatched("runner_10", u, newly);
+    if (st.runs >= 50) unlockBatched("runner_50", u, newly);
+    if (st.snips >= 1) unlockBatched("snippet_saver", u, newly);
     // New: reviews, mastery, paths, community, flowchart, daily plans
-    if (st.reviewsDone >= 7) unlock("review_7");
-    if (st.reviewsDone >= 30) unlock("review_30");
-    if (st.bestMastery != null && st.bestMastery >= 60) unlock("mastery_solid");
-    if (st.bestMastery != null && st.bestMastery >= 85) unlock("mastery_mastered");
-    if (st.pathsDone >= 1) unlock("path_first");
-    if (st.bestAnswers >= 1) unlock("best_answer");
-    if (st.showcaseStarred) unlock("showcase_star");
-    if (st.flowchartsDone >= 1) unlock("flowchart_first");
-    if (st.plansDone >= 7) unlock("plan_7");
+    if (st.reviewsDone >= 7) unlockBatched("review_7", u, newly);
+    if (st.reviewsDone >= 30) unlockBatched("review_30", u, newly);
+    if (st.bestMastery != null && st.bestMastery >= 60) unlockBatched("mastery_solid", u, newly);
+    if (st.bestMastery != null && st.bestMastery >= 85) unlockBatched("mastery_mastered", u, newly);
+    if (st.pathsDone >= 1) unlockBatched("path_first", u, newly);
+    if (st.bestAnswers >= 1) unlockBatched("best_answer", u, newly);
+    if (st.showcaseStarred) unlockBatched("showcase_star", u, newly);
+    if (st.flowchartsDone >= 1) unlockBatched("flowchart_first", u, newly);
+    if (st.plansDone >= 7) unlockBatched("plan_7", u, newly);
+    // P2-23: one ACH_KEY write + one feed write for the whole
+    // catch-up (was: a read+write pair per badge, plus a feed
+    // entry each). No day-count is touched here — unlocking is
+    // feed-only (P1-06 logFeed path, preserved).
+    if (newly.length) { set(ACH_KEY, u); logFeedMany(newly); }
   }
   function achievements() {
     var u = unlocked();
@@ -398,8 +459,10 @@
     var s = snippets();
     var sn = { id: "s" + Date.now().toString(36), title: title || "Untitled snippet", desc: desc || "", code: code, created: Date.now() };
     s.unshift(sn); set(SNIP_KEY, s);
+    // P2-23: log() above already runs checkAchievements() once — the
+    // second call here was a pure duplicate (a second full
+    // gatherState + unlock scan per save).
     log("snippet", "Saved snippet: " + sn.title);
-    checkAchievements();
     return sn;
   }
   function deleteSnippet(id) { set(SNIP_KEY, snippets().filter(function (s) { return s.id !== id; })); }

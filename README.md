@@ -44,6 +44,22 @@ python3 -m http.server 8080
 # then open http://localhost:8080
 ```
 
+### 🌐 Put it online with smart AI (one click, free)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/vikaspatil06/skillzify-v2)
+
+1. Click **Deploy to Render** above (or open the link).
+2. Connect your GitHub account if asked and confirm the `skillzify-v2` repo.
+3. When prompted for `GEMINI_API_KEY`, paste your Gemini API key (it stays in
+   Render's secret settings — never in the repo).
+4. Click **Deploy** and wait 2–3 minutes.
+5. Open the URL Render gives you (like `https://skillzify-v2.onrender.com`) —
+   the full site works there with smart AI, no setup for visitors.
+
+> Render's free tier sleeps after ~15 minutes idle; the first visit wakes it in
+> about a minute. Render deploys are triggered manually from the Render
+> dashboard — pushing to GitHub does not auto-deploy.
+
 > The compiler downloads the Pyodide runtime (~10 MB) from a CDN on first use, so an internet connection is needed the first time you press **Run**.
 
 ### 🤖 Backend (developer-side AI)
@@ -108,7 +124,7 @@ skillzify-v2/
 │   ├── js/review.js    # Spaced repetition (SM-2-lite)
 │   ├── js/practice.js  # Practice engine: test runner, hints, timed mode
 │   ├── js/practice-data.js # 150 validated exercises
-│   ├── js/paths-data.js    # Learning path definitions (6 paths, 364 steps)
+│   ├── js/paths-data.js    # Learning path definitions (6 paths, 370 steps)
 │   ├── js/paths.js     # Path rendering + enrollment
 │   ├── js/projects-data.js # 14 guided projects
 │   ├── js/compiler.js  # Pyodide runner + workspace + AI explainer

@@ -192,6 +192,24 @@
     loginTab.addEventListener("click", function () { show("login"); });
     regTab.addEventListener("click", function () { show("register"); });
 
+    /* P2-66: ARIA tabs keyboard pattern — ArrowLeft/ArrowRight move
+       between the tabs (wrapping), Home/End jump to the first/last.
+       Moving focus also switches the visible form, like a click. */
+    [loginTab, regTab].forEach(function (tab, i) {
+      tab.addEventListener("keydown", function (e) {
+        var tabs = [loginTab, regTab];
+        var next = -1;
+        if (e.key === "ArrowRight") next = (i + 1) % tabs.length;
+        else if (e.key === "ArrowLeft") next = (i - 1 + tabs.length) % tabs.length;
+        else if (e.key === "Home") next = 0;
+        else if (e.key === "End") next = tabs.length - 1;
+        else return;
+        e.preventDefault();
+        show(next === 0 ? "login" : "register");
+        tabs[next].focus();
+      });
+    });
+
     function setBusy(form, busy) {
       var btn = form.querySelector('button[type="submit"]');
       if (btn) { btn.disabled = busy; btn.style.opacity = busy ? ".6" : ""; }

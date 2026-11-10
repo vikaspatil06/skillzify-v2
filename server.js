@@ -83,9 +83,14 @@ const DAILY_CAP_ANON = 10;
 const app = express();
 // Render terminates TLS behind a proxy/load balancer: without this,
 // req.ip is the proxy's address and every signed-out user would share
-// one anonymous 10/day bucket. Trust one proxy hop (X-Forwarded-For);
-// direct connections without the header still fall back to the socket.
-app.set("trust proxy", 1);
+// one anonymous 10/day bucket. P2-50: Cloudflare fronts Render, so a
+// request passes through TWO proxies (Cloudflare edge, then Render's
+// router) — trust proxy 1 resolved req.ip to a shared edge IP. The
+// [proxy] log line below records the X-Forwarded-For chain on every
+// AI call, so the count can be re-tuned from real traffic if the
+// observed chain turns out longer or shorter than two hops.
+// Direct connections without the header still fall back to the socket.
+app.set("trust proxy", 2);
 app.use(express.json({ limit: "200kb" }));
 
 /* ---- CORS: the API is called cross-origin from GitHub Pages ----
@@ -119,11 +124,32 @@ app.use(function (req, res, next) {
   next();
 });
 
-/* ---- tiny in-memory rate limit: 30 AI req/min per IP ---- */
+/* ---- P2-50: log the proxy chain on AI calls so the trust-proxy
+   count above can be verified (and re-tuned) from real traffic:
+   req.ip must be the leftmost (client) entry of X-Forwarded-For.
+   Health/warmup pings are not logged — they carry no cap identity. */
+app.use("/api/explain", function (req, res, next) {
+  console.log("[proxy] ip=" + req.ip + " xff=" + (req.headers["x-forwarded-for"] || "(none)"));
+  next();
+});
+
+/* ---- tiny in-memory rate limit: 30 AI req/min per IP ----
+   P2-46: health/warmup pings are exempt — ai.js warmups on every page
+   load and several pages fire an extra api/health fetch, so counting
+   pings against the AI budget let a burst of page loads block real AI
+   calls. Only /api/explain consumes budget. An IP whose window has
+   fully expired has its map key deleted instead of lingering as an
+   empty array (the map otherwise grew by one entry per distinct IP
+   forever; an IP that never returns keeps only expired timestamps,
+   which the filter drops on its next request, so it can never cause
+   a false 429). */
 const hits = new Map();
 app.use("/api/", (req, res, next) => {
+  if (req.method === "GET" && (req.path === "/health" || req.path === "/api/health" ||
+      req.path === "/warmup" || req.path === "/api/warmup")) return next();
   const now = Date.now();
   const arr = (hits.get(req.ip) || []).filter((t) => now - t < 60000);
+  if (arr.length === 0) hits.delete(req.ip); // prune the stale key
   arr.push(now);
   hits.set(req.ip, arr);
   if (arr.length > 30) return res.status(429).json({ error: "Too many requests — slow down a little.", code: "RATE_LIMIT" });
@@ -247,17 +273,80 @@ async function capAddCount(key) {
 }
 function dayStr() { return new Date(Date.now() + (5 * 60 + 30) * 60000).toISOString().slice(0, 10); }
 function dailyKey(uid, ip) { return (uid ? "u:" + uid : "a:" + ip) + "|" + dayStr(); }
-// Check only — no increment. The count moves on the success path, so a
-// timeout / overload / bad reply never burns a daily answer, and a
-// client retry doesn't burn a second one.
-async function dailyAllowed(uid, ip) {
+// P2-47: increment-first with rollback. The old check-then-increment
+// was racy: two concurrent requests (two devices, two tabs) could both
+// read 49/50, both succeed, and both increment -> 51. Now a call
+// RESERVES one answer before the Gemini call (increment first) and
+// RELEASES it (decrement) on any failure, so a timeout / overload /
+// bad reply still never burns a daily answer — and the success path
+// keeps the reservation instead of incrementing a second time. The
+// in-memory increment+check runs synchronously (no await between the
+// read and the write), so it is atomic in Node's single thread and
+// cannot overshoot. The Firestore path uses a transaction when the SDK
+// offers one (the check re-runs on contention, so no overshoot);
+// without runTransaction it falls back to a pre-read plus an atomic
+// FieldValue.increment, which can overshoot by at most the number of
+// requests in flight at the same instant — a small, bounded residual
+// (real Firestore HAS runTransaction, so this only bites the test
+// stand-in). A crash between reserve and release likewise leaves at
+// most one count per in-flight request, and the memory store resets
+// on restart anyway.
+async function dailyReserve(uid, ip) {
   initCapStore();
-  var count = await capGetCount(dailyKey(uid, ip));
-  return count < (uid ? DAILY_CAP_USER : DAILY_CAP_ANON);
+  var key = dailyKey(uid, ip);
+  var cap = uid ? DAILY_CAP_USER : DAILY_CAP_ANON;
+  if (capStore === "firestore" && capDb) {
+    try {
+      if (typeof capDb.runTransaction === "function") {
+        return await capDb.runTransaction(async function (tx) {
+          var doc = capDb.collection(CAP_COLLECTION).doc(capDocId(key));
+          var snap = await tx.get(doc);
+          var data = snap.exists ? snap.data() : null;
+          var count = (data && typeof data.count === "number") ? data.count : 0;
+          if (count >= cap) return false;
+          var patch = { updatedAt: new Date().toISOString() };
+          if (capFieldValue && typeof capFieldValue.increment === "function") patch.count = capFieldValue.increment(1);
+          else patch.count = count + 1;
+          tx.set(doc, patch, { merge: true });
+          return true;
+        });
+      }
+      // No transactions: pre-read + atomic increment (see note above).
+      var cur = await capGetCount(key);
+      if (cur >= cap) return false;
+      await capAddCount(key);
+      return true;
+    } catch (e) {
+      console.log("[cap] Firestore reserve failed, using in-memory reserve for this request: " + (e && e.message ? e.message : e));
+    }
+  }
+  var rec = daily.get(key) || { count: 0 };
+  if (rec.count >= cap) return false;
+  rec.count += 1;
+  daily.set(key, rec);
+  return true;
 }
-async function dailyCount(uid, ip) {
-  initCapStore();
-  await capAddCount(dailyKey(uid, ip));
+// Undo a reservation: any failure return, or a success the client never
+// received because it disconnected first (P1-23). Never drops below 0.
+async function dailyRelease(uid, ip) {
+  var key = dailyKey(uid, ip);
+  if (capStore === "firestore" && capDb) {
+    try {
+      var doc = capDb.collection(CAP_COLLECTION).doc(capDocId(key));
+      var patch = { updatedAt: new Date().toISOString() };
+      if (capFieldValue && typeof capFieldValue.increment === "function") patch.count = capFieldValue.increment(-1);
+      else patch.count = Math.max(0, (await capGetCount(key)) - 1);
+      await doc.set(patch, { merge: true });
+      return;
+    } catch (e) {
+      console.log("[cap] Firestore release failed, releasing in-memory for this request: " + (e && e.message ? e.message : e));
+    }
+  }
+  var rec = daily.get(key);
+  if (rec) {
+    rec.count = Math.max(0, rec.count - 1);
+    if (rec.count === 0) daily.delete(key); else daily.set(key, rec);
+  }
 }
 
 app.get("/api/health", (req, res) => {
@@ -401,8 +490,19 @@ app.post("/api/explain", async (req, res) => {
   const uid = String((req.body && req.body.uid) || "").slice(0, 128);
   const spec = Object.prototype.hasOwnProperty.call(MODES, mode) ? MODES[mode] : MODES[""];
   if (!code.trim() && !errText.trim()) return res.status(400).json({ error: "Nothing to explain.", code: "EMPTY" });
-  if (!(await dailyAllowed(uid, req.ip))) {
+  // P2-47: reserve one answer BEFORE the Gemini call (increment-first);
+  // every failure return below releases it again via releaseCap().
+  var reserved = await dailyReserve(uid, req.ip);
+  if (!reserved) {
     return res.status(429).json({ error: "You've used your " + (uid ? DAILY_CAP_USER : DAILY_CAP_ANON) + " AI answers for today — they reset tomorrow.", code: "DAILY_CAP" });
+  }
+  async function releaseCap() { if (reserved) { reserved = false; await dailyRelease(uid, req.ip); } }
+  // A success the client never received (disconnected before delivery —
+  // P1-23) releases the reservation instead of burning a daily answer
+  // the client can't use; a delivered success keeps it (no second count).
+  function clientGone() { return req.aborted === true || !!(req.socket && req.socket.destroyed); }
+  async function keepOrRelease() {
+    if (clientGone()) { await releaseCap(); console.log("[ai] client disconnected before delivery — daily cap not counted"); }
   }
 
   const style = spec.style;
@@ -476,6 +576,7 @@ app.post("/api/explain", async (req, res) => {
     if (!got.r || !got.r.ok) {
       const g = got.error || { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
       console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "fail", g.code, Date.now() - started + "ms");
+      await releaseCap();
       return res.status(g.status).json({ error: g.error, code: g.code });
     }
     let r = got.r;
@@ -525,11 +626,12 @@ app.post("/api/explain", async (req, res) => {
         // below via `got` still holding the failed retry.
         if (!spec.json && firstText.trim()) {
           console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "ok-truncated", usedModel, Date.now() - started + "ms");
-          if (req.aborted !== true && !(req.socket && req.socket.destroyed)) await dailyCount(uid, req.ip);
+          await keepOrRelease();
           return res.json({ explanation: firstText, model: usedModel, truncated: true });
         }
         const g = (got && got.error) || { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
         console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "fail", g.code, Date.now() - started + "ms");
+        await releaseCap();
         return res.status(g.status).json({ error: g.error, code: g.code });
       }
     }
@@ -537,6 +639,7 @@ app.post("/api/explain", async (req, res) => {
     const text = parts ? parts.map((p) => p.text || "").join("") : "";
     if (!text.trim()) {
       console.log("[explain] empty model text; finishReason was:", finishReason || "(none)");
+      await releaseCap();
       return res.status(502).json({ error: "AI returned an empty explanation (finish: " + (finishReason || "unknown") + ").", code: "EMPTY_REPLY" });
     }
     let out = { explanation: text, model: usedModel };
@@ -546,27 +649,55 @@ app.post("/api/explain", async (req, res) => {
         out.json = parseJsonMode(text, validate);
       } catch (e) {
         console.log("[ai]", mode, uid ? "uid" : "anon", "fail", "BAD_JSON", Date.now() - started + "ms");
+        await releaseCap();
         return res.status(502).json({ error: "AI returned an unusable answer — try again.", code: "BAD_JSON" });
       }
     }
     console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "ok", usedModel, "key#" + (got.keyIdx + 1), Date.now() - started + "ms");
-    // Success only — every error return above leaves the cap untouched.
-    // A MAX_TOKENS retry is still one request, so it counts once here.
+    // Success only — the reservation made before the call IS the count
+    // (no second increment; a MAX_TOKENS retry is still one request).
     // Awaited: the count must be durable (Firestore) before answering.
     // P1-23: if the client already disconnected (aborted fetch), the
-    // answer is never delivered — do not burn a daily-cap answer for it,
-    // or the client's retry pays twice for one delivered answer.
-    if (req.aborted !== true && !(req.socket && req.socket.destroyed)) await dailyCount(uid, req.ip);
-    else console.log("[ai] client disconnected before delivery — daily cap not counted");
+    // answer is never delivered — release the reservation instead of
+    // burning a daily-cap answer for it, or the client's retry pays
+    // twice for one delivered answer.
+    await keepOrRelease();
     res.json(out);
   } catch (e) {
     console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "fail", "TIMEOUT", Date.now() - started + "ms");
+    try { await releaseCap(); } catch (e2) {}
     res.status(502).json({ error: "Could not reach the AI provider.", code: "TIMEOUT" });
   }
 });
 
-/* ---- static site ---- */
-app.use(express.static(path.join(__dirname)));
+/* ---- static site ----
+   P2-56: express.static used to serve the whole repo — server.js,
+   package.json, firestore.rules and the entire node_modules/ tree
+   (dependency versions included) were all downloadable. The site
+   files stay where they are (no public/ move); instead a guard denies
+   the sensitive paths and hidden files, and cache headers are set
+   (HTML entry points are revalidated on every load; versioned assets
+   — ?v= on JS/CSS — are cacheable for a day). Denied paths answer
+   404, not 403, so the guard never confirms a file exists. */
+var STATIC_DENIED_FILES = { "server.js": true, "package.json": true, "firestore.rules": true, ".env": true };
+app.use(function (req, res, next) {
+  if (req.path && req.path.indexOf("/api/") === 0) return next();
+  var parts = String(req.path || "/").split("/");
+  for (var i = 0; i < parts.length; i++) {
+    var seg = parts[i];
+    if (!seg) continue;
+    if (seg === "node_modules" || seg.charAt(0) === "." || STATIC_DENIED_FILES[seg]) return res.sendStatus(404);
+  }
+  next();
+});
+app.use(express.static(path.join(__dirname), {
+  dotfiles: "ignore",
+  setHeaders: function (res, filePath) {
+    // Entry points change on every deploy; assets are ?v= versioned.
+    if (/\.html?$/.test(filePath)) res.setHeader("Cache-Control", "no-cache");
+    else res.setHeader("Cache-Control", "public, max-age=86400");
+  }
+}));
 
 app.listen(PORT, () => {
   console.log(

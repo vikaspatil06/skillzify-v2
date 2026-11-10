@@ -41,10 +41,22 @@
       return { "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c];
     });
   }
+  /* P2-49: stronger cache hash (cyrb53 — two 32-bit lanes, ~53 bits
+     of output) instead of the old 32-bit DJB2, which could collide
+     across different questions. The cache key also carries the uid
+     now (see runJob), so two users can never share an entry. */
   function hash(s) {
-    var h = 5381;
-    for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
-    return h.toString(36);
+    var h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (var i = 0, ch; i < s.length; i++) {
+      ch = s.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 2654435761);
+      h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+    h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+    h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
   }
   function uid() {
     try {
@@ -54,6 +66,49 @@
       }
     } catch (e) {}
     return "";
+  }
+
+  /* P2-54 + P2-49: auth readiness and cache clearing.
+     - uid() is gated on SkillzifyAuth.onReady: an early tap in the
+       first second before Firebase restores the session used to read
+       currentUser() === null and burn the anonymous 10/day cap instead
+       of the signed-in 50/day. runJob now waits for onReady before it
+       resolves the uid (for the payload AND the cache key). A genuinely
+       signed-out user still resolves at once: onReady fires with a
+       null user as soon as the session state is known, and when the
+       auth module is absent there is nothing to wait for. A 5 s safety
+       timer keeps a stuck auth restore from wedging the queue forever.
+     - The cache is cleared on every auth change (sign-in / sign-out),
+       so a cached answer can never leak across users on a shared
+       device. The subscription is (re-)attempted on every ask until
+       the auth module is present, because ai.js cannot rely on load
+       order alone. */
+  var authReady = false, authWatchStarted = false;
+  function watchAuth() {
+    if (authWatchStarted) return;
+    try {
+      var A = window.SkillzifyAuth;
+      if (!A || typeof A.onReady !== "function") return;
+      authWatchStarted = true;
+      if (typeof A.onAuthChange === "function") {
+        A.onAuthChange(function () { cache = {}; cacheOrder = []; });
+      }
+      A.onReady(function () { authReady = true; });
+    } catch (e) {}
+  }
+  function whenAuthReady() {
+    watchAuth();
+    if (authReady) return Promise.resolve();
+    try {
+      var A = window.SkillzifyAuth;
+      if (!A || typeof A.onReady !== "function") return Promise.resolve();
+      var readyP = new Promise(function (resolve) {
+        A.onReady(function () { authReady = true; resolve(); });
+      });
+      if (typeof setTimeout !== "function") return readyP;
+      var timeoutP = new Promise(function (resolve) { setTimeout(function () { resolve(); }, 5000); });
+      return Promise.race([readyP, timeoutP]);
+    } catch (e) { return Promise.resolve(); }
   }
 
   // Sign-in link for DAILY_CAP errors — shown ONLY to signed-out
@@ -215,7 +270,12 @@
   }
   function cacheSet(key, val) {
     if (cacheOrder.indexOf(key) < 0) { cacheOrder.push(key); if (cacheOrder.length > 40) delete cache[cacheOrder.shift()]; }
-    cache[key] = { at: Date.now(), val: val };
+    // P2-49: store a COPY, not the caller's object — the delivered
+    // result and the cached entry must never be the same reference,
+    // or a caller mutating its answer would corrupt the cache.
+    var copy = val;
+    try { copy = JSON.parse(JSON.stringify(val)); } catch (e) { copy = val; }
+    cache[key] = { at: Date.now(), val: copy };
   }
   function fetchJSON(url, body, timeoutMs) {
     var ctrl = null, timer = null;
@@ -236,7 +296,15 @@
     });
   }
   function backendAsk(payload, attempt) {
-    return fetchJSON(BASE + "/api/explain", payload, 60000).then(function (res) {
+    // P2-48: the retry after a network failure (TypeError) gets a short
+    // 10 s fuse instead of another full 60 s — when the backend is down,
+    // a hung retry used to burn a second minute before the personal-key
+    // / offline fallback could run. The first attempt keeps the full
+    // 60 s (a cold Render instance legitimately takes that long).
+    // AbortError is still never retried (P1-23: the server may still
+    // complete and count the aborted request).
+    var timeoutMs = attempt === 0 ? 60000 : 10000;
+    return fetchJSON(BASE + "/api/explain", payload, timeoutMs).then(function (res) {
       if (res.ok && res.data && res.data.explanation) return res.data;
       var code = (res.data && res.data.code) || ("HTTP_" + res.status);
       // Retry once, and only where a retry can help: a 503 overload, or a
@@ -436,10 +504,15 @@
   function runJob(job) {
     var opts = job.opts, cb = job.cb;
     setStatus("working");
+    // P2-54: wait until Firebase has restored the session before the
+    // uid is resolved — an early tap must not burn the anonymous cap.
+    return whenAuthReady().then(function () {
     // Resolve the learner context ONCE: the cache key and the payload
     // must see the same string (opts.extra folds in via buildContext).
     var ctx = String(opts.context || buildContext(opts.extra)).slice(0, 2000);
-    var key = hash(JSON.stringify({ m: opts.mode, c: opts.code, e: opts.error, x: ctx }));
+    // P2-49: the uid is part of the cache key — the same question from
+    // two users (or anon vs signed-in) must never share an entry.
+    var key = hash(JSON.stringify({ u: uid(), m: opts.mode, c: opts.code, e: opts.error, x: ctx }));
     var cached = (opts.cache !== false && !opts.json) ? cacheGet(key) : null;
     if (cached) {
       setStatus("ok");
@@ -450,7 +523,7 @@
       for (var ck in cached) { if (Object.prototype.hasOwnProperty.call(cached, ck)) hit[ck] = cached[ck]; }
       hit.cached = true;
       safeCb(cb, null, hit);
-      return Promise.resolve();
+      return;
     }
     var payload = {
       mode: opts.mode || "",
@@ -507,6 +580,7 @@
         safeCb(cb, friendlyError(be), null);
       });
     });
+    });
   }
   function ask(opts, cb) {
     if (typeof cb !== "function") cb = function () {};
@@ -541,13 +615,22 @@
     if (ctrl) opts.signal = ctrl.signal;
     fetch(BASE + "/api/health", opts).then(function (r) {
       if (timer) clearTimeout(timer);
-      warmed = r.ok;
-      setStatus(r.ok ? "ok" : "offline");
-      // Item 5 (round 4): guard the initiating callback like flushWarm
-      // does — a throwing callback must not skip flushWarm and strand
-      // the queued waiters with `warming` stuck true.
-      if (cb) { try { cb(r.ok); } catch (e) {} }
-      flushWarm(r.ok);
+      // P2-55: r.ok is only the HTTP status — the body field `ai` says
+      // whether a Gemini key is configured. With no key the status dot
+      // used to show green "AI ready" while every call failed with
+      // NOT_CONFIGURED. Status is ok only when the health body has
+      // ai: true; anything else leaves `warmed` false, so a later
+      // warmup() call can retry with a fresh fetch.
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        var ok = r.ok && d && d.ai === true;
+        warmed = ok;
+        setStatus(ok ? "ok" : "offline");
+        // Item 5 (round 4): guard the initiating callback like flushWarm
+        // does — a throwing callback must not skip flushWarm and strand
+        // the queued waiters with `warming` stuck true.
+        if (cb) { try { cb(ok); } catch (e) {} }
+        flushWarm(ok);
+      });
     }).catch(function () {
       if (timer) clearTimeout(timer);
       setStatus("offline");

@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify Code Studio — a VS Code-like Python IDE in your browser. Multi-file workspace, terminal, problems panel, AI assistant.">
   <title>Code Studio — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=25">
+  <link rel="stylesheet" href="assets/css/style.css?v=26">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
@@ -139,10 +139,17 @@
 
     #editor-host { flex: 1; min-height: 200px; position: relative; overflow: hidden; }
     #editor-host .CodeMirror { height: 100%; font-family: "JetBrains Mono", monospace; }
+    /* P2-58: plain-text fallback editor (when the CodeMirror CDN fails)
+       — fill the editor pane like the real editor, same mono font. */
+    #editor-fallback { width: 100%; height: calc(100% - 34px); min-height: 160px; box-sizing: border-box;
+      background: #282a36; color: #f8f8f2; border: 0; resize: none; outline: none; padding: 10px 12px;
+      font-family: "JetBrains Mono", monospace; font-size: 14px; line-height: 1.6; tab-size: 4; }
+    .cm-fallback-note { background: #3d2c00; color: #fbbf24; font-size: 12px; padding: 7px 12px;
+      border-bottom: 1px solid var(--ide-border); line-height: 1.5; }
     .welcome { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       background: var(--ide-bg); z-index: 5; }
     .welcome-inner { text-align: center; max-width: 520px; padding: 20px; }
-    .welcome-inner h2 { color: #fff; font-size: 22px; margin: 0 0 8px; }
+    .welcome-inner h1 { color: #fff; font-size: 22px; margin: 0 0 8px; }
     .welcome-inner p { color: var(--ide-muted); font-size: 13px; }
     .welcome-keys { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; text-align: left; }
     .welcome-keys div { background: var(--ide-side); border: 1px solid var(--ide-border); border-radius: 8px;
@@ -300,10 +307,11 @@
         </div>
         <div class="side-title">AI SETTINGS</div>
         <div class="side-section">
-          <label>API key (optional fallback)</label>
+          <label for="ai-key">API key (optional fallback)</label>
           <input class="ide-input" type="password" id="ai-key" placeholder="AIza..." autocomplete="off">
+          <label style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--ide-muted);text-transform:none;letter-spacing:0;font-weight:400;margin:8px 0 0"><input type="checkbox" id="ai-remember" checked style="width:auto"> Remember this key in this browser</label>
           <button class="ide-btn ghost" id="ai-save">Save key</button>
-          <p style="font-size:11px;color:var(--ide-muted)">Key stays in this browser only. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#9d6bff">Get a free Gemini key →</a></p>
+          <p style="font-size:11px;color:var(--ide-muted)">Your key is stored in this browser only — it never leaves your device except to call the Gemini API. With "Remember" off it is kept for this session only and never stored. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#9d6bff">Get a free Gemini key →</a></p>
           <p style="font-size:11px;color:var(--ide-muted)">A saved key is used when the daily AI limit is reached, so you can keep going.</p>
         </div>
       </div>
@@ -316,7 +324,7 @@
       <div class="side-view" id="view-settings">
         <div class="side-title">EDITOR SETTINGS</div>
         <div class="side-section">
-          <label>Color theme</label>
+          <label for="theme-select">Color theme</label>
           <select class="ide-select" id="theme-select">
             <option value="dracula">Dracula</option>
             <option value="material-darker">Material Darker</option>
@@ -356,8 +364,8 @@
       </div>
       <div class="breadcrumbs" id="breadcrumbs">explorer <span class="sep">›</span> main.py</div>
       <div class="findbar" id="findbar">
-        <input id="find-input" placeholder="Find">
-        <input id="replace-input" placeholder="Replace" style="display:none">
+        <input id="find-input" placeholder="Find" aria-label="Find in file">
+        <input id="replace-input" placeholder="Replace" style="display:none" aria-label="Replace in file">
         <span class="cnt" id="find-count"></span>
         <button id="find-prev" title="Previous">↑</button>
         <button id="find-next" title="Next">↓</button>
@@ -368,7 +376,7 @@
       <div id="editor-host">
         <div class="welcome" id="welcome">
           <div class="welcome-inner">
-            <h2>⚡ Skillzify Code Studio</h2>
+            <h1>⚡ Skillzify Code Studio</h1>
             <p>A VS Code-like Python IDE in your browser. Multiple files, terminal, problems panel, AI assistant — no setup.</p>
             <div class="welcome-keys">
               <div><kbd>Ctrl+Enter</kbd> &nbsp;Run current file</div>
@@ -424,20 +432,20 @@
 <script src="assets/js/nav.js"></script>
 <script src="assets/js/footer.js"></script>
 <script src="assets/js/app.js?v=5"></script>
-<script src="assets/js/activity.js?v=8"></script>
+<script src="assets/js/activity.js?v=9"></script>
 <script src="assets/js/palette.js?v=2"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
-<script src="assets/js/auth.js?v=5"></script>
-<script src="assets/js/sync.js?v=14"></script>
-<script src="assets/js/ai.js?v=16"></script>
+<script src="assets/js/auth.js?v=6"></script>
+<script src="assets/js/sync.js?v=15"></script>
+<script src="assets/js/ai.js?v=17"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
-<script src="assets/js/compiler.js?v=17"></script>
+<script src="assets/js/compiler.js?v=18"></script>
 </body>
 </html>

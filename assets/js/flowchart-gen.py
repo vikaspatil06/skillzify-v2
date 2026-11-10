@@ -319,8 +319,18 @@ class FlowchartBuilder:
 
         # ---- with ----
         if isinstance(s, ast.With):
-            nid = self.add_node("process", _short(s.items[0].context_expr)
-                                if s.items else "with")
+            # P2-43: label the full statement — "with open('f') as fh" —
+            # not just the context expression, so the node shows the
+            # context-manager semantics and the bound name (capped like
+            # the other branches).
+            if s.items:
+                witem = s.items[0]
+                wlabel = "with " + _short(witem.context_expr)
+                if witem.optional_vars is not None:
+                    wlabel += " as " + _short(witem.optional_vars)
+                nid = self.add_node("process", _cap(wlabel))
+            else:
+                nid = self.add_node("process", "with")
             if not nid:
                 return list(entries)
             self._connect(entries, nid)

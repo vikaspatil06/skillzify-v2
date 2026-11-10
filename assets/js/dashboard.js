@@ -36,7 +36,11 @@
     // the achievements read the same number, so they can never disagree.
     var st = null;
     try { st = window.SkillzifyActivity ? window.SkillzifyActivity.streak() : null; } catch (e) {}
-    var streakN = st ? st.current : (window.Skillzify.storeGet("skillzify_streak", { last: null, count: 0 }).count || 0);
+    // P2-16: when SkillzifyActivity fails to load, the fallback reads
+    // the raw counter — but it must replicate the lapse check, not
+    // trust .count: a streak whose last activity was neither today
+    // nor yesterday has lapsed and reads 0.
+    var streakN = st ? st.current : streakFallbackCount();
     document.getElementById("dash-streak").textContent = streakN + " 🔥";
     // Best streak beside the current one — badges stay permanent, and the
     // two numbers together tell the truth (Vikas's call, 9 Nov).
@@ -70,15 +74,46 @@
       box.innerHTML = html;
     }
 
-    // Greeting
-    var user = window.SkillzifyAuth ? window.SkillzifyAuth.currentUser() : null;
-    document.getElementById("dash-hello").textContent =
-      user ? "Welcome back, " + user.name.split(" ")[0] + "! Keep the streak alive 🔥" :
-             "Your learning at a glance — log in to sync your name here.";
+    renderGreeting();
 
     renderUpgrades();
     renderNextUp();
     renderDailyPlan();
+  }
+
+  // Greeting — its own function so auth changes can re-render just
+  // this line (P2-52; mirrors profile.js decideView/onAuthChange).
+  // Firebase restores the session asynchronously, so the first render
+  // (on DOMContentLoaded) can only see a signed-out user; the
+  // onAuthChange subscription below fixes it the moment auth resolves.
+  var greetingWired = false;
+  function renderGreeting() {
+    var el = document.getElementById("dash-hello");
+    if (!el) return;
+    var user = null;
+    try { user = window.SkillzifyAuth ? window.SkillzifyAuth.currentUser() : null; } catch (e) {}
+    el.textContent =
+      user ? "Welcome back, " + user.name.split(" ")[0] + "! Keep the streak alive 🔥" :
+             "Your learning at a glance — log in to sync your name here.";
+    if (!greetingWired && window.SkillzifyAuth && typeof window.SkillzifyAuth.onAuthChange === "function") {
+      greetingWired = true;
+      window.SkillzifyAuth.onAuthChange(function () { renderGreeting(); });
+    }
+  }
+
+  // P2-16 fallback: current streak from the raw skillzify_streak
+  // counter, with the same lapse rule as Activity.streakCounter()
+  // (last === today or yesterday, else 0). Legacy toDateString()
+  // values are normalised the same way activity.js normDay does.
+  function streakFallbackCount() {
+    try {
+      var raw = window.Skillzify.storeGet("skillzify_streak", { last: null, count: 0 }) || {};
+      var last = raw.last ? new Date(raw.last) : null;
+      if (!last || isNaN(last.getTime())) return 0;
+      var iso = function (d) { var m = d.getMonth() + 1, dy = d.getDate(); return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (dy < 10 ? "0" + dy : dy); };
+      var lastIso = iso(last), today = iso(new Date()), yest = iso(new Date(Date.now() - 864e5));
+      return (lastIso === today || lastIso === yest) ? (raw.count || 0) : 0;
+    } catch (e) { return 0; }
   }
 
   /* Next Up card (Mastery Engine Phase 2): the dashboard hero now shows
@@ -154,7 +189,13 @@
         if (a.solved) topics[ex.topic].solved++;
       }
     });
-    var labels = { variables: "Variables", strings: "Strings", collections: "Collections", loops: "Loops", functions: "Functions", oop: "OOP", exceptions: "Exceptions", dsa: "Algorithms", recursion: "Recursion", sorting: "Sorting", "trees-graphs": "Trees & Graphs", "dynamic-programming": "Dynamic Programming", "data-science": "Data Science", web: "Web", files: "Files", testing: "Testing", async: "Async" };
+    // P2-22: labels come from the canonical copy in mastery.js
+    // (SkillzifyMastery.TOPIC_LABELS). The literal fallback only runs
+    // when mastery.js failed to load — the weak-spots section must
+    // still render proper labels then (the topic label is the only
+    // copy kept: deleting it would regress the no-mastery render).
+    var labels = (window.SkillzifyMastery && window.SkillzifyMastery.TOPIC_LABELS) ||
+      { variables: "Variables", strings: "Strings", collections: "Collections", loops: "Loops", functions: "Functions", oop: "OOP", exceptions: "Exceptions", dsa: "Algorithms", recursion: "Recursion", sorting: "Sorting", "trees-graphs": "Trees & Graphs", "dynamic-programming": "Dynamic Programming", "data-science": "Data Science", web: "Web", files: "Files", testing: "Testing", async: "Async" };
     return order.map(function (t) {
       var s = topics[t];
       return { topic: t, label: labels[t] || t, solved: s.solved, tried: s.tried,
@@ -162,31 +203,24 @@
     });
   }
 
-  // Plain-text weak-spot summary for the AI daily challenge prompt:
-  // weakest topic first, unsolved exercises, untried topics.
-  // Phase 4: the weakest/strongest lines come from the mastery engine
-  // (quality-weighted coverage + band + rust) when it is loaded; the
-  // old solve-rate lines are the fallback.
+  // Plain-text weak-spot summary for the AI daily challenge prompt.
+  // P2-22: the canonical implementation lives in mastery.js
+  // (SkillzifyMastery.weakSpotsSummary) — this is a thin delegate.
+  // The solve-rate-only fallback below runs only when mastery.js
+  // failed to load; it reuses topicRows() and never the mastery
+  // weak/strong lines.
   function weakSpotsSummary(EX, atts) {
+    try {
+      var M = window.SkillzifyMastery;
+      if (M && typeof M.weakSpotsSummary === "function") return M.weakSpotsSummary(EX, atts);
+    } catch (e) {}
     var rows = topicRows(EX, atts);
     var tried = rows.filter(function (r) { return r.tried > 0; })
                     .sort(function (a, b) { return a.pct - b.pct || b.tried - a.tried; });
     var untried = rows.filter(function (r) { return r.tried === 0; });
     var unsolved = EX.filter(function (ex) { var a = atts[ex.id]; return a && a.attempts > 0 && !a.solved; });
     var parts = [];
-    var mWeak = null, mStrong = null;
-    try {
-      var M = window.SkillzifyMastery;
-      if (M && typeof M.topicMastery === "function") {
-        var mrows = M.topicMastery().filter(function (r) { return r.tried > 0 && r.score != null; })
-          .sort(function (a, b) { return a.score - b.score; });
-        if (mrows.length) { mWeak = mrows[0]; mStrong = mrows[mrows.length - 1]; }
-      }
-    } catch (e) {}
-    if (mWeak) {
-      parts.push("Weakest topic: " + mWeak.label + " (mastery " + mWeak.score + "% \u2014 " + mWeak.band + (mWeak.rusty ? ", rusty" : "") + ").");
-      if (mStrong && mStrong.topic !== mWeak.topic) parts.push("Strongest topic: " + mStrong.label + " (mastery " + mStrong.score + "% \u2014 " + mStrong.band + ").");
-    } else if (tried.length) {
+    if (tried.length) {
       parts.push("Weakest topic: " + tried[0].label + " (" + tried[0].pct + "% of " + tried[0].tried + " tried).");
       if (tried.length > 1) parts.push("Strongest topic: " + tried[tried.length - 1].label + " (" + tried[tried.length - 1].pct + "%).");
     }
@@ -520,11 +554,63 @@
   function savePlanFlag(f) {
     try { window.Skillzify.storeSet(PLAN_KEY, f); } catch (e) {}
   }
+  // P2-17: the last real sync completion, from the skillzify-sync
+  // event detail (sync.js always dispatches with {at}). Only
+  // detail-bearing events count — a bare event is not a sync.
+  var LAST_SYNC_KEY = "skillzify_last_sync_at";
+  function lastSyncAt() {
+    try {
+      var v = parseInt(window.Skillzify.storeGet(LAST_SYNC_KEY, 0) || "0", 10);
+      return isFinite(v) ? v : 0;
+    } catch (e) { return 0; }
+  }
+  function noteSyncAt(at) {
+    try { window.Skillzify.storeSet(LAST_SYNC_KEY, at || Date.now()); } catch (e) {}
+  }
+  // Due review ids right now (SkillzifyReview when loaded, else the
+  // raw review store). Used to tell a genuinely new due review from
+  // the ones the stored plan was built from.
+  function currentDueIds() {
+    try {
+      if (window.SkillzifyReview && typeof window.SkillzifyReview.dueList === "function") {
+        return window.SkillzifyReview.dueList().slice();
+      }
+    } catch (e) {}
+    try {
+      var rm = window.Skillzify.storeGet("skillzify_review", {}) || {};
+      var t = Date.now();
+      return Object.keys(rm).filter(function (id) { return rm[id] && typeof rm[id].due === "number" && rm[id].due <= t; });
+    } catch (e2) { return []; }
+  }
   function getDailyPlan() {
     var M = window.SkillzifyMastery;
     if (!M || typeof M.dailyPlan !== "function") return null;
     var stored = readPlanFlag();
-    if (stored) return stored;
+    if (stored) {
+      // P2-17: a plan snapshotted before a sync (or before a review's
+      // due time arrived) can miss due reviews for the whole day.
+      // Regenerate when a due review exists that the plan was not
+      // built from — the generation-time snapshot (dueIds) is the
+      // comparison, so an ordinary re-render or a sync that changed
+      // nothing keeps the plan stable for the day (the existing
+      // same-day-stability behaviour). The stored createdAt + last
+      // sync time are recorded alongside for the same reason: a sync
+      // that changed the due set after the plan was built is the
+      // P2-17 case, and the dueIds comparison is what proves it.
+      var snap = stored.dueIds || stored.items.filter(function (it) { return it.kind === "review"; }).map(function (it) { return it.id; });
+      var snapSet = {};
+      snap.forEach(function (id) { snapSet[id] = true; });
+      var nowDue = currentDueIds();
+      var hasNewDue = nowDue.some(function (id) { return !snapSet[id]; });
+      var syncChangedDues = false;
+      var ls = lastSyncAt();
+      if (ls && stored.createdAt && stored.createdAt < ls) {
+        var nowSet = {};
+        nowDue.forEach(function (id) { nowSet[id] = true; });
+        syncChangedDues = hasNewDue || snap.some(function (id) { return !nowSet[id]; });
+      }
+      if (!hasNewDue && !syncChangedDues) return stored;
+    }
     var dp = M.dailyPlan() || {};
     var items = [];
     (dp.reviews || []).forEach(function (id) {
@@ -532,7 +618,7 @@
     });
     if (dp.exercise) items.push({ key: "exercise:" + dp.exercise, kind: "exercise", id: dp.exercise });
     if (dp.lesson) items.push({ key: "lesson:" + dp.lesson, kind: "lesson", id: dp.lesson });
-    var flag = { date: localToday(), items: items, done: [] };
+    var flag = { date: localToday(), items: items, done: [], createdAt: Date.now(), dueIds: currentDueIds() };
     savePlanFlag(flag);
     return flag;
   }
@@ -598,9 +684,26 @@
     // set right after a successful award, in the same synchronous block,
     // so no re-render or sync can award it twice.
     if (plan.items.length > 0 && autoDoneN === plan.items.length && !plan.xpAwarded) {
+      // P2-19: two tabs finishing the plan at once must not both pay
+      // the +10. Claim the day's award in localStorage first (token
+      // re-read: only the tab whose token survives pays); a lost race
+      // marks the plan awarded locally too, so this tab never retries.
+      var claimKey = "skillzify_daily_plan_xp_" + localToday();
+      var claimWon = false, claimToken = "";
+      try {
+        if (!localStorage.getItem(claimKey)) {
+          claimToken = String(Date.now()) + "-" + Math.random().toString(36).slice(2);
+          localStorage.setItem(claimKey, claimToken);
+          claimWon = localStorage.getItem(claimKey) === claimToken;
+        }
+      } catch (e) { claimWon = true; }
+      if (!claimWon) {
+        plan.xpAwarded = true;
+        savePlanFlag(plan);
+      }
       try {
         var LC = window.SkillzifyLearnCore;
-        if (LC && typeof LC.addXP === "function") {
+        if (claimWon && LC && typeof LC.addXP === "function") {
           LC.addXP(10);
           plan.xpAwarded = true;
           savePlanFlag(plan);
@@ -625,9 +728,14 @@
     plan.items.forEach(function (it) {
       var meta = planItemMeta(it, lessonById, exById);
       var done = !!doneSet[it.key];
+      // P2-18: an auto-detected-done item has NO working toggle — its
+      // checkbox is disabled, so un-checking a genuinely-done item
+      // can no longer silently re-check on the next render. Only
+      // hand-toggled items (not auto-done) stay toggleable.
+      var auto = isPlanItemDone(it);
       var label = esc(meta.icon + " " + meta.label);
       html += '<div class="run-item"><span><input type="checkbox" data-plan-key="' + esc(it.key) + '"' +
-        (done ? " checked" : "") + ' aria-label="Mark done: ' + label + '"> ' +
+        (done ? " checked" : "") + (auto ? " disabled" : "") + ' aria-label="Mark done: ' + label + '"> ' +
         (done ? "<s>" : "") + '<a href="' + esc(meta.href) + '">' + label + "</a>" + (done ? "</s>" : "") + "</span></div>";
     });
     mount.innerHTML = html;
@@ -636,6 +744,11 @@
         var key = cb.getAttribute("data-plan-key");
         var f = readPlanFlag();
         if (!f) return;
+        // P2-18: never hand-toggle an auto-detected-done item, even
+        // if a stale enabled checkbox is clicked.
+        var it0 = null;
+        f.items.forEach(function (x) { if (x.key === key) it0 = x; });
+        if (it0 && isPlanItemDone(it0)) { renderDailyPlan(); return; }
         var i = f.done.indexOf(key);
         if (i >= 0) f.done.splice(i, 1); else f.done.push(key);
         savePlanFlag(f);
@@ -647,7 +760,10 @@
   document.addEventListener("DOMContentLoaded", renderDashboard);
   // Keep Next Up fresh after a cross-device sync (cheap, targeted —
   // the full dashboard render would reset the weak-spots toggle).
-  window.addEventListener("skillzify-sync", function () {
+  window.addEventListener("skillzify-sync", function (ev) {
+    // P2-17: note real sync completions (detail.at) so getDailyPlan
+    // can tell a plan built before the sync from one built after it.
+    try { if (ev && ev.detail && ev.detail.at) noteSyncAt(ev.detail.at); } catch (e) {}
     try { renderNextUp(); renderDailyPlan(); } catch (e) {}
   });
 })();

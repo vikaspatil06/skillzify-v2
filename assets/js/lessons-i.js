@@ -521,7 +521,7 @@ var LESSONS_NEW_INTERMEDIATE = [
     ],
     challenge: { type: "predict", prompt: "What will this print?",
       code: 'import time\n\nt0 = time.perf_counter()\ns = 0\nfor i in range(1000):\n    s += i\nt1 = time.perf_counter()\nprint(s)\nprint((t1 - t0) >= 0)',
-      options: ["499500 / True", "499500 / False", "0 / True", "Error"], answer: 0,
+      options: ["499500\nTrue", "499500 / False", "0 / True", "Error"], answer: 0,
       hint: "Sum of 0..999 is 499500; elapsed time is always >= 0." }
   },
   {
