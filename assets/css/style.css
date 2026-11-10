@@ -627,7 +627,11 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 .weak-row:last-child { border-bottom: 0; }
 .weak-row .weak-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }
 .weak-row .lbl { font-weight: 700; }
-.weak-row .pct { font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The global .pct below is 52px, sized for a bare percentage. Weak-row
+   labels carry more ("8% · Starting out", "1/1 · 100%"), so the label
+   must size to its content and never shrink below it — otherwise the
+   nowrap text spills 49px past the card's right edge and gets clipped. */
+.weak-row .pct { width: auto; flex-shrink: 0; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .weak-row .bar { margin: 0 0 6px; }
 .weak-row.is-weak .bar span { background: linear-gradient(90deg, #f87171, #fb923c); }
 .weak-link { font-size: 0.85rem; font-weight: 700; }
