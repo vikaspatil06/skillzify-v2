@@ -521,6 +521,15 @@
       state.showcaseLoaded = true;
       renderFeatured();
       renderShowcaseGrid();
+      // Showcase-star badge: one of my posts has a star — record it and
+      // re-check achievements (the badge unlocks in checkAchievements).
+      try {
+        var me = currentUid();
+        if (me && (posts || []).some(function (pp) { return pp.authorUid === me && (pp.starCount || 0) > 0; })) {
+          try { localStorage.setItem("skillzify_showcase_starred", "1"); } catch (e2) {}
+          if (window.SkillzifyActivity && typeof window.SkillzifyActivity.checkAchievements === "function") window.SkillzifyActivity.checkAchievements();
+        }
+      } catch (e) {}
     }).catch(onApiError);
   }
   function showcaseCardHTML(p, featured) {

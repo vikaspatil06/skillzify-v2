@@ -47,7 +47,7 @@
       ["⚡", xp.toLocaleString(), "Total XP"],
       ["📚", done + "/" + totalLessons, "Lessons done"],
       ["🏋️", exSolved + "/" + exTotal, "Exercises solved"],
-      ["🔥", st.current + "d", "Day streak"],
+      ["🔥", st.current + "d", "Day streak · best " + st.longest + "d"],
       ["▶️", runs, "Code runs"]
     ];
     document.getElementById("profile-stats").innerHTML = stats.map(function (s) {
@@ -63,8 +63,14 @@
     var ach = A.achievements(), un = ach.filter(function (a) { return a.unlocked; });
     document.getElementById("ach-count").textContent = un.length + "/" + ach.length + " unlocked";
     document.getElementById("profile-achievements").innerHTML = ach.map(function (a) {
+      // Locked badges show how close you are (X/Y + thin bar); unlocked
+      // ones stay clean — the date is already in the tooltip.
+      var prog = (!a.unlocked && a.progress) ? a.progress : null;
+      var pct = prog && prog.total > 0 ? Math.round(prog.done / prog.total * 100) : 0;
       return '<div class="ach ' + (a.unlocked ? "on" : "") + '" title="' + esc(a.desc) + (a.unlocked ? " — unlocked " + new Date(a.at).toLocaleDateString() : " — locked") + '">' +
-        '<span class="ach-ico">' + (a.unlocked ? a.icon : "🔒") + '</span><span class="ach-name">' + esc(a.name) + '</span></div>';
+        '<span class="ach-ico">' + (a.unlocked ? a.icon : "🔒") + '</span><span class="ach-name">' + esc(a.name) + '</span>' +
+        (prog ? '<span class="ach-prog">' + prog.done + "/" + prog.total + '</span><span class="ach-bar"><span style="width:' + pct + '%"></span></span>' : "") +
+        '</div>';
     }).join("");
 
     var feed = A.feed(15);

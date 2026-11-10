@@ -38,6 +38,10 @@
     try { st = window.SkillzifyActivity ? window.SkillzifyActivity.streak() : null; } catch (e) {}
     var streakN = st ? st.current : (window.Skillzify.storeGet("skillzify_streak", { last: null, count: 0 }).count || 0);
     document.getElementById("dash-streak").textContent = streakN + " 🔥";
+    // Best streak beside the current one — badges stay permanent, and the
+    // two numbers together tell the truth (Vikas's call, 9 Nov).
+    var stb = document.getElementById("dash-streak-best");
+    if (stb && st && st.longest > 0) stb.textContent = "Best: " + st.longest + " days";
 
     // Level
     try {
@@ -593,6 +597,12 @@
           LC.addXP(10);
           plan.xpAwarded = true;
           savePlanFlag(plan);
+          // Plans-done counter (feeds the Plan Keeper badge). The flag
+          // above guards it, so a finished plan counts exactly once.
+          try {
+            var pd = parseInt(localStorage.getItem("skillzify_plans_done") || "0", 10) || 0;
+            localStorage.setItem("skillzify_plans_done", String(pd + 1));
+          } catch (e3) {}
           try { window.Skillzify.toast("+10 XP — daily plan complete! \u{1F389}", "success"); } catch (e2) {}
         }
       } catch (e) {}

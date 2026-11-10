@@ -132,7 +132,19 @@
     { id: "ex_10",        icon: "💪", name: "Decathlete",    desc: "Solve 10 exercises" },
     { id: "ex_25",        icon: "🔥", name: "On a Roll",     desc: "Solve 25 exercises" },
     { id: "ex_all",       icon: "🏆", name: "Completionist", desc: "Solve every exercise" },
-    { id: "topic_master", icon: "🎯", name: "Topic Master",  desc: "Solve every exercise in one topic" }
+    { id: "topic_master", icon: "🎯", name: "Topic Master",  desc: "Solve every exercise in one topic" },
+    { id: "lessons_25",  icon: "📚", name: "Bookworm",      desc: "Complete 25 lessons" },
+    { id: "lessons_50",  icon: "📖", name: "Dedicated",     desc: "Complete 50 lessons" },
+    { id: "lessons_100", icon: "🏛️", name: "Centurion",     desc: "Complete 100 lessons" },
+    { id: "review_7",    icon: "🔁", name: "Regular Reviewer", desc: "Complete 7 reviews" },
+    { id: "review_30",   icon: "🧠", name: "Memory Master", desc: "Complete 30 reviews" },
+    { id: "mastery_solid",   icon: "🎯", name: "Solid Start",  desc: "Reach 60% mastery in any topic" },
+    { id: "mastery_mastered", icon: "👑", name: "True Master", desc: "Reach 85% mastery in any topic" },
+    { id: "path_first",  icon: "🗺️", name: "Pathfinder",    desc: "Complete your first learning path" },
+    { id: "best_answer", icon: "💡", name: "Best Answer",   desc: "Have an answer marked as best" },
+    { id: "showcase_star", icon: "⭐", name: "Starred",      desc: "Get your first star on a showcase project" },
+    { id: "flowchart_first", icon: "📊", name: "First Flowchart", desc: "Render your first flowchart" },
+    { id: "plan_7",       icon: "📋", name: "Plan Keeper",   desc: "Finish 7 daily plans" }
   ];
   function unlocked() { return get(ACH_KEY, {}); }
   function unlock(id) {
@@ -143,11 +155,118 @@
     if (a) log("achievement", "Unlocked achievement: " + a.icon + " " + a.name);
     return true;
   }
+  /* Snapshot of everything achievements care about, read once so the
+     unlock checks and the progress bars can never disagree. Pure reads —
+     no unlocks, no XP, no writes. */
+  function gatherState() {
+    var st = { xp: 0, done: 0, totalLessons: 250, exSolved: 0, exTotal: 0,
+      bestTopic: null, topicDone: false, streak: { current: 0, longest: 0 },
+      runs: 0, snips: 0, reviewsDone: 0, plansDone: 0, bestAnswers: 0,
+      showcaseStarred: false, flowchartsDone: 0, bestMastery: null,
+      pathsDone: 0 };
+    try { st.xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0; } catch (e) {}
+    var prog = {};
+    try { prog = JSON.parse(localStorage.getItem("skillzify_progress") || "{}") || {}; } catch (e) {}
+    st.done = Object.keys(prog).length;
+    st.totalLessons = (window.SkillzifyLearn && window.SkillzifyLearn.totalLessons) || 250;
+    st.streak = streak();
+    st.runs = runCount();
+    try { st.snips = get(SNIP_KEY, []).length; } catch (e) {}
+    try { st.reviewsDone = parseInt(localStorage.getItem("skillzify_reviews_done") || "0", 10) || 0; } catch (e) {}
+    try { st.plansDone = parseInt(localStorage.getItem("skillzify_plans_done") || "0", 10) || 0; } catch (e) {}
+    try { st.bestAnswers = parseInt(localStorage.getItem("skillzify_best_answers") || "0", 10) || 0; } catch (e) {}
+    try { st.showcaseStarred = localStorage.getItem("skillzify_showcase_starred") === "1"; } catch (e) {}
+    try { st.flowchartsDone = parseInt(localStorage.getItem("skillzify_flowcharts_done") || "0", 10) || 0; } catch (e) {}
+    // Exercises + best topic (highest solved fraction, ties -> smallest topic)
+    try {
+      var atts = JSON.parse(localStorage.getItem("skillzify_exercise_attempts") || "{}") || {};
+      var EXD = window.SkillzifyPracticeData || [];
+      st.exTotal = EXD.length;
+      var byTopic = {};
+      EXD.forEach(function (ex) {
+        var t = byTopic[ex.topic] || (byTopic[ex.topic] = { total: 0, solved: 0 });
+        t.total++;
+        if (atts[ex.id] && atts[ex.id].solved) { st.exSolved++; t.solved++; }
+      });
+      Object.keys(byTopic).forEach(function (t) {
+        var b = byTopic[t];
+        if (b.total > 0 && b.solved === b.total) st.topicDone = true;
+        var frac = b.total ? b.solved / b.total : 0;
+        if (!st.bestTopic || frac > st.bestTopic.frac || (frac === st.bestTopic.frac && b.total < st.bestTopic.total))
+          st.bestTopic = { solved: b.solved, total: b.total, frac: frac };
+      });
+    } catch (e) {}
+    // Best topic mastery (0-100), when the mastery engine is loaded
+    try {
+      var M = window.SkillzifyMastery;
+      if (M && typeof M.topicMastery === "function") {
+        M.topicMastery().forEach(function (r) {
+          if (r.tried > 0 && r.score != null && (st.bestMastery == null || r.score > st.bestMastery)) st.bestMastery = r.score;
+        });
+      }
+    } catch (e) {}
+    // Paths: completed count + best completion fraction, from the same
+    // step data checkPathBonuses uses (lesson progress + exercise solves).
+    // The paid path bonuses count too, so a completion still counts on a
+    // page that never loaded the paths catalog.
+    try {
+      var paths = window.SkillzifyPaths || [];
+      var atts2 = {};
+      try { atts2 = JSON.parse(localStorage.getItem("skillzify_exercise_attempts") || "{}") || {}; } catch (e2) {}
+      paths.forEach(function (p) {
+        if (!p.steps || !p.steps.length) return;
+        var dd = 0;
+        p.steps.forEach(function (s) {
+          if (s.t === "lesson" ? !!prog[s.id] : !!(atts2[s.id] && atts2[s.id].solved)) dd++;
+        });
+        if (dd === p.steps.length) st.pathsDone++;
+      });
+      try {
+        var paid = JSON.parse(localStorage.getItem("skillzify_path_bonus") || "{}") || {};
+        var paidN = Object.keys(paid).length;
+        if (paidN > st.pathsDone) st.pathsDone = paidN;
+      } catch (e3) {}
+    } catch (e) {}
+    return st;
+  }
+
+  /* Progress toward a locked badge: {done, total}, or null when the badge
+     has no meaningful progress (time-of-day badges). Unlocked badges get
+     null — the profile only shows progress while locked. */
+  function progressFor(id, st) {
+    var best = Math.max(st.streak.current, st.streak.longest);
+    var n;
+    if (id.indexOf("xp_") === 0) { n = parseInt(id.split("_")[1], 10); return { done: Math.min(st.xp, n), total: n }; }
+    if (id.indexOf("streak_") === 0) { n = parseInt(id.split("_")[1], 10); return { done: Math.min(best, n), total: n }; }
+    if (id.indexOf("runner_") === 0) { n = parseInt(id.split("_")[1], 10); return { done: Math.min(st.runs, n), total: n }; }
+    switch (id) {
+      case "first_steps": return { done: Math.min(st.done, 1), total: 1 };
+      case "lessons_25": return { done: Math.min(st.done, 25), total: 25 };
+      case "lessons_50": return { done: Math.min(st.done, 50), total: 50 };
+      case "lessons_100": return { done: Math.min(st.done, 100), total: 100 };
+      case "scholar": return { done: Math.min(st.done, st.totalLessons), total: st.totalLessons };
+      case "snippet_saver": return { done: Math.min(st.snips, 1), total: 1 };
+      case "ex_first": return { done: Math.min(st.exSolved, 1), total: 1 };
+      case "ex_10": return { done: Math.min(st.exSolved, 10), total: 10 };
+      case "ex_25": return { done: Math.min(st.exSolved, 25), total: 25 };
+      case "ex_all": return st.exTotal > 0 ? { done: st.exSolved, total: st.exTotal } : null;
+      case "topic_master": return st.bestTopic ? { done: st.bestTopic.solved, total: st.bestTopic.total } : null;
+      case "review_7": return { done: Math.min(st.reviewsDone, 7), total: 7 };
+      case "review_30": return { done: Math.min(st.reviewsDone, 30), total: 30 };
+      case "mastery_solid": return { done: Math.min(st.bestMastery || 0, 60), total: 60 };
+      case "mastery_mastered": return { done: Math.min(st.bestMastery || 0, 85), total: 85 };
+      case "path_first": return { done: Math.min(st.pathsDone, 1), total: 1 };
+      case "best_answer": return { done: Math.min(st.bestAnswers, 1), total: 1 };
+      case "showcase_star": return { done: st.showcaseStarred ? 1 : 0, total: 1 };
+      case "flowchart_first": return { done: Math.min(st.flowchartsDone, 1), total: 1 };
+      case "plan_7": return { done: Math.min(st.plansDone, 7), total: 7 };
+      default: return null; // night_owl, early_bird: time-based, no progress bar
+    }
+  }
+
   function checkAchievements() {
-    var xp = 0, done = 0;
-    try { xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0; } catch (e) {}
-    try { var p = JSON.parse(localStorage.getItem("skillzify_progress") || "{}"); done = Object.keys(p).length; } catch (e) {}
-    var s = streak(), runs = runCount(), snips = get(SNIP_KEY, []).length;
+    var st = gatherState();
+    var xp = st.xp, s = st.streak;
     // Streak-milestone XP: +50 the first time the streak reaches 7 days,
     // +150 at 30 days. Flags make each fire exactly once per device
     // (XP itself syncs by MAX, so a second device can't double-count
@@ -165,45 +284,51 @@
         if (window.Skillzify && typeof window.Skillzify.toast === "function") window.Skillzify.toast("🔥 30-day streak! +150 XP", "success");
       }
     } catch (e) {}
-    if (done >= 1) unlock("first_steps");
-    var totalLessons = (window.SkillzifyLearn && window.SkillzifyLearn.totalLessons) || 250;
-    if (done >= totalLessons) unlock("scholar");
-    var exSolved = 0, exTotal = 0, topicDone = false;
-    try {
-      var atts = JSON.parse(localStorage.getItem("skillzify_exercise_attempts") || "{}");
-      var EXD = window.SkillzifyPracticeData || [];
-      exTotal = EXD.length;
-      var byTopic = {};
-      EXD.forEach(function (ex) {
-        var t = byTopic[ex.topic] || (byTopic[ex.topic] = { total: 0, solved: 0 });
-        t.total++;
-        if (atts[ex.id] && atts[ex.id].solved) { exSolved++; t.solved++; }
-      });
-      topicDone = Object.keys(byTopic).some(function (t) {
-        return byTopic[t].total > 0 && byTopic[t].solved === byTopic[t].total;
-      });
-    } catch (e) {}
-    if (exSolved >= 1) unlock("ex_first");
-    if (exSolved >= 10) unlock("ex_10");
-    if (exSolved >= 25) unlock("ex_25");
-    if (exTotal > 0 && exSolved >= exTotal) unlock("ex_all");
-    if (topicDone) unlock("topic_master");
+    // Lessons (+ the new 25/50/100 milestones) and Scholar
+    if (st.done >= 1) unlock("first_steps");
+    if (st.done >= 25) unlock("lessons_25");
+    if (st.done >= 50) unlock("lessons_50");
+    if (st.done >= 100) unlock("lessons_100");
+    if (st.done >= st.totalLessons) unlock("scholar");
+    // Exercises
+    if (st.exSolved >= 1) unlock("ex_first");
+    if (st.exSolved >= 10) unlock("ex_10");
+    if (st.exSolved >= 25) unlock("ex_25");
+    if (st.exTotal > 0 && st.exSolved >= st.exTotal) unlock("ex_all");
+    if (st.topicDone) unlock("topic_master");
+    // XP (uses the local xp var — the milestone block above may have just
+    // added +50/+150 to it, same as before)
     if (xp >= 100) unlock("xp_100");
     if (xp >= 500) unlock("xp_500");
     if (xp >= 1000) unlock("xp_1000");
     if (xp >= 5000) unlock("xp_5000");
     if (xp >= 10000) unlock("xp_10000");
+    // Streaks: best-ever (current OR longest) — badges stay permanent by
+    // design; a lapsed streak never revokes one (Vikas's call, 9 Nov).
     if (s.current >= 3 || s.longest >= 3) unlock("streak_3");
     if (s.current >= 7 || s.longest >= 7) unlock("streak_7");
     if (s.current >= 30 || s.longest >= 30) unlock("streak_30");
-    if (runs >= 10) unlock("runner_10");
-    if (runs >= 50) unlock("runner_50");
-    if (snips >= 1) unlock("snippet_saver");
+    if (st.runs >= 10) unlock("runner_10");
+    if (st.runs >= 50) unlock("runner_50");
+    if (st.snips >= 1) unlock("snippet_saver");
+    // New: reviews, mastery, paths, community, flowchart, daily plans
+    if (st.reviewsDone >= 7) unlock("review_7");
+    if (st.reviewsDone >= 30) unlock("review_30");
+    if (st.bestMastery != null && st.bestMastery >= 60) unlock("mastery_solid");
+    if (st.bestMastery != null && st.bestMastery >= 85) unlock("mastery_mastered");
+    if (st.pathsDone >= 1) unlock("path_first");
+    if (st.bestAnswers >= 1) unlock("best_answer");
+    if (st.showcaseStarred) unlock("showcase_star");
+    if (st.flowchartsDone >= 1) unlock("flowchart_first");
+    if (st.plansDone >= 7) unlock("plan_7");
   }
   function achievements() {
     var u = unlocked();
+    var st = gatherState();
     return ACHIEVEMENTS.map(function (a) {
-      return { id: a.id, icon: a.icon, name: a.name, desc: a.desc, unlocked: !!u[a.id], at: u[a.id] || null };
+      var un = !!u[a.id];
+      return { id: a.id, icon: a.icon, name: a.name, desc: a.desc, unlocked: un, at: u[a.id] || null,
+               progress: un ? null : progressFor(a.id, st) };
     });
   }
 

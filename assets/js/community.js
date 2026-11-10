@@ -379,6 +379,13 @@
             localStorage.setItem("skillzify_xp", String(xp + total));
           }
         } catch (e) {}
+        // Best-answer counter (feeds the Best Answer badge). Every grant
+        // here is a best-answer grant, so one count per grant claimed.
+        try {
+          var prev = parseInt(localStorage.getItem("skillzify_best_answers") || "0", 10) || 0;
+          localStorage.setItem("skillzify_best_answers", String(prev + pending.length));
+          if (window.SkillzifyActivity && typeof window.SkillzifyActivity.checkAchievements === "function") window.SkillzifyActivity.checkAchievements();
+        } catch (e2) {}
         return total;
       });
     }).catch(function () { return 0; });

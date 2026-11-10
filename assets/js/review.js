@@ -85,6 +85,12 @@
     }
     m[id] = { interval: next, due: t + next * DAY, updatedAt: t };
     writeMap(m);
+    // Reviews-done counter (feeds the review achievements). One count per
+    // lesson reviewed in a session, correct or not.
+    try {
+      var rc = parseInt(localStorage.getItem("skillzify_reviews_done") || "0", 10) || 0;
+      localStorage.setItem("skillzify_reviews_done", String(rc + 1));
+    } catch (e) {}
     // Correct recall earns +5 XP. This runs once per lesson reviewed in
     // a session — and a correct review pushes the next due date at
     // least 3 days out, so the same lesson can't pay twice in a day.

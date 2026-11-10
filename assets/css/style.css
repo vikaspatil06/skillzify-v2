@@ -886,6 +886,9 @@ button, a, .quiz-opt, .quiz-opt *, .node, .track-tab, .auth-tabs button {
 .ach.on { opacity: 1; filter: none; border-color: rgba(255, 200, 60, .45); }
 .ach-ico { font-size: 1.7rem; display: block; }
 .ach-name { font-size: .78rem; font-weight: 700; display: block; margin-top: 6px; }
+.ach-prog { font-size: .72rem; color: var(--muted); display: block; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.ach-bar { display: block; height: 4px; background: var(--bg-soft); border-radius: 999px; overflow: hidden; margin-top: 4px; }
+.ach-bar > span { display: block; height: 100%; background: var(--gradient); border-radius: 999px; }
 
 .feed { margin-top: 12px; display: flex; flex-direction: column; gap: 2px; }
 .feed-item { display: flex; gap: 10px; align-items: baseline; padding: 9px 4px; border-bottom: 1px solid var(--card-border); font-size: .92rem; }
@@ -988,6 +991,7 @@ pre.code { background: #0d1117; color: #e6edf3; border: 1px solid var(--card-bor
 .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
 .opt-list { display: grid; gap: 8px; margin-top: 12px; }
 .opt-btn { text-align: left; justify-content: flex-start; font-family: ui-monospace, monospace; }
+.opt-btn.sel { background: var(--gradient); color: #fff; border-color: transparent; }
 .test-list { display: grid; gap: 8px; }
 .test { border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; font-size: .9rem; }
 .test.pass { border-color: rgba(46,204,113,.5); background: rgba(46,204,113,.07); }
