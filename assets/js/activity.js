@@ -479,6 +479,6 @@
     stars: stars, toggleStar: toggleStar, isStarred: isStarred,
     snippets: snippets, saveSnippet: saveSnippet, deleteSnippet: deleteSnippet,
     profile: profile, saveProfile: saveProfile,
-    checkAchievements: checkAchievements, todayStr: todayStr
+    checkAchievements: checkAchievements
   };
 })();

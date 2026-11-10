@@ -17,7 +17,7 @@
   if (!mount) return;
 
   /* local aliases */
-  var LESSONS = LC.LESSONS, TRACKS = LC.TRACKS, SECTIONS = LC.SECTIONS;
+  var LESSONS = LC.LESSONS, SECTIONS = LC.SECTIONS;
 
   /* Safe toast (P2-34): if app.js failed to load, a bare
      window.Skillzify.toast call would abort lesson completion. */
@@ -27,7 +27,6 @@
   var esc = LC.esc, el = LC.el, reducedMotion = LC.reducedMotion;
   var highlightPython = LC.highlight, copyCode = LC.copyCode, tryInCompiler = LC.tryInCompiler;
   var getProgress = LC.getProgress, saveProgress = LC.saveProgress,
-      getState = LC.getState, saveState = LC.saveState,
       getXP = LC.getXP, addXP = LC.addXP, levelFor = LC.levelFor;
   var idxOf = LC.idxOf, lessonById = LC.lessonById, isDone = LC.isDone,
       isUnlocked = LC.isUnlocked, isPathOnlyUnlocked = LC.isPathOnlyUnlocked;
@@ -473,7 +472,6 @@
     var after = levelFor(xp).name;
     var p = getProgress(); p[lesson.id] = true; saveProgress(p);
     if (window.SkillzifyReview && typeof window.SkillzifyReview.scheduleFor === "function") window.SkillzifyReview.scheduleFor(lesson.id);
-    var st = getState(); delete st[lesson.id]; saveState(st);
     // One-time completion bonuses (section +100, path +150) — flags in
     // learn-core.js make them fire exactly once.
     try { if (LC.checkSectionBonuses) LC.checkSectionBonuses(); } catch (e) {}

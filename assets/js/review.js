@@ -308,7 +308,7 @@
   window.SkillzifyReview = {
     dueList: dueList, dueCount: dueCount, recordResult: recordResult,
     scheduleFor: scheduleFor, entry: entry,
-    _readMap: readMap, _writeMap: writeMap, _intervals: INTERVALS
+    _readMap: readMap, _writeMap: writeMap
   };
 
   function init() {

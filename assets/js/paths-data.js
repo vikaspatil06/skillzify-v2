@@ -203,10 +203,6 @@ window.SkillzifyPaths = [
   var P = window.SkillzifyPaths;
   if (!P) return;
   P.enrollMap = readMap;
-  P.enrolled = function () {
-    var m = readMap();
-    return Object.keys(m).filter(function (k) { return m[k].enrolled; });
-  };
   P.isEnrolled = function (id) { var m = readMap(); return !!(m[id] && m[id].enrolled); };
   P.enroll = function (id) { var m = readMap(); m[id] = { enrolled: true, at: Date.now() }; writeMap(m); };
   P.leave = function (id) { var m = readMap(); m[id] = { enrolled: false, at: Date.now() }; writeMap(m); };

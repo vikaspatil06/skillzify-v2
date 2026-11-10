@@ -10,13 +10,12 @@
   if (!LC) return;
 
   /* local aliases for the overview code */
-  var LESSONS = LC.LESSONS, TRACKS = LC.TRACKS, SECTIONS = LC.SECTIONS;
+  var LESSONS = LC.LESSONS, SECTIONS = LC.SECTIONS;
   var esc = LC.esc, el = LC.el;
   var getProgress = LC.getProgress, getXP = LC.getXP,
       levelFor = LC.levelFor, nextLevel = LC.nextLevel;
   var idxOf = LC.idxOf, isDone = LC.isDone, isUnlocked = LC.isUnlocked,
-      isPathOnlyUnlocked = LC.isPathOnlyUnlocked, trackLessons = LC.trackLessons,
-      trackUnlocked = LC.trackUnlocked, trackPct = LC.trackPct,
+      isPathOnlyUnlocked = LC.isPathOnlyUnlocked,
       sectionLessons = LC.sectionLessons, sectionUnlocked = LC.sectionUnlocked,
       sectionPct = LC.sectionPct,
       currentIdx = LC.currentIdx,
@@ -453,8 +452,6 @@
     totalLessons: LC.totalLessons,
     nextLesson: LC.nextLesson, highlight: LC.highlight,
     getXP: LC.getXP, levelFor: LC.levelFor, nextLevel: LC.nextLevel,
-    isLessonDone: LC.isLessonDone,
-    lessonIndex: LC.lessonIndex,
     isLessonUnlocked: LC.isLessonUnlocked,
     isLessonPathUnlocked: LC.isLessonPathUnlocked
   };

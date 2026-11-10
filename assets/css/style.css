@@ -277,13 +277,6 @@ img { max-width: 100%; }
 .stat .num { font-size: 2.2rem; font-weight: 800; background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .stat .lbl { color: var(--muted); font-size: 0.9rem; margin-top: 6px; }
 
-/* ---------- Testimonials ---------- */
-.testimonials { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 40px; }
-.testi { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); padding: 26px; }
-.testi p { font-size: 0.95rem; color: var(--muted); }
-.testi .who { margin-top: 16px; font-weight: 700; font-size: 0.9rem; }
-.testi .stars { color: var(--warning); letter-spacing: 2px; margin-bottom: 10px; }
-
 /* ---------- CTA banner ---------- */
 .cta-banner {
   background: var(--gradient); border-radius: 24px; padding: 56px 40px; text-align: center;
@@ -311,18 +304,10 @@ footer::before { content: ""; display: block; height: 3px; background: var(--gra
 .footer-bottom a:hover { color: var(--text); }
 
 /* ---------- Learn page ---------- */
-.track-tabs { display: flex; gap: 10px; flex-wrap: wrap; margin: 30px 0; }
-.track-tab {
-  padding: 10px 22px; border-radius: 999px; border: 1px solid var(--card-border);
-  background: var(--card); color: var(--muted); font-weight: 700; cursor: pointer; font-size: 0.92rem;
-}
-.track-tab.active { background: var(--gradient); color: #fff; border-color: transparent; }
 .lesson {
   background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius);
   padding: 26px; margin-bottom: 20px;
 }
-.lesson-head { display: flex; align-items: flex-start; gap: 14px; }
-.lesson-check { width: 26px; height: 26px; margin-top: 4px; accent-color: var(--primary); cursor: pointer; flex-shrink: 0; }
 .lesson h3 { font-size: 1.2rem; }
 .lesson.done h3 { text-decoration: line-through; color: var(--muted); }
 .lesson .explain { color: var(--muted); margin: 10px 0 16px; font-size: 0.96rem; }
@@ -335,7 +320,6 @@ footer::before { content: ""; display: block; height: 3px; background: var(--gra
 .pct { width: 52px; text-align: right; font-size: 0.86rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ---------- Compiler ---------- */
-.compiler-grid { display: grid; grid-template-columns: 1fr 380px; gap: 20px; margin-top: 30px; align-items: start; }
 .panel { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); padding: 22px; }
 .panel h3 { margin-bottom: 14px; font-size: 1.05rem; }
 .CodeMirror { border-radius: 12px; border: 1px solid var(--card-border); font-size: 15px; height: 380px; }
@@ -362,9 +346,6 @@ label.field-lbl { display: block; font-size: 0.84rem; font-weight: 600; color: v
 .console .err { color: var(--danger); }
 .console .ok-meta { color: var(--success); }
 .console .dim { color: #5b648c; }
-.status-pill { display: inline-block; padding: 4px 14px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; background: var(--bg-soft); color: var(--muted); }
-.status-pill.running { background: rgba(251,191,36,.15); color: var(--warning); }
-.status-pill.ready { background: rgba(52,211,153,.15); color: var(--success); }
 .ai-box { background: var(--bg-soft); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px; margin-top: 12px; font-size: 0.9rem; max-height: 420px; overflow-y: auto; }
 .ai-box h4 { margin-bottom: 8px; color: var(--accent); }
 .ai-box ul { padding-left: 20px; }
@@ -525,7 +506,6 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 .list-check { list-style: none; margin-top: 16px; }
 .list-check li { padding: 8px 0 8px 32px; position: relative; color: var(--muted); }
 .list-check li::before { content: "✓"; position: absolute; left: 0; color: var(--success); font-weight: 800; }
-.roadmap li { margin-bottom: 10px; }
 
 /* ---------- Responsive ---------- */
 /* ---------- Nav collapse (moved up from the 960px block) ----------
@@ -568,16 +548,15 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.9rem;
 @media (max-width: 960px) {
   .hero-grid { grid-template-columns: 1fr; }
   .grid-4 { grid-template-columns: repeat(2, 1fr); }
-  .grid-3, .testimonials { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: 1fr 1fr; }
   .stats { grid-template-columns: repeat(2, 1fr); }
-  .compiler-grid { grid-template-columns: 1fr; }
   .dash-grid { grid-template-columns: 1fr 1fr; }
   .footer-grid { grid-template-columns: 1fr 1fr; }
   .two-col { grid-template-columns: 1fr; }
 
 }
 @media (max-width: 720px) {
-  .grid-4, .grid-3, .grid-2, .testimonials, .dash-grid { grid-template-columns: 1fr; }
+  .grid-4, .grid-3, .grid-2, .dash-grid { grid-template-columns: 1fr; }
   /* P1-5: on phones hide only the "👋 Name" greeting inside #account-link
      so the bar still fits — the Login link / Logout button stay visible. */
   #account-link > span { display: none; }
@@ -833,7 +812,7 @@ a.node, a.node:hover { text-decoration: none; }
    ============================================================ */
 html { -webkit-text-size-adjust: 100%; }
 html, body { overflow-x: clip; } /* safety net: never allow sideways scrolling */
-button, a, .quiz-opt, .quiz-opt *, .node, .track-tab, .auth-tabs button {
+button, a, .quiz-opt, .quiz-opt *, .node, .auth-tabs button {
   touch-action: manipulation; /* remove tap delay */
   -webkit-tap-highlight-color: transparent;
 }
@@ -858,7 +837,7 @@ button, a, .quiz-opt, .quiz-opt *, .node, .track-tab, .auth-tabs button {
 
   /* --- compiler: toolbar becomes select on its own row, big Run/Clear --- */
   .toolbar #snippet-select { flex: 1 1 100% !important; min-width: 0 !important; }
-  .toolbar #run-btn, .toolbar #clear-btn { flex: 1 1 0; padding: 13px 10px; font-size: 0.95rem; }
+  .toolbar #run-btn { flex: 1 1 0; padding: 13px 10px; font-size: 0.95rem; }
   .toolbar .kbd { display: none; } /* no Ctrl key on phones */
   .CodeMirror { height: 300px; } /* editor doesn't hog the whole screen */
   .console { font-size: 0.82rem; }
@@ -870,7 +849,6 @@ button, a, .quiz-opt, .quiz-opt *, .node, .track-tab, .auth-tabs button {
   .xp-bar { width: 110px; }
   .xp-num { font-size: 1.6rem; }
   .quiz-opt { padding: 13px 14px; } /* easier to tap */
-  .lm-panel h2 { font-size: 1.35rem; }
   .blank-row { flex-wrap: wrap; }
   .blank-row .btn { flex: 1 1 100%; }
 
@@ -920,13 +898,6 @@ button, a, .quiz-opt, .quiz-opt *, .node, .track-tab, .auth-tabs button {
 .mastery-bar span { display: block; height: 100%; }
 .mastery-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .82rem; color: var(--muted); }
 .mastery-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; }
-
-/* snippets (Gists-like) */
-.snippet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
-.snippet-card { background: var(--bg-soft); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px; }
-.snippet-card h4 { margin: 0 0 4px; font-size: 1rem; }
-.snippet-card pre { background: rgba(0,0,0,.25); border-radius: 8px; padding: 10px; font-size: .78rem; max-height: 120px; overflow: hidden; margin: 10px 0; white-space: pre-wrap; word-break: break-all; }
-.snippet-actions { display: flex; gap: 8px; }
 
 /* reference page (W3Schools-style) */
 .ref-layout { display: grid; grid-template-columns: 240px 1fr; gap: 22px; align-items: start; }
@@ -1025,14 +996,4 @@ p.fail { color: #e74c3c; font-weight: 600; }
 .filter-bar .checkline { flex: none; white-space: nowrap; }
 .input-sm { background: var(--card); color: var(--text); border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 8px; font-size: .85rem; }
 .checkline { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; color: var(--muted); }
-/* Paths + projects */
-.path-card ol, .proj-card ol { margin: 10px 0 0 20px; display: grid; gap: 6px; }
-.path-step { display: flex; gap: 10px; align-items: baseline; }
-.path-step.done .step-t { text-decoration: line-through; color: var(--muted); }
-.step-n { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--card); border: 1px solid var(--card-border); display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 700; }
-.path-step.done .step-n { background: rgba(46,204,113,.2); border-color: #2ecc71; }
-/* Certificate */
-.cert-wrap { background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); border-radius: 14px; padding: 36px 28px; text-align: center; color: #fff; border: 2px solid #c9a227; }
-.cert-wrap h2 { font-family: Georgia, serif; letter-spacing: 1px; }
-.cert-name { font-size: 1.8rem; font-weight: 800; margin: 12px 0; color: #ffe9a8; }
 @media (max-width: 720px) { .stats-row { grid-template-columns: repeat(2, 1fr); } .daily-inner { flex-direction: column; align-items: flex-start; } }

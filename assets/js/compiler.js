@@ -392,7 +392,6 @@
   /* ================= helpers ================= */
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   function toast(m, k) { if (window.Skillzify) window.Skillzify.toast(m, k); }
-  function currentCode() { return editor ? editor.getValue() : ""; }
 
   /* ================= Pyodide ================= */
   function setRunUI(running) {
@@ -598,11 +597,6 @@
   function copyOutput() {
     var t = document.getElementById("console").innerText;
     if (navigator.clipboard) navigator.clipboard.writeText(t).then(function () { toast("Terminal output copied 📋", "success"); });
-  }
-  function makeStdin(lines) {
-    var text = lines.join("\n") + (lines.length ? "\n" : "");
-    var i = 0;
-    return { stdin: function () { return i >= text.length ? null : text.charCodeAt(i++); } };
   }
 
   /* ================= run ================= */

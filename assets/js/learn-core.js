@@ -11,7 +11,6 @@
 
   var PROGRESS_KEY = "skillzify_progress";
   var XP_KEY = "skillzify_xp";
-  var STATE_KEY = "skillzify_lesson_state";
 
 
   /* ================= Lesson catalog ================= */
@@ -768,8 +767,6 @@
     window.Skillzify.storeSet(XP_KEY, xp);
     return xp;
   }
-  function getState() { return window.Skillzify.storeGet(STATE_KEY, {}); }
-  function saveState(s) { window.Skillzify.storeSet(STATE_KEY, s); }
   function levelFor(xp) {
     var l = LEVELS[0];
     for (var i = 0; i < LEVELS.length; i++) if (xp >= LEVELS[i].xp) l = LEVELS[i];
@@ -778,32 +775,6 @@
   function nextLevel(xp) {
     for (var i = 0; i < LEVELS.length; i++) if (xp < LEVELS[i].xp) return LEVELS[i];
     return null;
-  }
-  function bumpStreak() {
-    // Thin wrapper for compatibility: the counter now lives in
-    // SkillzifyActivity and is bumped by A.log() on any activity day.
-    // Delegating keeps the old call shape working on every page.
-    try {
-      if (window.SkillzifyActivity && typeof window.SkillzifyActivity.bumpStreak === "function")
-        return window.SkillzifyActivity.bumpStreak();
-    } catch (e) {}
-    var s = window.Skillzify.storeGet("skillzify_streak", { last: null, count: 0 });
-    // Accept both legacy toDateString() and synced yyyy-MM-dd formats.
-    function isoDay(d) { var m = d.getMonth() + 1, dy = d.getDate(); return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (dy < 10 ? "0" + dy : dy); }
-    function normDay(v) {
-      if (!v) return null;
-      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-      var t = new Date(v);
-      return isNaN(t.getTime()) ? null : isoDay(t);
-    }
-    var todayIso = isoDay(new Date());
-    var yestIso = isoDay(new Date(Date.now() - 864e5));
-    var lastIso = normDay(s.last);
-    if (lastIso === todayIso) return s;
-    s.count = (lastIso === yestIso) ? s.count + 1 : 1;
-    s.last = todayIso;
-    window.Skillzify.storeSet("skillzify_streak", s);
-    return s;
   }
 
   /* ============ One-time completion bonuses ============
@@ -1197,9 +1168,8 @@
     highlight: highlightPython, shuffled: shuffled,
     copyCode: copyCode, tryInCompiler: tryInCompiler,
     getProgress: getProgress, saveProgress: saveProgress,
-    getState: getState, saveState: saveState,
     getXP: getXP, addXP: addXP,
-    levelFor: levelFor, nextLevel: nextLevel, bumpStreak: bumpStreak,
+    levelFor: levelFor, nextLevel: nextLevel,
     checkSectionBonuses: checkSectionBonuses, checkPathBonuses: checkPathBonuses,
     idxOf: idxOf, lessonById: lessonById, trackLessons: trackLessons,
     isDone: isDone, isUnlocked: isUnlocked,

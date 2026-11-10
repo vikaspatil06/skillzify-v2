@@ -5,7 +5,6 @@
      API key from the GEMINI_API_KEY environment variable.
      The key is NEVER sent to the browser and NEVER committed.
    - GET  /api/health reports whether the AI backend is live.
-   - GET  /api/warmup wakes the free instance (same as health).
    Modes (see MODES below): the original explain/tutor/flowchart/
    generate/fix, plus the AI-system modes: tutor-lesson, quiz,
    drill, trace, review, path, viva (stage ask/judge), challenge,
@@ -127,14 +126,14 @@ app.use(function (req, res, next) {
 /* ---- P2-50: log the proxy chain on AI calls so the trust-proxy
    count above can be verified (and re-tuned) from real traffic:
    req.ip must be the leftmost (client) entry of X-Forwarded-For.
-   Health/warmup pings are not logged — they carry no cap identity. */
+   Health pings are not logged — they carry no cap identity. */
 app.use("/api/explain", function (req, res, next) {
   console.log("[proxy] ip=" + req.ip + " xff=" + (req.headers["x-forwarded-for"] || "(none)"));
   next();
 });
 
 /* ---- tiny in-memory rate limit: 30 AI req/min per IP ----
-   P2-46: health/warmup pings are exempt — ai.js warmups on every page
+   P2-46: health pings are exempt — ai.js warmups on every page
    load and several pages fire an extra api/health fetch, so counting
    pings against the AI budget let a burst of page loads block real AI
    calls. Only /api/explain consumes budget. An IP whose window has
@@ -145,8 +144,7 @@ app.use("/api/explain", function (req, res, next) {
    a false 429). */
 const hits = new Map();
 app.use("/api/", (req, res, next) => {
-  if (req.method === "GET" && (req.path === "/health" || req.path === "/api/health" ||
-      req.path === "/warmup" || req.path === "/api/warmup")) return next();
+  if (req.method === "GET" && (req.path === "/health" || req.path === "/api/health")) return next();
   const now = Date.now();
   const arr = (hits.get(req.ip) || []).filter((t) => now - t < 60000);
   if (arr.length === 0) hits.delete(req.ip); // prune the stale key
@@ -353,11 +351,6 @@ app.get("/api/health", (req, res) => {
   initCapStore(); // local-only; reports which cap store is active
   res.json({ ok: true, ai: GEMINI_KEYS.length > 0, model: MODEL, models: MODELS, capStore: capStore, uptimeSec: Math.floor(process.uptime()) });
 });
-app.get("/api/warmup", (req, res) => {
-  initCapStore(); // local-only; reports which cap store is active
-  res.json({ ok: true, ai: GEMINI_KEYS.length > 0, model: MODEL, models: MODELS, capStore: capStore, uptimeSec: Math.floor(process.uptime()) });
-});
-
 /* ---------------- mode definitions ---------------- */
 const tutorStyle =
   "You are a friendly Python tutor for a beginner student. " +

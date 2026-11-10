@@ -361,7 +361,6 @@
     saveLast();
     clearSession();
     paintScoreDone();
-    var total = Math.max(qCount, 1);
     var html =
       '<h3 style="margin:0 0 8px;">Viva summary — ' + esc(lesson ? lesson.title : "") + "</h3>" +
       "<p>You scored <strong>" + score + " / " + MAX_Q + "</strong>" +

@@ -998,17 +998,9 @@
     } catch (e) {}
   }
 
-  function onStatus(fn) {
-    if (typeof fn === "function") {
-      statusCbs.push(fn);
-      try { fn(lastStatus.text, lastStatus.at); } catch (e) {}
-    }
-  }
-
   root.SkillzifySync = {
     init: init,
     markDirty: markDirty,
-    onStatus: onStatus,
     handleLogout: handleLogout,
     syncNow: function () { try { return syncCycle(); } catch (e) { return Promise.resolve(false); } },
     getStatus: function () { return lastStatus.text; }

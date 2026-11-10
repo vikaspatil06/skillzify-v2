@@ -122,6 +122,11 @@
         var victim = unsolved.length ? unsolved[0] : keys[0];
         var title = defs[victim] && defs[victim].title;
         delete defs[victim];
+        /* D-14: evicting the definition must also drop its attempts
+           record, or the orphan keeps counting in the stats line
+           (renderStats iterates the attempts store, not the defs). */
+        delete drills[victim];
+        saveDrills(drills);
         keys = Object.keys(defs);
         try { if (window.Skillzify && window.Skillzify.toast) window.Skillzify.toast("Dropped your oldest drill" + (title ? " (“" + title + "”)" : "") + " — the drill shelf holds 20."); } catch (e) {}
       }
@@ -975,7 +980,7 @@
         showHintsUpTo(a.hintsUsed);
       });
     });
-    $("ex-reveal").addEventListener("click", function () { revealSolution(false); });
+    $("ex-reveal").addEventListener("click", function () { revealSolution(); });
     $("ex-walk").addEventListener("click", function () {
       $("solution-box").innerHTML = '<h4>📖 Walkthrough</h4><p>' + esc(ex.walkthrough).replace(/\n/g, "<br>") + '</p>' +
         (ex.pythonic ? '<h4>🐍 Pythonic take</h4><p>' + esc(ex.pythonic) + '</p>' : '');
@@ -1107,7 +1112,7 @@
     });
   }
 
-  function revealSolution(auto) {
+  function revealSolution() {
     var ex = cur;
     var a = attFor(ex.id);
     // P1-04: revealing after solving must not taint the record — the
@@ -1220,16 +1225,6 @@
     solvedCount: solvedCount,
     totalCount: function () { return EX.length; },
     attFor: attFor,
-    topicProgress: topicProgress,
-    topicAccuracy: function () {
-      var atts = getAttempts(), out = {};
-      TOPICS.forEach(function (t) { out[t] = { solved: 0, total: 0 }; });
-      EX.forEach(function (ex) {
-        out[ex.topic].total++;
-        var a = atts[ex.id];
-        if (a && a.solved) out[ex.topic].solved++;
-      });
-      return out;
-    }
+    topicProgress: topicProgress
   };
 })();

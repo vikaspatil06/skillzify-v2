@@ -648,11 +648,8 @@
     capLink: capLink,
     buildContext: buildContext,
     explainError: explainError,
-    explainErrorText: explainErrorText,
     explainErrorHTML: explainErrorHTML,
     getStatus: function () { return status; },
-    onStatus: onStatus,
-    attachStatus: attachStatus,
-    apiBase: API_BASE
+    attachStatus: attachStatus
   };
 })();
