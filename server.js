@@ -13,8 +13,8 @@
    parsed, shape-validated object the UI renders from.
    Limits: 30 AI req/min per IP (abuse guard) + 200 AI calls/day
    per signed-in user (uid), 20/day for anonymous users. The admin
-   (ADMIN_EMAIL, below) is unlimited and can see their usage at
-   GET /api/usage.
+   (ADMIN_EMAIL, below) has a 60,000/day cap and can see their usage
+   at GET /api/usage.
    Usage is logged as counts only — never code content.
    Cap persistence: counts live in Firestore (collection
    "aiDailyCaps") when a Firebase service-account credential is
@@ -107,17 +107,19 @@ const FAILOVER_BUDGET_MS = 40000;
 const MAX_TOKENS_DEADLINE_MS = Number(process.env.MAX_TOKENS_DEADLINE_MS) || 55000;
 const DAILY_CAP_USER = 200;
 const DAILY_CAP_ANON = 20;
-// Skillzify admin (Vikas — patil.vikas6306@gmail.com): unlimited AI
-// answers + a usage view at GET /api/usage. The check needs BOTH the
-// signed-in uid AND the matching email — an email alone (no uid) is
-// anonymous and stays capped. Identity here is client-supplied, the
-// same trust model as uid everywhere else in this file (N5: the server
-// does not verify Firebase ID tokens) — anyone who sends this email +
-// any uid in a hand-made request would also bypass the cap. The real
-// fix is server-side ID-token verification (needs the Firebase
-// service-account key); until then this is the owner's bypass, not a
-// security boundary. Override with ADMIN_EMAIL env.
+// Skillzify admin (Vikas — patil.vikas6306@gmail.com): a 60,000/day
+// cap (his number, not "unlimited") + a usage view at GET /api/usage.
+// The check needs BOTH the signed-in uid AND the matching email — an
+// email alone (no uid) is anonymous and stays capped at 20/day.
+// Identity here is client-supplied, the same trust model as uid
+// everywhere else in this file (N5: the server does not verify
+// Firebase ID tokens) — anyone who sends this email + any uid in a
+// hand-made request would also get the 60,000 cap. The real fix is
+// server-side ID-token verification (needs the Firebase
+// service-account key). Override the address with ADMIN_EMAIL env,
+// the number with ADMIN_DAILY_CAP env.
 const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || "patil.vikas6306@gmail.com").trim().toLowerCase();
+const ADMIN_DAILY_CAP = Number(process.env.ADMIN_DAILY_CAP) || 60000;
 
 const app = express();
 // Render terminates TLS behind a proxy/load balancer: without this,
@@ -329,10 +331,10 @@ function dailyKey(uid, ip) { return (uid ? "u:" + uid : "a:" + ip) + "|" + daySt
 // stand-in). A crash between reserve and release likewise leaves at
 // most one count per in-flight request, and the memory store resets
 // on restart anyway.
-async function dailyReserve(uid, ip) {
+async function dailyReserve(uid, ip, isAdmin) {
   initCapStore();
   var key = dailyKey(uid, ip);
-  var cap = uid ? DAILY_CAP_USER : DAILY_CAP_ANON;
+  var cap = isAdmin ? ADMIN_DAILY_CAP : (uid ? DAILY_CAP_USER : DAILY_CAP_ANON);
   if (capStore === "firestore" && capDb) {
     try {
       if (typeof capDb.runTransaction === "function") {
@@ -392,18 +394,18 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true, ai: GEMINI_KEYS.length > 0 || GROQ_API_KEY !== "", model: MODEL, models: MODELS, groq: GROQ_API_KEY !== "", groqModels: GROQ_MODELS, capStore: capStore, uptimeSec: Math.floor(process.uptime()) });
 });
 // GET /api/usage — today's AI usage for the REQUESTER only:
-// { ok, date (IST), used, cap, unlimited }. Signed-in users are
-// keyed by uid, anonymous by IP. The admin (ADMIN_EMAIL + uid) gets
-// unlimited: true and cap: null. Identity is client-supplied (uid +
-// email query params), same trust model as /api/explain (N5) — this
-// endpoint never returns anyone else's count.
+// { ok, date (IST), used, cap, admin }. Signed-in users are keyed by
+// uid, anonymous by IP. The admin (ADMIN_EMAIL + uid) gets cap 60,000
+// and admin: true. Identity is client-supplied (uid + email query
+// params), same trust model as /api/explain (N5) — this endpoint
+// never returns anyone else's count.
 app.get("/api/usage", async (req, res) => {
   initCapStore();
   var uid = String((req.query && req.query.uid) || "").slice(0, 128);
   var email = String((req.query && req.query.email) || "").trim().toLowerCase().slice(0, 128);
   var admin = !!uid && email === ADMIN_EMAIL;
   var used = await capGetCount(dailyKey(uid, req.ip));
-  res.json({ ok: true, date: dayStr(), used: used, cap: admin ? null : (uid ? DAILY_CAP_USER : DAILY_CAP_ANON), unlimited: admin });
+  res.json({ ok: true, date: dayStr(), used: used, cap: admin ? ADMIN_DAILY_CAP : (uid ? DAILY_CAP_USER : DAILY_CAP_ANON), admin: admin });
 });
 /* ---------------- mode definitions ---------------- */
 const tutorStyle =
@@ -536,21 +538,17 @@ app.post("/api/explain", async (req, res) => {
   const stage = String((req.body && req.body.stage) || "");
   const uid = String((req.body && req.body.uid) || "").slice(0, 128);
   const email = String((req.body && req.body.email) || "").trim().toLowerCase().slice(0, 128);
-  // Admin (ADMIN_EMAIL, signed in): unlimited AI answers — no reserve,
-  // no cap error. Usage is still counted on delivered answers (see
-  // countAdminSuccess below) so /api/usage can show it.
+  // Admin (ADMIN_EMAIL, signed in): a 60,000/day cap (ADMIN_DAILY_CAP),
+  // reserved like everyone else — no bypass, just a much bigger bucket.
   const isAdminUser = !!uid && email === ADMIN_EMAIL;
   const spec = Object.prototype.hasOwnProperty.call(MODES, mode) ? MODES[mode] : MODES[""];
   if (!code.trim() && !errText.trim()) return res.status(400).json({ error: "Nothing to explain.", code: "EMPTY" });
   // P2-47: reserve one answer BEFORE the Gemini call (increment-first);
   // every failure return below releases it again via releaseCap().
-  // The admin skips the reserve entirely (unlimited).
-  var reserved = false;
-  if (!isAdminUser) {
-    reserved = await dailyReserve(uid, req.ip);
-    if (!reserved) {
-      return res.status(429).json({ error: "You've used your " + (uid ? DAILY_CAP_USER : DAILY_CAP_ANON) + " AI answers for today — they reset tomorrow.", code: "DAILY_CAP" });
-    }
+  var myCap = isAdminUser ? ADMIN_DAILY_CAP : (uid ? DAILY_CAP_USER : DAILY_CAP_ANON);
+  var reserved = await dailyReserve(uid, req.ip, isAdminUser);
+  if (!reserved) {
+    return res.status(429).json({ error: "You've used your " + myCap.toLocaleString("en-IN") + " AI answers for today — they reset tomorrow.", code: "DAILY_CAP" });
   }
   async function releaseCap() { if (reserved) { reserved = false; await dailyRelease(uid, req.ip); } }
   // A success the client never received (disconnected before delivery —
@@ -559,13 +557,6 @@ app.post("/api/explain", async (req, res) => {
   function clientGone() { return req.aborted === true || !!(req.socket && req.socket.destroyed); }
   async function keepOrRelease() {
     if (clientGone()) { await releaseCap(); console.log("[ai] client disconnected before delivery — daily cap not counted"); }
-  }
-  // Admin usage: count a DELIVERED answer (not a reservation) so the
-  // admin's /api/usage total is real. Called on the two success paths
-  // only, and skipped when the client already disconnected.
-  async function countAdminSuccess() {
-    if (!isAdminUser || clientGone()) return;
-    try { await capAddCount(dailyKey(uid, req.ip)); } catch (e) {}
   }
 
   const style = spec.style;
@@ -790,7 +781,6 @@ app.post("/api/explain", async (req, res) => {
         if (!spec.json && firstText.trim()) {
           console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "ok-truncated", usedModel, Date.now() - started + "ms");
           await keepOrRelease();
-          await countAdminSuccess();
           return res.json({ explanation: firstText, model: usedModel, truncated: true });
         }
         const g = (got && got.error) || { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
@@ -826,7 +816,6 @@ app.post("/api/explain", async (req, res) => {
     // burning a daily-cap answer for it, or the client's retry pays
     // twice for one delivered answer.
     await keepOrRelease();
-    await countAdminSuccess();
     res.json(out);
   } catch (e) {
     console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "fail", "TIMEOUT", Date.now() - started + "ms");

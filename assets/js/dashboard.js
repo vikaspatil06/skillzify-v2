@@ -195,8 +195,8 @@
     renderAIUsage();
   }
 
-  // AI usage today — one small line at the bottom of the Daily card.
-  // The admin sees "Unlimited"; everyone else sees used / cap. Fetched
+  // AI usage today — one small line at the bottom of the Daily card:
+  // "N / cap", with "(admin)" for the admin's 60,000 cap. Fetched
   // from /api/usage via SkillzifyAI.usage; silent on failure (the line
   // just doesn't appear — usage is informational, never blocking).
   // Re-runs on auth change (the cap changes when you sign in), replacing
@@ -211,9 +211,7 @@
       if (err || !u) return;
       var dd2 = document.getElementById("dash-daily");
       if (!dd2 || document.getElementById("dash-ai-usage")) return;
-      var txt = u.unlimited
-        ? "🤖 AI answers today: " + u.used + " — Unlimited (admin)"
-        : "🤖 AI answers today: " + u.used + " / " + u.cap;
+      var txt = "🤖 AI answers today: " + u.used + " / " + Number(u.cap).toLocaleString("en-IN") + (u.admin ? " (admin)" : "");
       dd2.innerHTML += '<p id="dash-ai-usage" class="hint">' + txt + "</p>";
     });
   }
