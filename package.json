@@ -2,7 +2,8 @@
   "dependencies": {
     "express": "^4.22.3",
     "dotenv": "^16.4.5",
-    "firebase-admin": "^14.5.0"
+    "firebase-admin": "^14.5.0",
+    "@google-cloud/firestore": "^9.1.0"
   },
   "description": "Skillzify v2 – advanced student learning website with AI compiler (developer-side AI backend)",
   "engines": {
