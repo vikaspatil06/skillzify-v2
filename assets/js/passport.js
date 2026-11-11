@@ -340,16 +340,16 @@
      Same card-dropdown idiom as the navbar (nav.js) and the twin in
      profile.js (Achievements filter). The exercises table body lives
      in #proof-exercises so the filter re-renders just the table,
-     never the card or the menu. The choice persists in localStorage;
-     a fresh device defaults to "All topics". The action item copies
+     never the card or the menu. The default is "Solved only" on
+     EVERY load (Vikas's call) — the pick lives in memory for this
+     page load only and is NEVER persisted. The action item copies
      this passport's link — there is no "View public passport" item
      here because this card IS the public passport page. */
-  var PROOF_FILTER_KEY = "skillzify_profile_filter_proof";
   var PROOF_FILTERS = { all: "All topics", solved: "Solved only", unsolved: "Unsolved only" };
   var lastProofEx = null;
+  var proofFilterState = "solved";
   function getProofFilter() {
-    var v = storeGet(PROOF_FILTER_KEY, "all");
-    return PROOF_FILTERS[v] ? v : "all";
+    return PROOF_FILTERS[proofFilterState] ? proofFilterState : "all";
   }
   function proofExercisesHtml(ex, filter) {
     var topics = Object.keys((ex && ex.byTopic) || {}).sort();
@@ -388,11 +388,11 @@
       if (it) it.setAttribute("aria-checked", k === f ? "true" : "false");
     });
   }
-  function applyProofFilter(f, save) {
-    if (save) storeSet(PROOF_FILTER_KEY, f);
+  function applyProofFilter(f) {
+    if (PROOF_FILTERS[f]) proofFilterState = f;
     var box = document.getElementById("proof-exercises");
-    if (box && lastProofEx) box.innerHTML = proofExercisesHtml(lastProofEx, f);
-    paintProofFilter(f);
+    if (box && lastProofEx) box.innerHTML = proofExercisesHtml(lastProofEx, proofFilterState);
+    paintProofFilter(proofFilterState);
   }
   function copyPassportLink() {
     var url = "";
@@ -484,9 +484,9 @@
       if (action === "copy-link") { copyPassportLink(); return; }
       var f = item.getAttribute("data-filter");
       if (!PROOF_FILTERS[f]) return;
-      applyProofFilter(f, true);
+      applyProofFilter(f);
     });
-    applyProofFilter(getProofFilter(), false);
+    applyProofFilter(getProofFilter());
   }
 
   function renderPublic(uid) {
@@ -580,10 +580,10 @@
     html += '<div class="dash-card" style="margin-top:20px">' +
       '<div class="card-head"><h2>\u{1F50D} Proof of work</h2>' +
       '<div class="card-drop" id="proof-drop">' +
-      '<button type="button" class="card-drop-btn" id="proof-drop-btn" aria-haspopup="true" aria-expanded="false" aria-controls="proof-drop-menu"><span id="proof-drop-label">All topics</span> <span class="caret">▾</span></button>' +
+      '<button type="button" class="card-drop-btn" id="proof-drop-btn" aria-haspopup="true" aria-expanded="false" aria-controls="proof-drop-menu"><span id="proof-drop-label">Solved only</span> <span class="caret">▾</span></button>' +
       '<div class="card-menu" id="proof-drop-menu" role="menu">' +
-      '<button type="button" role="menuitemradio" aria-checked="true" id="proof-filter-all" data-filter="all">All topics <span class="tick">✓</span></button>' +
-      '<button type="button" role="menuitemradio" aria-checked="false" id="proof-filter-solved" data-filter="solved">Solved only <span class="tick">✓</span></button>' +
+      '<button type="button" role="menuitemradio" aria-checked="false" id="proof-filter-all" data-filter="all">All topics <span class="tick">✓</span></button>' +
+      '<button type="button" role="menuitemradio" aria-checked="true" id="proof-filter-solved" data-filter="solved">Solved only <span class="tick">✓</span></button>' +
       '<button type="button" role="menuitemradio" aria-checked="false" id="proof-filter-unsolved" data-filter="unsolved">Unsolved only <span class="tick">✓</span></button>' +
       '<div class="menu-sep" role="separator"></div>' +
       '<button type="button" role="menuitem" id="proof-copy-link" data-action="copy-link">📋 Copy passport link</button>' +

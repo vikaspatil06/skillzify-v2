@@ -8,15 +8,13 @@
 
   /* ---------- Achievements dropdown (filter) ----------
      The header count is the TOTAL (never the filtered count); the
-     grid below is the filtered view. The choice persists in
-     localStorage so it survives reloads; a fresh device defaults
-     to "All badges". */
-  var ACH_FILTER_KEY = "skillzify_profile_filter_achievements";
+     grid below is the filtered view. The default is "Unlocked only"
+     on EVERY load (Vikas's call) — the pick lives in memory for
+     this page load only and is NEVER persisted. */
   var ACH_FILTERS = { all: "All badges", unlocked: "Unlocked only", locked: "Locked only" };
+  var achFilterState = "unlocked";
   function getAchFilter() {
-    var v = null;
-    try { v = localStorage.getItem(ACH_FILTER_KEY); } catch (e) {}
-    return ACH_FILTERS[v] ? v : "all";
+    return ACH_FILTERS[achFilterState] ? achFilterState : "all";
   }
   function achEmptyHtml(f) {
     if (f === "unlocked") return '<p class="muted">No unlocked badges yet — complete a lesson or run some code to earn one.</p>';
@@ -101,7 +99,7 @@
     wireCardDropdown("ach-drop", ["ach-filter-all", "ach-filter-unlocked", "ach-filter-locked"], function (item) {
       var f = item.getAttribute("data-filter");
       if (!ACH_FILTERS[f]) return;
-      try { localStorage.setItem(ACH_FILTER_KEY, f); } catch (e) {}
+      achFilterState = f;
       render();
     });
   }
