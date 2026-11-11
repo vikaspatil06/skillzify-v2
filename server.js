@@ -11,8 +11,10 @@
    flowchart-explain, flowchart-code.
    JSON modes return { explanation, json } where `json` is the
    parsed, shape-validated object the UI renders from.
-   Limits: 30 AI req/min per IP (abuse guard) + 50 AI calls/day
-   per signed-in user (uid), 10/day for anonymous users.
+   Limits: 30 AI req/min per IP (abuse guard) + 200 AI calls/day
+   per signed-in user (uid), 20/day for anonymous users. The admin
+   (ADMIN_EMAIL, below) is unlimited and can see their usage at
+   GET /api/usage.
    Usage is logged as counts only — never code content.
    Cap persistence: counts live in Firestore (collection
    "aiDailyCaps") when a Firebase service-account credential is
@@ -27,6 +29,9 @@
    the JSON as FIREBASE_SERVICE_ACCOUNT_JSON in the Render
    dashboard (Environment) of services skillzify-v2 and
    skillzify-v2-staging. Never commit the JSON.
+   Groq failover: free key at console.groq.com → API Keys, then set
+   GROQ_API_KEY the same way (Render Environment, both services).
+   No card needed. Without it the server is Gemini-only.
 Run: set GEMINI_API_KEY in the environment, then node server.js (or use a .env file)
    ============================================================ */
 "use strict";
@@ -45,16 +50,24 @@ const GEMINI_API_KEY = (process.env || {})["GEMINI_API_KEY"] || "";
 // is 5 RPM / 20 RPD on this project, so one model alone cannot cover
 // testing. Limits are per model per project, so trying models in order
 // multiplies the daily budget; a second API key (second Google Cloud
-// project) multiplies it again. Order is preference order: the primary
-// first, then the biggest published daily pools, then the highest
-// per-minute headroom. Models with 0 quota on this project
-// (gemini-2.0-flash, gemini-2.5-pro, ...) are NOT listed. 2.5-flash is
-// deprecated: from 1 Dec 2026 Google auto-routes it to 3.5-flash-lite,
-// which is already in this list, so nothing breaks then.
+// project) multiplies it again. Order is preference order: the proven six
+// first, then the newer free-tier models. Free-tier text models on the
+// Gemini API (Nov 2026): 3.8 Flash, 3.6 Flash, 3.5 Flash-Lite, 3.1
+// Flash-Lite, 3 Flash Preview, Gemma 4 (31b + 26b-a4b). 2.5 Flash /
+// Flash-Lite stay for projects that already used them — since 18 Sep 2026
+// new projects cannot use them (they 404 and are skipped). NOT listed:
+// gemini-2.0-flash/-lite (SHUT DOWN 1 Jun 2026), Pro models (2.5 Pro left
+// the free tier Apr 2026; 3.1 Pro Preview, 4 Argon/Carbon are paid only),
+// 3.5/3.7 Flash (aliases of 3.6/3.8). 3.1-flash-lite shuts down 7 May
+// 2027. 2.5-flash is deprecated: from 1 Dec 2026 Google auto-routes it to
+// 3.5-flash-lite, which is already in this list, so nothing breaks then.
+// A model with no quota on a project costs one fast 404/429 skip — the
+// loop has no attempt cap, only the shared time budget — so listing a
+// model that turns out dead is harmless.
 // Override the list with GEMINI_MODELS="model-a,model-b"; GEMINI_MODEL
 // still overrides just the primary.
 const MODELS = (process.env.GEMINI_MODELS ||
-  "gemini-3.8-flash,gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.5-flash-lite,gemini-3.6-flash,gemini-3.1-flash-lite")
+  "gemini-3.8-flash,gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.5-flash-lite,gemini-3.6-flash,gemini-3.1-flash-lite,gemini-3-flash-preview,gemma-4-31b-it,gemma-4-26b-a4b-it")
   .split(",").map(function (s) { return s.trim(); }).filter(Boolean);
 if (process.env.GEMINI_MODEL) MODELS[0] = process.env.GEMINI_MODEL;
 const MODEL = MODELS[0];
@@ -64,6 +77,22 @@ const MODEL = MODELS[0];
 const GEMINI_KEYS = (process.env.GEMINI_API_KEYS || "")
   .split(",").map(function (s) { return s.trim(); }).filter(Boolean);
 if (!GEMINI_KEYS.length && GEMINI_API_KEY) GEMINI_KEYS.push(GEMINI_API_KEY);
+// Groq failover (second provider, OpenAI-compatible). Free tier, no card:
+// console.groq.com → API Keys → GROQ_API_KEY. Limits are per ORGANISATION,
+// per model (Groq rate-limits docs, Nov 2026): openai/gpt-oss-120b,
+// openai/gpt-oss-20b and qwen/qwen3.8-27b are each 30 RPM / 1,000 RPD /
+// 8K TPM / 200K TPD. The TOKEN cap binds first: ~200K tokens/day/model is
+// only a few hundred real tutor calls per model. Llama models are
+// Enterprise-only on self-serve keys (404) — NOT listed. Groq is tried
+// AFTER all Gemini keys x models, so it is spillover capacity, not the
+// primary. Override the list with GROQ_MODELS="model-a,model-b". Unset
+// key = Groq off, Gemini-only. Key read via bracket notation like
+// GEMINI_API_KEY (runtime redaction safety).
+const GROQ_API_KEY = (process.env || {})["GROQ_API_KEY"] || "";
+const GROQ_MODELS = (process.env.GROQ_MODELS ||
+  "openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3.8-27b")
+  .split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 // Per-attempt ceiling (12s) + total failover budget (40s): the client
 // gives up at 60s, so the server must answer first. No same-model
 // retry: with failover the next model IS the retry, and re-hitting an
@@ -76,13 +105,24 @@ const FAILOVER_BUDGET_MS = 40000;
 // The client aborts at 60 s, so 55 s leaves room to deliver the answer.
 // Overridable via env only for tests (MAX_TOKENS_DEADLINE_MS).
 const MAX_TOKENS_DEADLINE_MS = Number(process.env.MAX_TOKENS_DEADLINE_MS) || 55000;
-const DAILY_CAP_USER = 50;
-const DAILY_CAP_ANON = 10;
+const DAILY_CAP_USER = 200;
+const DAILY_CAP_ANON = 20;
+// Skillzify admin (Vikas — patil.vikas6306@gmail.com): unlimited AI
+// answers + a usage view at GET /api/usage. The check needs BOTH the
+// signed-in uid AND the matching email — an email alone (no uid) is
+// anonymous and stays capped. Identity here is client-supplied, the
+// same trust model as uid everywhere else in this file (N5: the server
+// does not verify Firebase ID tokens) — anyone who sends this email +
+// any uid in a hand-made request would also bypass the cap. The real
+// fix is server-side ID-token verification (needs the Firebase
+// service-account key); until then this is the owner's bypass, not a
+// security boundary. Override with ADMIN_EMAIL env.
+const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || "patil.vikas6306@gmail.com").trim().toLowerCase();
 
 const app = express();
 // Render terminates TLS behind a proxy/load balancer: without this,
 // req.ip is the proxy's address and every signed-out user would share
-// one anonymous 10/day bucket. P2-50: Cloudflare fronts Render, so a
+// one anonymous 20/day bucket. P2-50: Cloudflare fronts Render, so a
 // request passes through TWO proxies (Cloudflare edge, then Render's
 // router) — trust proxy 1 resolved req.ip to a shared edge IP. The
 // [proxy] log line below records the X-Forwarded-For chain on every
@@ -273,7 +313,7 @@ function dayStr() { return new Date(Date.now() + (5 * 60 + 30) * 60000).toISOStr
 function dailyKey(uid, ip) { return (uid ? "u:" + uid : "a:" + ip) + "|" + dayStr(); }
 // P2-47: increment-first with rollback. The old check-then-increment
 // was racy: two concurrent requests (two devices, two tabs) could both
-// read 49/50, both succeed, and both increment -> 51. Now a call
+// read 199/200, both succeed, and both increment -> 201. Now a call
 // RESERVES one answer before the Gemini call (increment first) and
 // RELEASES it (decrement) on any failure, so a timeout / overload /
 // bad reply still never burns a daily answer — and the success path
@@ -349,7 +389,21 @@ async function dailyRelease(uid, ip) {
 
 app.get("/api/health", (req, res) => {
   initCapStore(); // local-only; reports which cap store is active
-  res.json({ ok: true, ai: GEMINI_KEYS.length > 0, model: MODEL, models: MODELS, capStore: capStore, uptimeSec: Math.floor(process.uptime()) });
+  res.json({ ok: true, ai: GEMINI_KEYS.length > 0 || GROQ_API_KEY !== "", model: MODEL, models: MODELS, groq: GROQ_API_KEY !== "", groqModels: GROQ_MODELS, capStore: capStore, uptimeSec: Math.floor(process.uptime()) });
+});
+// GET /api/usage — today's AI usage for the REQUESTER only:
+// { ok, date (IST), used, cap, unlimited }. Signed-in users are
+// keyed by uid, anonymous by IP. The admin (ADMIN_EMAIL + uid) gets
+// unlimited: true and cap: null. Identity is client-supplied (uid +
+// email query params), same trust model as /api/explain (N5) — this
+// endpoint never returns anyone else's count.
+app.get("/api/usage", async (req, res) => {
+  initCapStore();
+  var uid = String((req.query && req.query.uid) || "").slice(0, 128);
+  var email = String((req.query && req.query.email) || "").trim().toLowerCase().slice(0, 128);
+  var admin = !!uid && email === ADMIN_EMAIL;
+  var used = await capGetCount(dailyKey(uid, req.ip));
+  res.json({ ok: true, date: dayStr(), used: used, cap: admin ? null : (uid ? DAILY_CAP_USER : DAILY_CAP_ANON), unlimited: admin });
 });
 /* ---------------- mode definitions ---------------- */
 const tutorStyle =
@@ -464,7 +518,7 @@ function parseJsonMode(text, validate) {
   return obj;
 }
 
-function geminiError(status) {
+function providerError(status) {
   if (status === 404) return { status: 502, code: "MODEL_NOT_FOUND", error: "AI model not found (configuration problem)." };
   if (status === 401 || status === 403) return { status: 502, code: "KEY_ERROR", error: "AI key problem (configuration)." };
   if (status === 429) return { status: 429, code: "QUOTA", error: "AI quota exhausted — try again later." };
@@ -474,20 +528,29 @@ function geminiError(status) {
 
 app.post("/api/explain", async (req, res) => {
   const started = Date.now();
-  if (!GEMINI_KEYS.length) return res.status(503).json({ error: "AI backend not configured.", code: "NOT_CONFIGURED" });
+  if (!GEMINI_KEYS.length && !GROQ_API_KEY) return res.status(503).json({ error: "AI backend not configured.", code: "NOT_CONFIGURED" });
   const code = String((req.body && req.body.code) || "").slice(0, 8000);
   const errText = String((req.body && req.body.error) || "").slice(0, 2000);
   const context = String((req.body && req.body.context) || "").slice(0, 2000);
   const mode = String((req.body && req.body.mode) || "");
   const stage = String((req.body && req.body.stage) || "");
   const uid = String((req.body && req.body.uid) || "").slice(0, 128);
+  const email = String((req.body && req.body.email) || "").trim().toLowerCase().slice(0, 128);
+  // Admin (ADMIN_EMAIL, signed in): unlimited AI answers — no reserve,
+  // no cap error. Usage is still counted on delivered answers (see
+  // countAdminSuccess below) so /api/usage can show it.
+  const isAdminUser = !!uid && email === ADMIN_EMAIL;
   const spec = Object.prototype.hasOwnProperty.call(MODES, mode) ? MODES[mode] : MODES[""];
   if (!code.trim() && !errText.trim()) return res.status(400).json({ error: "Nothing to explain.", code: "EMPTY" });
   // P2-47: reserve one answer BEFORE the Gemini call (increment-first);
   // every failure return below releases it again via releaseCap().
-  var reserved = await dailyReserve(uid, req.ip);
-  if (!reserved) {
-    return res.status(429).json({ error: "You've used your " + (uid ? DAILY_CAP_USER : DAILY_CAP_ANON) + " AI answers for today — they reset tomorrow.", code: "DAILY_CAP" });
+  // The admin skips the reserve entirely (unlimited).
+  var reserved = false;
+  if (!isAdminUser) {
+    reserved = await dailyReserve(uid, req.ip);
+    if (!reserved) {
+      return res.status(429).json({ error: "You've used your " + (uid ? DAILY_CAP_USER : DAILY_CAP_ANON) + " AI answers for today — they reset tomorrow.", code: "DAILY_CAP" });
+    }
   }
   async function releaseCap() { if (reserved) { reserved = false; await dailyRelease(uid, req.ip); } }
   // A success the client never received (disconnected before delivery —
@@ -496,6 +559,13 @@ app.post("/api/explain", async (req, res) => {
   function clientGone() { return req.aborted === true || !!(req.socket && req.socket.destroyed); }
   async function keepOrRelease() {
     if (clientGone()) { await releaseCap(); console.log("[ai] client disconnected before delivery — daily cap not counted"); }
+  }
+  // Admin usage: count a DELIVERED answer (not a reservation) so the
+  // admin's /api/usage total is real. Called on the two success paths
+  // only, and skipped when the client already disconnected.
+  async function countAdminSuccess() {
+    if (!isAdminUser || clientGone()) return;
+    try { await capAddCount(dailyKey(uid, req.ip)); } catch (e) {}
   }
 
   const style = spec.style;
@@ -551,7 +621,7 @@ app.post("/api/explain", async (req, res) => {
         }
         clearTimeout(timer);
         if (r.ok) return { r: r, model: model, keyIdx: ki };
-        var g = geminiError(r.status);
+        var g = providerError(r.status);
         if (r.status === 429 || r.status === 503 || r.status === 404) {
           console.log("[ai] model " + model + " key#" + (ki + 1) + " fail " + g.code + " — trying next");
           lastErr = g;
@@ -564,8 +634,108 @@ app.post("/api/explain", async (req, res) => {
     return { r: null, model: lastModel, keyIdx: lastKeyIdx, error: lastErr };
   }
 
+  // Groq (OpenAI-compatible chat completions). Same contract as
+  // callGemini: { r, model, keyIdx, error, provider }. The success `r`
+  // is a thin wrapper whose json() translates Groq's OpenAI shape into
+  // the Gemini shape the handler below already parses (candidates[0].
+  // content.parts, finishReason STOP / MAX_TOKENS), so nothing
+  // downstream changes. Retryable: 429 / 503 / 404 (model retired) —
+  // next model. Fatal: 401/403 (bad key) and anything else — answer
+  // at once. Single key: Groq limits are per organisation, so extra
+  // keys in the same org add nothing.
+  async function callGroq(promptText, maxTokens, onlyModel, timeoutMs, budgetMs) {
+    var models = onlyModel ? [onlyModel] : GROQ_MODELS;
+    var attemptTimeout = timeoutMs || ATTEMPT_TIMEOUT_MS;
+    var budget = (typeof budgetMs === "number" && budgetMs > 0) ? budgetMs : FAILOVER_BUDGET_MS;
+    var lastErr = { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
+    var lastModel = models[0];
+    for (var mi = 0; mi < models.length; mi++) {
+      var model = models[mi];
+      if (Date.now() - started > budget) {
+        console.log("[ai] groq failover budget spent — answering with last error " + lastErr.code);
+        return { r: null, model: lastModel, keyIdx: 0, error: lastErr, provider: "groq" };
+      }
+      lastModel = model;
+      var ctrl = new AbortController();
+      var timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, attemptTimeout);
+      var r;
+      try {
+        r = await fetch(GROQ_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + GROQ_API_KEY },
+          body: JSON.stringify(Object.assign(
+            {
+              model: model,
+              messages: [
+                { role: "system", content: style },
+                { role: "user", content: promptText }
+              ],
+              temperature: 0.4,
+              max_tokens: maxTokens,
+              stream: false
+            },
+            spec.json ? { response_format: { type: "json_object" } } : {}
+          )),
+          signal: ctrl.signal,
+        });
+      } catch (e) {
+        clearTimeout(timer);
+        console.log("[ai] groq model " + model + " attempt failed (" + (e.name || "error") + ") — trying next");
+        lastErr = { status: 502, code: "TIMEOUT", error: "Could not reach the AI provider." };
+        continue;
+      }
+      clearTimeout(timer);
+      if (r.ok) {
+        var groqData;
+        try { groqData = await r.json(); } catch (e) {
+          console.log("[ai] groq model " + model + " returned unparsable JSON — trying next");
+          lastErr = { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
+          continue;
+        }
+        var choice = (groqData.choices && groqData.choices[0]) || {};
+        var groqText = (choice.message && choice.message.content) || "";
+        var groqFinish = choice.finish_reason === "length" ? "MAX_TOKENS" : "STOP";
+        var translated = { candidates: [{ content: { parts: [{ text: groqText }] }, finishReason: groqFinish }] };
+        return { r: { ok: true, json: async function () { return translated; } }, model: model, keyIdx: 0, provider: "groq" };
+      }
+      var g = providerError(r.status);
+      if (r.status === 429 || r.status === 503 || r.status === 404) {
+        console.log("[ai] groq model " + model + " fail " + g.code + " — trying next");
+        lastErr = g;
+        continue;
+      }
+      console.log("[ai] groq model " + model + " fail " + g.code + " — not retryable");
+      return { r: r, model: model, keyIdx: 0, error: g, provider: "groq" };
+    }
+    return { r: null, model: lastModel, keyIdx: 0, error: lastErr, provider: "groq" };
+  }
+
+  // Provider order: all Gemini keys x models first, Groq second.
+  // onlyModel pins one model (MAX_TOKENS retry): route by which list
+  // owns it. Returns the same { r, model, keyIdx, error, provider }.
+  async function callAI(promptText, maxTokens, onlyModel, timeoutMs, budgetMs) {
+    if (onlyModel && GROQ_MODELS.indexOf(onlyModel) !== -1) {
+      if (!GROQ_API_KEY) return { r: null, model: onlyModel, keyIdx: 0, error: { status: 502, code: "MODEL_ERROR", error: "AI provider error." }, provider: "groq" };
+      return callGroq(promptText, maxTokens, onlyModel, timeoutMs, budgetMs);
+    }
+    var got = await callGemini(promptText, maxTokens, onlyModel, timeoutMs, budgetMs);
+    if ((got.r && got.r.ok) || !GROQ_API_KEY) return got;
+    // Gemini failed on every combination (or is unconfigured) — spill
+    // over to Groq with the same shared budget. The budget clock is
+    // shared (started), so a spent budget returns at once from callGroq.
+    console.log("[ai] gemini exhausted — trying groq");
+    var g2 = await callGroq(promptText, maxTokens, null, timeoutMs, budgetMs);
+    // Prefer the Groq answer if it worked; otherwise keep the Gemini
+    // error — it is usually the more actionable one for the client.
+    // Exception: when Gemini was not even configured, its error is just
+    // the default placeholder — Groq's error is the real one.
+    if (g2.r && g2.r.ok) return g2;
+    if (!GEMINI_KEYS.length) return g2;
+    return got;
+  }
+
   try {
-    let got = await callGemini(prompt, spec.maxTokens || 1000);
+    let got = await callAI(prompt, spec.maxTokens || 1000);
     if (!got.r || !got.r.ok) {
       const g = got.error || { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
       console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "fail", g.code, Date.now() - started + "ms");
@@ -598,7 +768,7 @@ app.post("/api/explain", async (req, res) => {
         console.log("[explain] no time left before the MAX_TOKENS deadline — keeping the truncated reply");
         retryFailed = true;
       } else {
-        got = await callGemini(prompt, 4000, usedModel, Math.min(25000, retryRemaining), MAX_TOKENS_DEADLINE_MS);
+        got = await callAI(prompt, 4000, usedModel, Math.min(25000, retryRemaining), MAX_TOKENS_DEADLINE_MS);
         if (!got.r || !got.r.ok) {
           const g = got.error || { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
           console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "MAX_TOKENS retry fail", g.code, Date.now() - started + "ms");
@@ -620,6 +790,7 @@ app.post("/api/explain", async (req, res) => {
         if (!spec.json && firstText.trim()) {
           console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "ok-truncated", usedModel, Date.now() - started + "ms");
           await keepOrRelease();
+          await countAdminSuccess();
           return res.json({ explanation: firstText, model: usedModel, truncated: true });
         }
         const g = (got && got.error) || { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
@@ -646,7 +817,7 @@ app.post("/api/explain", async (req, res) => {
         return res.status(502).json({ error: "AI returned an unusable answer — try again.", code: "BAD_JSON" });
       }
     }
-    console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "ok", usedModel, "key#" + (got.keyIdx + 1), Date.now() - started + "ms");
+    console.log("[ai]", mode || "explain", isAdminUser ? "admin" : (uid ? "uid" : "anon"), "ok", (got.provider || "gemini") + ":" + usedModel, "key#" + (got.keyIdx + 1), Date.now() - started + "ms");
     // Success only — the reservation made before the call IS the count
     // (no second increment; a MAX_TOKENS retry is still one request).
     // Awaited: the count must be durable (Firestore) before answering.
@@ -655,6 +826,7 @@ app.post("/api/explain", async (req, res) => {
     // burning a daily-cap answer for it, or the client's retry pays
     // twice for one delivered answer.
     await keepOrRelease();
+    await countAdminSuccess();
     res.json(out);
   } catch (e) {
     console.log("[ai]", mode || "explain", uid ? "uid" : "anon", "fail", "TIMEOUT", Date.now() - started + "ms");
@@ -694,6 +866,6 @@ app.use(express.static(path.join(__dirname), {
 
 app.listen(PORT, () => {
   console.log(
-    "Skillzify v2 on http://localhost:" + PORT + " | AI backend: " + (GEMINI_KEYS.length ? "ON (" + MODELS.join(", ") + ")" : "OFF (set GEMINI_API_KEY)")
+    "Skillzify v2 on http://localhost:" + PORT + " | AI backend: " + (GEMINI_KEYS.length ? "ON (" + MODELS.join(", ") + ")" : "OFF (set GEMINI_API_KEY)") + (GROQ_API_KEY ? " + Groq (" + GROQ_MODELS.join(", ") + ")" : "")
   );
 });

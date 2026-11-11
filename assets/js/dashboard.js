@@ -97,7 +97,7 @@
              "Your learning at a glance — log in to sync your name here.";
     if (!greetingWired && window.SkillzifyAuth && typeof window.SkillzifyAuth.onAuthChange === "function") {
       greetingWired = true;
-      window.SkillzifyAuth.onAuthChange(function () { renderGreeting(); });
+      window.SkillzifyAuth.onAuthChange(function () { renderGreeting(); renderAIUsage(); });
     }
   }
 
@@ -192,6 +192,30 @@
       : '<p class="muted" style="grid-column:1/-1">Complete a lesson to earn your first badge. <a href="learn.html">Start →</a></p>';
 
     renderPracticeWidgets();
+    renderAIUsage();
+  }
+
+  // AI usage today — one small line at the bottom of the Daily card.
+  // The admin sees "Unlimited"; everyone else sees used / cap. Fetched
+  // from /api/usage via SkillzifyAI.usage; silent on failure (the line
+  // just doesn't appear — usage is informational, never blocking).
+  // Re-runs on auth change (the cap changes when you sign in), replacing
+  // the old line. The numbers are the requester's own, for today (IST).
+  function renderAIUsage() {
+    var dd = document.getElementById("dash-daily");
+    if (!dd) return;
+    if (!window.SkillzifyAI || typeof window.SkillzifyAI.usage !== "function") return;
+    var old = document.getElementById("dash-ai-usage");
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    window.SkillzifyAI.usage(function (err, u) {
+      if (err || !u) return;
+      var dd2 = document.getElementById("dash-daily");
+      if (!dd2 || document.getElementById("dash-ai-usage")) return;
+      var txt = u.unlimited
+        ? "🤖 AI answers today: " + u.used + " — Unlimited (admin)"
+        : "🤖 AI answers today: " + u.used + " / " + u.cap;
+      dd2.innerHTML += '<p id="dash-ai-usage" class="hint">' + txt + "</p>";
+    });
   }
 
   /* ---------- Practice analytics, daily, revision, certificates ---------- */
@@ -338,8 +362,8 @@
       // note's sign-in link for the new auth state (M3, item 2).
       var lastFailErr = null;
       var renderFailNote = function (err) {
-        // DAILY_CAP carries the server's message verbatim (10/day signed
-        // out, 50/day signed in) — plus a sign-in link only when signed
+        // DAILY_CAP carries the server's message verbatim (20/day signed
+        // out, 200/day signed in) — plus a sign-in link only when signed
         // out (ai.js capLink returns "" for signed-in users at cap).
         lastFailErr = err || null;
         var cap = err && err.code === "DAILY_CAP";
@@ -415,7 +439,7 @@
         renderStaticDaily();
         if (challengeFailedRecently()) renderFailNote();
         // M2: never auto-fetch a personal challenge for a signed-out
-        // user — the anonymous 10/day cap would silently burn one
+        // user — the anonymous 20/day cap would silently burn one
         // answer. Firebase restores the session async, so a
         // currentUser() check here at load time would misclassify
         // signed-in users as anonymous; wait for auth.js to resolve

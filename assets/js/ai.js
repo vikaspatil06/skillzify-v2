@@ -20,7 +20,7 @@
   var KEY_STORE = "skillzify_ai_key";
   var MODEL = "gemini-3.8-flash";
   /* Personal-key fallback models, in order (P2-38): the server path has
-     6-model failover; the key path had one model and no retry. */
+     9-model failover; the key path had one model and no retry. */
   var KEY_MODELS = ["gemini-3.8-flash", "gemini-2.5-flash-lite", "gemini-3.5-flash-lite"];
   var BASE = (function () {
     try {
@@ -67,12 +67,21 @@
     } catch (e) {}
     return "";
   }
+  function email() {
+    try {
+      if (window.SkillzifyAuth && window.SkillzifyAuth.currentUser) {
+        var u = window.SkillzifyAuth.currentUser();
+        if (u && u.email) return String(u.email);
+      }
+    } catch (e) {}
+    return "";
+  }
 
   /* P2-54 + P2-49: auth readiness and cache clearing.
      - uid() is gated on SkillzifyAuth.onReady: an early tap in the
        first second before Firebase restores the session used to read
-       currentUser() === null and burn the anonymous 10/day cap instead
-       of the signed-in 50/day. runJob now waits for onReady before it
+       currentUser() === null and burn the anonymous 20/day cap instead
+       of the signed-in 200/day. runJob now waits for onReady before it
        resolves the uid (for the payload AND the cache key). A genuinely
        signed-out user still resolves at once: onReady fires with a
        null user as soon as the session state is known, and when the
@@ -112,12 +121,26 @@
   }
 
   // Sign-in link for DAILY_CAP errors — shown ONLY to signed-out
-  // users. A signed-in user who hit the 50/day cap gets the plain
+  // users. A signed-in user who hit the 200/day cap gets the plain
   // server message with no link (the link would just bounce them to
   // auth.html and back to the dashboard). All DAILY_CAP error sites
   // must go through this helper; none hardcodes the link anymore.
   function capLink() {
-    return uid() ? "" : ' <a href="auth.html">Sign in for 50 AI answers/day</a>';
+    return uid() ? "" : ' <a href="auth.html">Sign in for 200 AI answers/day</a>';
+  }
+
+  // Today's AI usage for the requester (GET /api/usage): { used, cap,
+  // unlimited } — the admin sees unlimited: true. Callback-style like
+  // the rest of this module; cb(new Error) on any failure, so callers
+  // treat usage as informational and never block on it.
+  function usage(cb) {
+    try {
+      var q = "uid=" + encodeURIComponent(uid()) + "&email=" + encodeURIComponent(email());
+      fetch(BASE + "/api/usage?" + q).then(function (r) { return r.json(); }).then(function (d) {
+        if (d && d.ok) { try { cb(null, d); } catch (e) {} }
+        else { try { cb(new Error("usage")); } catch (e) {} }
+      }).catch(function () { try { cb(new Error("usage")); } catch (e) {} });
+    } catch (e) { try { cb(new Error("usage")); } catch (e2) {} }
   }
 
   /* ---------------- status ---------------- */
@@ -472,8 +495,8 @@
     var code = (e && e.code) || "";
     var msg = (e && typeof e.message === "string" && e.message) ? e.message : "";
     if (code === "DAILY_CAP") {
-      // The server's message already carries the right cap (10/day signed
-      // out, 50/day signed in) — keep it verbatim. Never hardcode a number
+      // The server's message already carries the right cap (20/day signed
+      // out, 200/day signed in) — keep it verbatim. Never hardcode a number
       // in the fallback.
       if (msg) return { code: code, message: msg };
       return { code: code, message: "You've used your AI answers for today — they reset tomorrow." };
@@ -532,6 +555,7 @@
       error: String(opts.error || "").slice(0, 2000),
       context: ctx,
       uid: uid(),
+      email: email(),
       json: !!opts.json
     };
     return backendAsk(payload, 0).then(function (d) {
@@ -646,6 +670,7 @@
     ask: ask,
     warmup: warmup,
     capLink: capLink,
+    usage: usage,
     buildContext: buildContext,
     explainError: explainError,
     explainErrorHTML: explainErrorHTML,

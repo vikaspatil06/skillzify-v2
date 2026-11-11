@@ -354,7 +354,7 @@ END</textarea>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js?v=7"></script>
 <script src="assets/js/sync.js?v=19"></script>
-<script src="assets/js/ai.js?v=18"></script>
+<script src="assets/js/ai.js?v=19"></script>
 <script>
 let pyodide = null, currentGraph = null, currentSVG = null, currentMermaid = null, currentZoom = 1, currentSource = null;
 let shareHashError = false; // P2-35: a #fc= hash was present but undecodable (shown by init() once loaded)
@@ -394,7 +394,7 @@ function setStatus(msg, type='', extraHtml='') {
   el.innerHTML = (type==='working' ? '<span class="spin"></span> ' : '') + esc(msg) + (extraHtml || '');
 }
 // DAILY_CAP sign-in link, via the shared ai.js helper: "" when signed
-// in (at the 50/day cap), the link only when signed out.
+// in (at the 200/day cap), the link only when signed out.
 function aiCapLink(err) {
   try { return (err && err.code === 'DAILY_CAP' && window.SkillzifyAI && window.SkillzifyAI.capLink) ? window.SkillzifyAI.capLink() : ''; } catch (e) { return ''; }
 }

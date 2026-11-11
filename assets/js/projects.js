@@ -181,7 +181,7 @@
         btn.textContent = "🤖 AI review";
         if (err) {
           // Sign-in link only when signed out (ai.js capLink returns
-          // "" for signed-in users at the 50/day cap).
+          // "" for signed-in users at the 200/day cap).
           var revCap = (err && err.code === "DAILY_CAP" && window.SkillzifyAI && window.SkillzifyAI.capLink)
             ? window.SkillzifyAI.capLink() : "";
           out.innerHTML = '<p class="hint">⚠️ ' + esc(err.message || "The AI review failed.") + revCap + "</p>"; return;
