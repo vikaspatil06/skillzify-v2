@@ -246,7 +246,7 @@ function initCapStore() {
     var fsMod = require("firebase-admin/firestore");
     admin = { appMod: appMod, fsMod: fsMod };
   } catch (e) {
-    console.log("[cap] A Firebase credential is set but firebase-admin could not be loaded — daily cap stays in-memory (resets on restart). Run `npm install firebase-admin` to enable the Firestore cap store.");
+    console.log("[cap] A Firebase credential is set but firebase-admin could not be loaded (" + (e && e.code ? e.code + ": " : "") + (e && e.message ? e.message : e) + ") — daily cap stays in-memory (resets on restart). Run `npm install firebase-admin` to enable the Firestore cap store.");
     return;
   }
   try {
