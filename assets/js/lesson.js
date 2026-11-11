@@ -471,6 +471,19 @@
     var xp = addXP(gain);
     var after = levelFor(xp).name;
     var p = getProgress(); p[lesson.id] = true; saveProgress(p);
+    // Passport (§4a): record the first completion time. completeLesson
+    // returns early when already done, so this write IS the completion
+    // time. No backfill — pre-passport completions have no entry and
+    // render as "date not recorded".
+    try {
+      if (window.Skillzify && window.Skillzify.storeGet && window.Skillzify.storeSet) {
+        var doneAt = window.Skillzify.storeGet("skillzify_lesson_done_at", {}) || {};
+        if (!doneAt[lesson.id]) {
+          doneAt[lesson.id] = Date.now();
+          window.Skillzify.storeSet("skillzify_lesson_done_at", doneAt);
+        }
+      }
+    } catch (e) {}
     if (window.SkillzifyReview && typeof window.SkillzifyReview.scheduleFor === "function") window.SkillzifyReview.scheduleFor(lesson.id);
     // One-time completion bonuses (section +100, path +150) — flags in
     // learn-core.js make them fire exactly once.
@@ -500,6 +513,11 @@
         "</div>";
     }
   }
+
+  /* Test seam (harness): completion side effects (progress + doneAt + XP).
+     The Complete button's disabled gate lives in refreshComplete(); the
+     seam exercises the same function the button calls. */
+  window.SkillzifyLesson = { completeLesson: completeLesson };
 
   /* ================= Keyboard ================= */
   document.addEventListener("keydown", function (e) {

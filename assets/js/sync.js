@@ -17,7 +17,12 @@
      different days can clobber each other's count — the winner's
      count survives whole, the loser's day is lost.
    - exercises.attempts: per-exercise merge — solved/revealed OR,
-     attempts/hintsUsed/lastTry MAX, bestMs MIN of non-zero (else 0)
+     attempts/hintsUsed/lastTry MAX, bestMs MIN of non-zero (else 0),
+     at (first-solve time) earliest non-zero wins
+   - progress.doneAt: per-lesson earliest non-zero wins (0/absent =
+     unknown; a real completion ms beats 0; min of two non-zero)
+   - projects: union of keys, per-project earliest non-zero wins
+     (same rule as doneAt; 0 = done, date unknown, and survives)
    - profile: last-write-wins by updatedAt (whole document)
    - customPaths: last-write-wins by updatedAt (whole document —
      same shape as profile). Definitions live in localStorage
@@ -69,6 +74,30 @@
      can't poison xp / streak / updatedAt with NaN (P2-36). */
   function num(v) { v = Number(v); return isFinite(v) ? v : 0; }
 
+  /* Earliest non-zero wins (passport §4a–b): union of keys; per key
+     the minimum of the non-zero values, else the non-zero one, else
+     0 (unknown). Keys both sides hold are kept even at 0 — a 0 is a
+     real "done, date unknown" marker, not an absence. `ignore` keys
+     (e.g. updatedAt on a flat cloud doc) are never treated as ids. */
+  function earliestMap(a, b, ignore) {
+    var out = {}, keys = {};
+    [a, b].forEach(function (m) {
+      if (m && typeof m === "object" && !Array.isArray(m)) {
+        Object.keys(m).forEach(function (k) {
+          if (!ignore || !ignore[k]) keys[k] = true;
+        });
+      }
+    });
+    Object.keys(keys).forEach(function (k) {
+      var av = num((a || {})[k]), bv = num((b || {})[k]);
+      var best = 0;
+      if (av > 0 && bv > 0) best = Math.min(av, bv);
+      else best = Math.max(av, bv);
+      out[k] = best;
+    });
+    return out;
+  }
+
   function mergeProgress(localDoc, cloudDoc) {
     localDoc = localDoc || {};
     cloudDoc = cloudDoc || {};
@@ -105,6 +134,7 @@
       runCount: runCount,
       streakCount: streakCount,
       streakLast: streakLast,
+      doneAt: earliestMap(localDoc.doneAt, cloudDoc.doneAt),
       updatedAt: Math.max(num(localDoc.updatedAt), num(cloudDoc.updatedAt))
     };
   }
@@ -124,7 +154,7 @@
       // attempts: "abc" used to give Math.max("abc", 0) -> NaN, which
       // JSON.stringify writes as null into localStorage and Firestore.
       var bests = [num(a.bestMs), num(b.bestMs)].filter(function (v) { return v > 0; });
-      out[id] = {
+      var rec = {
         attempts: Math.max(num(a.attempts), num(b.attempts)),
         solved: !!(a.solved || b.solved),
         hintsUsed: Math.max(num(a.hintsUsed), num(b.hintsUsed)),
@@ -132,6 +162,13 @@
         bestMs: bests.length ? Math.min.apply(null, bests) : 0,
         lastTry: Math.max(num(a.lastTry), num(b.lastTry))
       };
+      // Passport §4c: first-solve time, earliest non-zero wins. A
+      // pre-passport solve has no `at` — the key is left off entirely
+      // rather than inventing one (display shows last-solve only).
+      var fa = num(a.at), fb = num(b.at);
+      var firstAt = (fa > 0 && fb > 0) ? Math.min(fa, fb) : Math.max(fa, fb);
+      if (firstAt > 0) rec.at = firstAt;
+      out[id] = rec;
     });
     return {
       attempts: out,
@@ -147,6 +184,24 @@
     return {
       name: winner.name || "",
       bio: winner.bio || "",
+      updatedAt: Math.max(num(localDoc.updatedAt), num(cloudDoc.updatedAt))
+    };
+  }
+
+  /* ---------- projects (passport §4b) ----------
+     Local shape: `skillzify_projects_done` {[projectId]: ms} (0 =
+     done, date unknown — the legacy-array migration). Cloud shape:
+     a FLAT top-level field `projects` ({<id>: ms, updatedAt}), like
+     `paths`. Union of keys, per-project earliest non-zero wins. */
+  function mergeProjects(localDoc, cloudDoc) {
+    localDoc = localDoc || {}; cloudDoc = cloudDoc || {};
+    var lp = (localDoc.projects && typeof localDoc.projects === "object" && !Array.isArray(localDoc.projects))
+      ? localDoc.projects : {};
+    var src = (cloudDoc.projects && typeof cloudDoc.projects === "object" && !Array.isArray(cloudDoc.projects))
+      ? cloudDoc.projects : cloudDoc;
+    if (!src || typeof src !== "object" || Array.isArray(src)) src = {};
+    return {
+      projects: earliestMap(lp, src, { updatedAt: true, projects: true }),
       updatedAt: Math.max(num(localDoc.updatedAt), num(cloudDoc.updatedAt))
     };
   }
@@ -414,6 +469,7 @@
     mergeProgress: mergeProgress,
     mergeExercises: mergeExercises,
     mergeProfile: mergeProfile,
+    mergeProjects: mergeProjects,
     mergePaths: mergePaths,
     mergeCustomPaths: mergeCustomPaths,
     mergeWorkspace: mergeWorkspace,
@@ -479,6 +535,11 @@
     VIVA_LAST: "skillzify_viva_last",
     EXERCISE_DRAFTS: "skillzify_exercise_drafts",
     PROJECTS_DONE: "skillzify_projects_done",
+    // Passport (System 3): lesson completion times, persisted
+    // certificate records, and the passport privacy flag.
+    DONE_AT: "skillzify_lesson_done_at",
+    CERTIFICATES: "skillzify_certificates",
+    PASSPORT_PRIVATE: "skillzify_passport_private",
     LESSON_STATE: "skillzify_lesson_state",
     RUNS: "skillzify_runs",
     WS_BACKUP: "skillzify_ws_backup",
@@ -507,12 +568,20 @@
 
   /* ---------- local <-> cloud doc mapping ---------- */
   function readLocalProgress() {
+    var doneAt = {};
+    try {
+      var raw = storeGet(LS.DONE_AT, {}) || {};
+      if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        Object.keys(raw).forEach(function (k) { doneAt[k] = num(raw[k]); });
+      }
+    } catch (e) {}
     return {
       lessons: storeGet(LS.PROGRESS, {}) || {},
       xp: parseInt(lsGet(LS.XP) || "0", 10) || 0,
       runCount: parseInt(lsGet(LS.RUN_COUNT) || "0", 10) || 0,
       streakCount: (storeGet(LS.STREAK, {}) || {}).count || 0,
       streakLast: normalizeDate((storeGet(LS.STREAK, {}) || {}).last),
+      doneAt: doneAt,
       updatedAt: Date.now()
     };
   }
@@ -525,12 +594,32 @@
       last: normalizeDate(doc && doc.streakLast),
       count: (doc && doc.streakCount) || 0
     });
+    storeSet(LS.DONE_AT, (doc && doc.doneAt) || {});
   }
   function readLocalExercises() {
     return {
       attempts: storeGet(LS.ATTEMPTS, {}) || {},
       updatedAt: Date.now()
     };
+  }
+  /* ---------- projects (passport §4b) ---------- */
+  function readLocalProjects() {
+    // Legacy array shape (pre-passport) migrates in memory to
+    // {[id]: 0} — done, date unknown. projects.js persists the same
+    // migration on its own reads; sync never writes the array back.
+    var m = {};
+    try {
+      var v = JSON.parse(lsGet(LS.PROJECTS_DONE) || "null");
+      if (Array.isArray(v)) {
+        v.forEach(function (id) { if (typeof id === "string") m[id] = 0; });
+      } else if (v && typeof v === "object") {
+        Object.keys(v).forEach(function (k) { m[k] = num(v[k]); });
+      }
+    } catch (e) {}
+    return { projects: m, updatedAt: Date.now() };
+  }
+  function writeLocalProjects(doc) {
+    storeSet(LS.PROJECTS_DONE, (doc && doc.projects) || {});
   }
   function writeLocalExercises(doc) {
     storeSet(LS.ATTEMPTS, (doc && doc.attempts) || {});
@@ -652,7 +741,7 @@
   function userDoc(d, u) {
     // Layout: ONE document per user at users/{uid} with map fields:
     // { profile: {...}, progress: {...}, exercises: {...}, paths: {...},
-    //   customPaths: {...}, workspace: {...} }. The Android app reads its fields by name
+    //   customPaths: {...}, workspace: {...}, projects: {...} }. The Android app reads its fields by name
     // and ignores the rest, so the extra customPaths/workspace fields are safe.
     // NOTE: `workspace` is website-only for now — the Android app has its
     // own local compiler workspace and does not read this field.
@@ -687,7 +776,7 @@
   // leaves local state untouched.
   function buildMerged(data) {
     data = data || {};
-    var cloud = [data.profile || null, data.progress || null, data.exercises || null, data.paths || null, data.customPaths || null, data.workspace || null, data.reviews || null];
+    var cloud = [data.profile || null, data.progress || null, data.exercises || null, data.paths || null, data.customPaths || null, data.workspace || null, data.reviews || null, data.projects || null];
     var mergedProfile = mergeProfile(readLocalProfile(), cloud[0]);
     var mergedProgress = mergeProgress(readLocalProgress(), cloud[1]);
     var mergedExercises = mergeExercises(readLocalExercises(), cloud[2]);
@@ -695,6 +784,7 @@
     var mergedCustomPaths = mergeCustomPaths(readLocalCustomPaths(), cloud[4]);
     var mergedWorkspace = mergeWorkspace(readLocalWorkspace(), cloud[5]);
     var mergedReviews = mergeReviews(readLocalReviews(), cloud[6]);
+    var mergedProjects = mergeProjects(readLocalProjects(), cloud[7]);
     // Profile and customPaths are whole-document last-write-wins by
     // updatedAt, so ONLY stamp them when this device actually contributed
     // a change — re-stamping an unchanged doc let an idle device's old
@@ -741,12 +831,15 @@
     mergedProgress.updatedAt = now;
     mergedExercises.updatedAt = now;
     mergedPaths.updatedAt = now;
+    mergedProjects.updatedAt = now;
     // NOTE: `paths` is pushed FLAT ({ <pathId>: {enrolled, at}, updatedAt })
     // to match the Android app — the old nested { paths: {...} } shape is
     // what broke cross-device enrollment sync (each side read the shape
     // the other never wrote). mergePaths still reads both shapes.
+    // `projects` is pushed flat the same way ({ <id>: ms, updatedAt }).
     var flatPaths = Object.assign({}, mergedPaths.paths, { updatedAt: now });
-    var payload = { profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises, paths: flatPaths, customPaths: mergedCustomPaths };
+    var flatProjects = Object.assign({}, mergedProjects.projects, { updatedAt: now });
+    var payload = { profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises, paths: flatPaths, customPaths: mergedCustomPaths, projects: flatProjects };
     var wsSkipped = false;
     if (wsHasFiles && !workspaceTooBig(mergedWorkspace)) {
       payload.workspace = mergedWorkspace;
@@ -757,7 +850,7 @@
     return {
       profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises,
       paths: mergedPaths, customPaths: mergedCustomPaths, workspace: mergedWorkspace,
-      reviews: mergedReviews, payload: payload, wsSkipped: wsSkipped
+      reviews: mergedReviews, projects: mergedProjects, payload: payload, wsSkipped: wsSkipped
     };
   }
   // Write a merged result locally + report success. Runs only after the
@@ -770,6 +863,7 @@
     writeLocalCustomPaths(m.customPaths);
     writeLocalWorkspace(m.workspace);
     writeLocalReviews(m.reviews);
+    writeLocalProjects(m.projects);
     if (m.wsSkipped) setStatus("Workspace too large to sync (700 KB limit)");
     else setStatus("Synced \u2713 " + fmtTime(Date.now()));
     try {
@@ -858,6 +952,7 @@
     writeLocalCustomPaths(mergeCustomPaths(readLocalCustomPaths(), data.customPaths || null));
     writeLocalWorkspace(mergeWorkspace(readLocalWorkspace(), data.workspace || null));
     writeLocalReviews(mergeReviews(readLocalReviews(), data.reviews || null));
+    writeLocalProjects(mergeProjects(readLocalProjects(), data.projects || null));
     setStatus("Synced ✓ " + fmtTime(Date.now()));
     try {
       if (typeof CustomEvent === "function")
@@ -899,6 +994,7 @@
      LS.REVIEWS_DONE, LS.PLANS_DONE, LS.BEST_ANSWERS, LS.SHOWCASE_STARRED, LS.FLOWCHARTS_DONE,
      LS.SECTION_BONUS, LS.PATH_BONUS, LS.DAILY_PLAN, LS.DAILY_CHALLENGE, LS.DAILY_CHALLENGE_FAILED,
      LS.DRILLS, LS.DRILL_DEFS, LS.VIVA_SESSION, LS.VIVA_LAST, LS.EXERCISE_DRAFTS, LS.PROJECTS_DONE,
+     LS.DONE_AT, LS.CERTIFICATES, LS.PASSPORT_PRIVATE,
      LS.LESSON_STATE, LS.RUNS, LS.WS_BACKUP, LS.WS_BACKUP_AT, LS.COMPILER_CODE, LS.CODE_HISTORY,
      LS.COMMUNITY_DRAFT, LS.AI_KEY].forEach(function (k) {
       try { localStorage.removeItem(k); } catch (e) {}
@@ -1005,4 +1101,21 @@
     syncNow: function () { try { return syncCycle(); } catch (e) { return Promise.resolve(false); } },
     getStatus: function () { return lastStatus.text; }
   };
+
+  /* Race recovery (found live, 11 Nov 2026): auth.js's callback calls
+     init() — but if the auth state resolves BEFORE this script has
+     parsed (a fast restore; the test stub fires in 0ms), that
+     callback finds window.SkillzifySync undefined, skips init, and
+     nothing ever retries — sync stays dead for the whole page load
+     while everything else works, so a completed lesson/project
+     silently never reaches the cloud. If a user is ALREADY signed in
+     when this script loads, the restore already happened: start now.
+     When auth hasn't resolved yet, currentUser() is null and this is
+     a no-op — the callback path starts sync as usual. init() is
+     idempotent (the `inited` flag), so a later callback can't
+     double-start it. */
+  try {
+    var SA = root.SkillzifyAuth;
+    if (SA && typeof SA.currentUser === "function" && SA.currentUser()) init();
+  } catch (e) {}
 })();

@@ -177,7 +177,9 @@
     }
     Object.keys(ep).forEach(function (k) { cur[k] = ep[k]; });
     cur.lastTry = Date.now();
-    if (ep.solved && !wasSolvedEx) cur.solveQuality = solveQualityFor(cur);
+    // Passport §4c: first-solve time, mirroring the drill branch
+    // above. wasSolvedEx gates it, so a re-solve never moves `at`.
+    if (ep.solved && !wasSolvedEx) { cur.solveQuality = solveQualityFor(cur); cur.at = Date.now(); }
     all[id] = cur; saveAttempts(all);
     if (window.SkillzifySync) window.SkillzifySync.markDirty();
     return cur;
@@ -1225,6 +1227,7 @@
     solvedCount: solvedCount,
     totalCount: function () { return EX.length; },
     attFor: attFor,
+    setAtt: setAtt,
     topicProgress: topicProgress
   };
 })();

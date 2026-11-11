@@ -480,37 +480,63 @@
   function publishPublicProfile() {
     var u = currentUser();
     if (!u) return Promise.resolve();
+    // Privacy (§6): a private passport must NOT be re-published by
+    // the next profile visit — return before any write, or the
+    // toggle would undo itself on the next render.
+    try {
+      var P0 = window.SkillzifyPassport;
+      if (P0 && typeof P0.isPrivate === "function" && P0.isPrivate()) return Promise.resolve();
+    } catch (e) {}
     var d = db();
     if (!d) return Promise.resolve();
-    var xp = 0, lessonsDone = 0, streak = 0, achievements = [];
-    try { xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0; } catch (e) {}
+    // Rich passport doc when passport.js is loaded; today's
+    // counts-only doc when it isn't (same shape as before).
+    var doc = null;
     try {
-      var prog = JSON.parse(localStorage.getItem("skillzify_progress") || "{}");
-      // skillzify_progress is a FLAT map {b1: true, ...} (learn-core.js
-      // getProgress) — count its truthy keys, not a nested .lessons object.
-      lessonsDone = Object.keys(prog).filter(function (k) { return !!prog[k]; }).length;
-    } catch (e) {}
-    try {
-      var st = window.SkillzifyActivity ? window.SkillzifyActivity.streak() : null;
-      streak = (st && st.current) || 0;
-    } catch (e) {}
-    try {
-      var un = window.SkillzifyActivity ? window.SkillzifyActivity.unlocked() : null;
-      achievements = un ? Object.keys(un) : [];
-    } catch (e) {}
+      var PP = window.SkillzifyPassport;
+      if (PP && typeof PP.buildPassport === "function") doc = PP.buildPassport();
+    } catch (e2) { doc = null; }
+    if (!doc) {
+      var xp = 0, lessonsDone = 0, streak = 0, achievements = [];
+      try { xp = parseInt(localStorage.getItem("skillzify_xp") || "0", 10) || 0; } catch (e) {}
+      try {
+        var prog = JSON.parse(localStorage.getItem("skillzify_progress") || "{}");
+        // skillzify_progress is a FLAT map {b1: true, ...} (learn-core.js
+        // getProgress) — count its truthy keys, not a nested .lessons object.
+        lessonsDone = Object.keys(prog).filter(function (k) { return !!prog[k]; }).length;
+      } catch (e3) {}
+      try {
+        var st = window.SkillzifyActivity ? window.SkillzifyActivity.streak() : null;
+        streak = (st && st.current) || 0;
+      } catch (e4) {}
+      try {
+        var un = window.SkillzifyActivity ? window.SkillzifyActivity.unlocked() : null;
+        achievements = un ? Object.keys(un) : [];
+      } catch (e5) {}
+      doc = { displayName: u.name, xp: xp, lessonsDone: lessonsDone, streak: streak, achievements: achievements };
+    }
     // P1-28: clamp to sane values before writing — the rules also reject
     // out-of-range stats, but the doc is still client-written, so public
     // stats stay unverified until a server-side source exists.
     var total = Object.keys(LESSON_TITLES).length;
-    xp = Math.max(0, xp);
-    lessonsDone = Math.max(0, Math.min(lessonsDone, total));
-    streak = Math.max(0, streak);
-    achievements = (achievements || []).slice(0, 32);
-    return d.collection("publicProfiles").doc(u.uid).set({
-      displayName: u.name, xp: xp, lessonsDone: lessonsDone,
-      lessonsTotal: total,
-      streak: streak, achievements: achievements, updatedAt: ts()
-    }, { merge: true }).catch(function () {});
+    doc.displayName = String(doc.displayName || u.name || "").slice(0, 100);
+    doc.xp = Math.max(0, doc.xp || 0);
+    doc.lessonsDone = Math.max(0, Math.min(doc.lessonsDone || 0, total));
+    doc.lessonsTotal = total;
+    doc.streak = Math.max(0, doc.streak || 0);
+    doc.achievements = (doc.achievements || []).slice(0, 32);
+    doc.updatedAt = ts();
+    return d.collection("publicProfiles").doc(u.uid).set(doc, { merge: true }).catch(function () {});
+  }
+  // Passport privacy (§6): delete the public doc. The flag itself
+  // lives in passport.js (unpublish sets it); this just removes the
+  // document so the passport page shows the empty state.
+  function deletePublicProfile() {
+    var u = currentUser();
+    if (!u) return Promise.resolve();
+    var d = db();
+    if (!d) return Promise.resolve();
+    return d.collection("publicProfiles").doc(u.uid).delete().catch(function () {});
   }
   function getPublicProfile(uid) {
     var d = db();
@@ -603,6 +629,7 @@
     deleteShowcase: deleteShowcase,
     forkShowcase: forkShowcase,
     publishPublicProfile: publishPublicProfile, getPublicProfile: getPublicProfile,
+    deletePublicProfile: deletePublicProfile,
     claimXpGrants: claimXpGrants,
     validateQuestion: validateQuestion, validateShowcase: validateShowcase,
     filterQuestions: filterQuestions, filterByQuery: filterByQuery,

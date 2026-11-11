@@ -10,19 +10,51 @@
   var filter = "all";
   function projColor(p) { return p.color || "#6c7bff"; }
 
-  /* Project completion (local-only, like stars/pins): which projects
-     the learner has marked done. Stored as an array of project ids. */
+  /* Project completion (passport §4b): which projects the learner
+     has marked done, with completion times. Stored as a map
+     {[projectId]: ms}; 0 means done but the date was never recorded
+     (a legacy-array migration). A legacy plain id array migrates
+     in place on first read. */
   var DONE_KEY = "skillzify_projects_done";
   function getDone() {
-    try { var d = JSON.parse(localStorage.getItem(DONE_KEY) || "[]"); return Array.isArray(d) ? d : []; } catch (e) { return []; }
+    try {
+      var d = JSON.parse(localStorage.getItem(DONE_KEY) || "[]");
+      if (Array.isArray(d)) {
+        var m = {};
+        d.forEach(function (id) { if (typeof id === "string") m[id] = 0; });
+        try { localStorage.setItem(DONE_KEY, JSON.stringify(m)); } catch (e2) {}
+        return m;
+      }
+      if (d && typeof d === "object") {
+        var out = {};
+        Object.keys(d).forEach(function (k) {
+          var v = Number(d[k]);
+          out[k] = (isFinite(v) && v > 0) ? v : 0;
+        });
+        return out;
+      }
+    } catch (e) {}
+    return {};
   }
-  function isDone(id) { return getDone().indexOf(id) >= 0; }
+  function isDone(id) {
+    var d = getDone();
+    return Object.prototype.hasOwnProperty.call(d, id);
+  }
   function setDone(id, on) {
-    var d = getDone(), i = d.indexOf(id);
-    if (on && i < 0) d.push(id);
-    if (!on && i >= 0) d.splice(i, 1);
+    var d = getDone();
+    if (on) {
+      // Keep the original timestamp when already set (a re-mark after
+      // a legacy migration keeps its honest 0, not a fresh "now").
+      if (!Object.prototype.hasOwnProperty.call(d, id)) d[id] = Date.now();
+    } else {
+      delete d[id];
+    }
     try { localStorage.setItem(DONE_KEY, JSON.stringify(d)); } catch (e) {}
+    // Sync picks the change up (lesson completion does the same).
+    try { if (window.SkillzifySync) window.SkillzifySync.markDirty(); } catch (e2) {}
   }
+  // Test seam (harness) + the passport's read path for project dates.
+  window.SkillzifyProjectsDone = { getDone: getDone, isDone: isDone, setDone: setDone };
 
   /* ---------------- LIST ---------------- */
   function levelPills(projects) {

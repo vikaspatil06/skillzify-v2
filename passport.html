@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YYR4JD16G8"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-YYR4JD16G8');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A Skillzify learner's public skill passport — lessons, exercises, projects and paths with dates, read live from Skillzify's database.">
+  <title>Skill Passport — Skillzify</title>
+  <link rel="icon" href="assets/logo-light.png">
+  <link rel="stylesheet" href="assets/css/style.css?v=29">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+  <style>
+    /* Passport proof table: same restrained card language as the rest
+       of the site, no new design system. */
+    .passport-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .passport-table th, .passport-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border, #334155); }
+    .passport-table th { color: var(--muted, #94a3b8); font-weight: 600; }
+    #passport-root details { margin-top: 10px; }
+    #passport-root details summary { cursor: pointer; }
+    #passport-root details ul { margin: 8px 0 0; padding-left: 20px; }
+  </style>
+</head>
+<body>
+
+<div id="site-nav"></div>
+<div class="toast" id="toast" role="status"></div>
+
+<main>
+  <section class="page-hero">
+    <div class="container">
+      <h1 class="section-title">🎓 Skill Passport</h1>
+      <p class="section-sub">A public, itemised record of what this learner did — every lesson, exercise, project and path, with dates — read live from Skillzify's database.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:24px">
+    <div class="container" id="passport-root">
+      <div class="dash-card"><p class="hint">Loading this learner's passport…</p></div>
+    </div>
+  </section>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="assets/js/nav.js"></script>
+<script src="assets/js/footer.js"></script>
+<script src="assets/js/app.js?v=5"></script>
+<script src="assets/js/activity.js?v=10"></script>
+<script src="assets/js/palette.js?v=2"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
+<script src="assets/js/auth.js?v=7"></script>
+<script src="assets/js/sync.js?v=17"></script>
+<script src="assets/js/ai.js?v=18"></script>
+<script src="assets/js/community.js?v=12"></script>
+<script src="assets/js/passport.js?v=2"></script>
+<script>
+(function () {
+  "use strict";
+  document.addEventListener("DOMContentLoaded", function () {
+    var uid = null;
+    try { uid = new URLSearchParams(location.search).get("uid"); } catch (e) {}
+    if (window.SkillzifyPassport && typeof window.SkillzifyPassport.renderPublic === "function") {
+      window.SkillzifyPassport.renderPublic(uid);
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -118,9 +118,57 @@
           '<button class="btn btn-sm" data-cert="' + t.id + '">Download certificate</button></div>';
       }
     });
-    cx.innerHTML = html || '<p class="hint">Finish every lesson in a section to unlock its certificate.</p>';
+    // Passport link + privacy toggle (own view only — this whole card
+    // is hidden in public view via hideCard). Re-rendered from the
+    // stored flag on every render(), so the toggle always shows its
+    // current state. The extra markup joins the string BEFORE the
+    // single innerHTML write — appending afterwards would re-parse
+    // the card and drop the Download buttons' listeners.
+    var ownUid = null;
+    try {
+      var me = window.SkillzifyAuth && window.SkillzifyAuth.currentUser();
+      ownUid = me && me.uid;
+    } catch (e) {}
+    var extra = "";
+    if (ownUid) {
+      extra += '<p style="margin-top:12px"><a href="passport.html?uid=' + encodeURIComponent(ownUid) + '">View your public passport \u2192</a></p>';
+    }
+    var PP = window.SkillzifyPassport;
+    if (PP && typeof PP.isPrivate === "function") {
+      var priv = false;
+      try { priv = PP.isPrivate(); } catch (e2) {}
+      extra += '<div class="passport-privacy" style="margin-top:12px;border-top:1px solid var(--border,#334155);padding-top:12px">' +
+        '<p class="hint" style="margin:0 0 8px">' + (priv
+          ? "Your passport is private \u2014 certificates still download, but their verify link shows \u2018passport not public\u2019."
+          : "Anyone with the link can see your lessons, exercises and projects with dates.") + "</p>" +
+        '<button class="btn btn-sm btn-ghost" id="passport-privacy-btn">' +
+        (priv ? "Make my passport public" : "Make my passport private") + "</button></div>";
+    }
+    cx.innerHTML = (html || '<p class="hint">Finish every lesson in a section to unlock its certificate.</p>') + extra;
     Array.prototype.forEach.call(cx.querySelectorAll("[data-cert]"), function (b) {
       b.addEventListener("click", function () { downloadCert(b.getAttribute("data-cert")); });
+    });
+    var privBtn = document.getElementById("passport-privacy-btn");
+    if (privBtn) privBtn.addEventListener("click", function () {
+      var P = window.SkillzifyPassport;
+      if (!P) return;
+      var nowPriv = false;
+      try { nowPriv = P.isPrivate(); } catch (e) {}
+      if (nowPriv) {
+        try { P.setPrivate(false); } catch (e2) {}
+        try { if (window.SkillzifyCommunity) window.SkillzifyCommunity.publishPublicProfile(); } catch (e3) {}
+        if (window.Skillzify) window.Skillzify.toast("Your passport is public \u2014 anyone with the link can see it. \u{1F513}", "success");
+        renderCerts();
+      } else {
+        var done = function () {
+          if (window.Skillzify) window.Skillzify.toast("Your passport is private \u2014 the public page is gone. \u{1F512}", "success");
+          renderCerts();
+        };
+        try {
+          var r = P.unpublish();
+          if (r && typeof r.then === "function") r.then(done, done); else done();
+        } catch (e4) { done(); }
+      }
     });
   }
 
@@ -146,6 +194,16 @@
     try { localStorage.removeItem(PENDING_CERT_KEY); } catch (e2) {}
     downloadCert(rec.section);
     if (window.Skillzify) window.Skillzify.toast("Certificate downloading — if it doesn't start, use the Download button below. 🎓", "success");
+  }
+
+  /* Fallback certificate ID, same shape as SkillzifyPassport.certId
+     (SKZ-{SECTION}-{YYMMDD}, local timezone) — used only when
+     passport.js failed to load, so the certificate still gets an ID. */
+  function fallbackCertId(sectionId, date) {
+    function p2(n) { return (n < 10 ? "0" : "") + n; }
+    var dt = date || new Date();
+    return "SKZ-" + String(sectionId || "").toUpperCase() + "-" +
+      p2(dt.getFullYear() % 100) + p2(dt.getMonth() + 1) + p2(dt.getDate());
   }
 
   function downloadCert(unitId) {
@@ -191,8 +249,33 @@
     g.font = "400 26px Georgia, serif"; g.fillStyle = "#94a3b8";
     var d = new Date();
     g.fillText("Skillzify · Learn. Build. Shine. — " + d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }), 600, 600);
+    // Passport (System 3): certificate ID + verify link. certFor()
+    // persists the record, so the ID printed here is the same one the
+    // passport page shows — and it stays stable across downloads.
+    // Without passport.js, fall back to the same ID shape built from
+    // today's date so the certificate still gets an ID. When the
+    // passport is private the verify line says so instead of
+    // pointing at a page that no longer exists.
+    var certIdText = null, passportPriv = false;
+    try {
+      var PP = window.SkillzifyPassport;
+      if (PP) {
+        if (typeof PP.certFor === "function") {
+          var rec = PP.certFor(unitId);
+          certIdText = rec && rec.id;
+        }
+        if (!certIdText && typeof PP.certId === "function") certIdText = PP.certId(unitId, Date.now());
+        if (typeof PP.isPrivate === "function") passportPriv = !!PP.isPrivate();
+      }
+    } catch (e) {}
+    if (!certIdText) certIdText = fallbackCertId(unitId, d);
+    var verifyText = passportPriv ? "Verify: passport not public"
+      : "Verify: skillzify-v2.onrender.com/passport.html?uid=" + ((signedIn && signedIn.uid) || "");
+    g.font = "400 26px Georgia, serif"; g.fillStyle = "#cbd5e1";
+    g.fillText("Certificate ID: " + certIdText, 600, 640);
+    g.fillText(verifyText, 600, 675);
     g.font = "700 40px Georgia, serif"; g.fillStyle = "#c9a227";
-    g.fillText("🐍", 600, 700);
+    g.fillText("🐍", 600, 730);
     var a = document.createElement("a");
     a.download = "skillzify-" + unitId + "-certificate.png";
     a.href = c.toDataURL("image/png");
@@ -311,7 +394,8 @@
       ];
       document.getElementById("profile-stats").innerHTML = stats.map(function (s) {
         return '<div class="dash-card stat"><div class="stat-ico">' + s[0] + '</div><div><div class="big">' + esc(s[1]) + '</div><div class="muted small">' + esc(s[2]) + "</div></div></div>";
-      }).join("");
+      }).join("") +
+        '<div class="dash-card" style="grid-column:1/-1;text-align:center"><a href="passport.html?uid=' + encodeURIComponent(uid) + '">View full passport \u2192</a></div>';
     }).catch(function () {
       document.getElementById("profile-name").textContent = "Couldn't load this profile";
       document.getElementById("profile-bio").textContent = "Check your connection and try again.";
