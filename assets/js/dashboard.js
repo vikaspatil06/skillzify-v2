@@ -731,6 +731,9 @@
             var pd = parseInt(localStorage.getItem("skillzify_plans_done") || "0", 10) || 0;
             localStorage.setItem("skillzify_plans_done", String(pd + 1));
           } catch (e3) {}
+          // Counters sync: push the new plans-done count to Firestore
+          // (sync.js `counters` field, MAX merge).
+          try { if (window.SkillzifySync && typeof window.SkillzifySync.markDirty === "function") window.SkillzifySync.markDirty("counters"); } catch (e4) {}
           try { window.Skillzify.toast("+10 XP — daily plan complete! \u{1F389}", "success"); } catch (e2) {}
         }
       } catch (e) {}

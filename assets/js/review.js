@@ -134,6 +134,10 @@
       var rc = parseInt(localStorage.getItem("skillzify_reviews_done") || "0", 10) || 0;
       localStorage.setItem("skillzify_reviews_done", String(rc + 1));
     } catch (e) {}
+    // Counters sync: the reviews-done counter now reaches Firestore
+    // (sync.js `counters` field, MAX merge) so badges agree across
+    // devices. markDirty() is the local debounced helper (above).
+    markDirty();
     // Correct recall earns +5 XP — but only when this call wins the
     // per-lesson-per-day claim and its write is still current (P2-19,
     // see the guards above).

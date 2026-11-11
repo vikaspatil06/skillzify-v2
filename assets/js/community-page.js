@@ -623,6 +623,9 @@
           return (pp.starCount || 0) > 0;
         })) {
           try { localStorage.setItem("skillzify_showcase_starred", "1"); } catch (e2) {}
+          // Counters sync: push the starred flag to Firestore
+          // (sync.js `counters` field, OR merge).
+          try { if (window.SkillzifySync && typeof window.SkillzifySync.markDirty === "function") window.SkillzifySync.markDirty("counters"); } catch (e3) {}
           if (window.SkillzifyActivity && typeof window.SkillzifyActivity.checkAchievements === "function") window.SkillzifyActivity.checkAchievements();
         }
       } catch (e) {}

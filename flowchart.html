@@ -353,7 +353,7 @@ END</textarea>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js?v=7"></script>
-<script src="assets/js/sync.js?v=18"></script>
+<script src="assets/js/sync.js?v=19"></script>
 <script src="assets/js/ai.js?v=18"></script>
 <script>
 let pyodide = null, currentGraph = null, currentSVG = null, currentMermaid = null, currentZoom = 1, currentSource = null;
@@ -699,6 +699,9 @@ async function renderGraph(json, keepState) {
     // Flowcharts-done counter (feeds the First Flowchart badge). Only a
     // fresh render counts — re-renders (keepState) don't.
     if (!keepState) { try { const fc = parseInt(localStorage.getItem("skillzify_flowcharts_done") || "0", 10) || 0; localStorage.setItem("skillzify_flowcharts_done", String(fc + 1)); } catch (e2) {} }
+    // Counters sync: push the new flowcharts-done count to Firestore
+    // (sync.js `counters` field, MAX merge).
+    if (!keepState) { try { if (window.SkillzifySync && typeof window.SkillzifySync.markDirty === "function") window.SkillzifySync.markDirty("counters"); } catch (e3) {} }
     stats.textContent = `${g.nodes.length} nodes · ${g.edges.length} edges` + (g.truncated?' · truncated':'');
     document.getElementById('btn-trace').disabled = false;
     if (!keepState) setStatus('✓ Flowchart ready — click any node, or hit Trace execution','ok');

@@ -27,6 +27,9 @@
    - placement: last-write-wins by `date` (whole record — a pointer,
      not progress; see mergePlacement). Null when neither side has one,
      so a fresh device never pushes an empty placement.
+   - counters: per-field MAX for reviewsDone/plansDone/bestAnswers/
+     flowchartsDone, OR for showcaseStarred (see mergeCounters).
+     Counters only grow, so MAX/OR is safe — same reasoning as xp.
    - customPaths: last-write-wins by updatedAt (whole document —
      same shape as profile). Definitions live in localStorage
      `skillzify_custom_paths` (array of {id, title, steps, ...});
@@ -469,6 +472,42 @@
     if (!c) return l;
     return (l.date >= c.date) ? l : c; // tie -> local
   }
+
+  /* ---------- achievement counters (badge mismatch fix, 11 Nov 2026) ----------
+     The 5 achievement counters live in localStorage and feed
+     gatherState() in activity.js (reviews/plans/best-answers/
+     showcase-starred/flowcharts). They never reached Firestore, so
+     the same learner showed 9/32 badges on GitHub Pages and 8/32 on
+     staging (First Flowchart — a flowchart rendered on one origin
+     didn't count on the other). They sync as a top-level `counters`
+     field on users/{uid} — firestore.rules allows any field on the
+     owner's own doc, so no rules change is needed. Per-field MAX for
+     the four numbers (counters only grow — same reasoning as xp),
+     OR for showcaseStarred (true wins). A malformed/non-numeric
+     value degrades to 0/false and can never poison the merge; a
+     fresh device's all-zero counters can never lower the cloud,
+     so the merged value is always pushed (no omit-when-empty rule
+     like placement). */
+  function normalizeCounters(doc) {
+    doc = (doc && typeof doc === "object" && !Array.isArray(doc)) ? doc : {};
+    return {
+      reviewsDone: Math.max(0, num(doc.reviewsDone)),
+      plansDone: Math.max(0, num(doc.plansDone)),
+      bestAnswers: Math.max(0, num(doc.bestAnswers)),
+      showcaseStarred: doc.showcaseStarred === true,
+      flowchartsDone: Math.max(0, num(doc.flowchartsDone))
+    };
+  }
+  function mergeCounters(localDoc, cloudDoc) {
+    var l = normalizeCounters(localDoc), c = normalizeCounters(cloudDoc);
+    return {
+      reviewsDone: Math.max(l.reviewsDone, c.reviewsDone),
+      plansDone: Math.max(l.plansDone, c.plansDone),
+      bestAnswers: Math.max(l.bestAnswers, c.bestAnswers),
+      showcaseStarred: !!(l.showcaseStarred || c.showcaseStarred),
+      flowchartsDone: Math.max(l.flowchartsDone, c.flowchartsDone)
+    };
+  }
   function reviewsTooBig(doc) {
     try { return unescape(encodeURIComponent(JSON.stringify((doc && doc.items) || {}))).length > 100 * 1024; }
     catch (e) { return false; }
@@ -514,6 +553,7 @@
     mergeWorkspace: mergeWorkspace,
     mergeReviews: mergeReviews,
     mergePlacement: mergePlacement,
+    mergeCounters: mergeCounters,
     reviewsTooBig: reviewsTooBig,
     workspaceTooBig: workspaceTooBig,
     contentChanged: contentChanged
@@ -773,6 +813,23 @@
     if (!doc) return; // never wipe a local placement with "no information"
     storeSet(LS.PLACEMENT, doc);
   }
+  function readLocalCounters() {
+    return {
+      reviewsDone: Math.max(0, parseInt(lsGet(LS.REVIEWS_DONE) || "0", 10) || 0),
+      plansDone: Math.max(0, parseInt(lsGet(LS.PLANS_DONE) || "0", 10) || 0),
+      bestAnswers: Math.max(0, parseInt(lsGet(LS.BEST_ANSWERS) || "0", 10) || 0),
+      showcaseStarred: lsGet(LS.SHOWCASE_STARRED) === "1",
+      flowchartsDone: Math.max(0, parseInt(lsGet(LS.FLOWCHARTS_DONE) || "0", 10) || 0)
+    };
+  }
+  function writeLocalCounters(doc) {
+    doc = doc || {};
+    lsSet(LS.REVIEWS_DONE, String(Math.max(0, num(doc.reviewsDone))));
+    lsSet(LS.PLANS_DONE, String(Math.max(0, num(doc.plansDone))));
+    lsSet(LS.BEST_ANSWERS, String(Math.max(0, num(doc.bestAnswers))));
+    lsSet(LS.SHOWCASE_STARRED, doc.showcaseStarred ? "1" : "0");
+    lsSet(LS.FLOWCHARTS_DONE, String(Math.max(0, num(doc.flowchartsDone))));
+  }
 
   /* ---------- Firebase guards ---------- */
   function db() {
@@ -792,7 +849,7 @@
     // Layout: ONE document per user at users/{uid} with map fields:
     // { profile: {...}, progress: {...}, exercises: {...}, paths: {...},
     //   customPaths: {...}, workspace: {...}, projects: {...},
-    //   placement: {...} }. The Android app reads its fields by name
+    //   placement: {...}, counters: {...} }. The Android app reads its fields by name
     // and ignores the rest, so the extra customPaths/workspace fields are safe.
     // NOTE: `workspace` is website-only for now — the Android app has its
     // own local compiler workspace and does not read this field.
@@ -839,6 +896,9 @@
     // Placement: last-write-wins by date; null when neither side has a
     // valid record (omitted from the payload, never pushed as empty).
     var mergedPlacement = mergePlacement(readLocalPlacement(), data.placement || null);
+    // Counters: per-field MAX / OR — a fresh device's zeros can never
+    // lower the cloud, so the merged value is always pushed.
+    var mergedCounters = mergeCounters(readLocalCounters(), data.counters || null);
     // Profile and customPaths are whole-document last-write-wins by
     // updatedAt, so ONLY stamp them when this device actually contributed
     // a change — re-stamping an unchanged doc let an idle device's old
@@ -893,7 +953,7 @@
     // `projects` is pushed flat the same way ({ <id>: ms, updatedAt }).
     var flatPaths = Object.assign({}, mergedPaths.paths, { updatedAt: now });
     var flatProjects = Object.assign({}, mergedProjects.projects, { updatedAt: now });
-    var payload = { profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises, paths: flatPaths, customPaths: mergedCustomPaths, projects: flatProjects };
+    var payload = { profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises, paths: flatPaths, customPaths: mergedCustomPaths, projects: flatProjects, counters: mergedCounters };
     // Placement carries its own date as the last-write-wins key, so it
     // needs no re-stamping — the merged record is pushed as-is, and only
     // when at least one side actually holds a placement.
@@ -908,7 +968,7 @@
     return {
       profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises,
       paths: mergedPaths, customPaths: mergedCustomPaths, workspace: mergedWorkspace,
-      reviews: mergedReviews, projects: mergedProjects, placement: mergedPlacement, payload: payload, wsSkipped: wsSkipped
+      reviews: mergedReviews, projects: mergedProjects, placement: mergedPlacement, counters: mergedCounters, payload: payload, wsSkipped: wsSkipped
     };
   }
   // Write a merged result locally + report success. Runs only after the
@@ -923,6 +983,7 @@
     writeLocalReviews(m.reviews);
     writeLocalProjects(m.projects);
     writeLocalPlacement(m.placement);
+    writeLocalCounters(m.counters);
     if (m.wsSkipped) setStatus("Workspace too large to sync (700 KB limit)");
     else setStatus("Synced \u2713 " + fmtTime(Date.now()));
     try {
@@ -1013,6 +1074,7 @@
     writeLocalReviews(mergeReviews(readLocalReviews(), data.reviews || null));
     writeLocalProjects(mergeProjects(readLocalProjects(), data.projects || null));
     writeLocalPlacement(mergePlacement(readLocalPlacement(), data.placement || null));
+    writeLocalCounters(mergeCounters(readLocalCounters(), data.counters || null));
     setStatus("Synced ✓ " + fmtTime(Date.now()));
     try {
       if (typeof CustomEvent === "function")

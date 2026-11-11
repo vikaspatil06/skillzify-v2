@@ -573,6 +573,9 @@
         localStorage.setItem("skillzify_best_answers", String(prev + count));
         if (window.SkillzifyActivity && typeof window.SkillzifyActivity.checkAchievements === "function") window.SkillzifyActivity.checkAchievements();
       } catch (e2) {}
+      // Counters sync: push the new best-answers count to Firestore
+      // (sync.js `counters` field, MAX merge).
+      try { if (window.SkillzifySync && typeof window.SkillzifySync.markDirty === "function") window.SkillzifySync.markDirty("counters"); } catch (e3) {}
       return total;
     }
     // P1-10: claim inside one transaction (read unclaimed -> mark
