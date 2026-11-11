@@ -14,7 +14,7 @@
   <meta name="description" content="Your Skillzify learning dashboard — progress, streaks and run history.">
   <title>Dashboard — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=29">
+  <link rel="stylesheet" href="assets/css/style.css?v=32">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -43,12 +43,18 @@
         </div>
         <div class="next-actions">
           <a class="btn" id="dash-next-btn" href="learn.html">Resume lesson →</a>
+          <a class="hint" id="dash-next-map" href="map.html" hidden>🗺️ Show on map</a>
           <div class="next-quick">
             <a href="practice.html">🏋️ Practice</a><span>·</span>
             <a href="paths.html">🗺️ Paths</a><span>·</span>
             <a href="projects.html">🛠️ Projects</a>
           </div>
         </div>
+      </div>
+      <div class="dash-card" style="margin-top:20px">
+        <h2>🗺️ Concept map</h2>
+        <p class="hint" style="margin:4px 0 12px">The whole journey at a glance — every section and lesson, coloured by your progress.</p>
+        <a class="btn" href="map.html">Open the map →</a>
       </div>
       <div class="dash-card" id="dash-plan-card" style="margin-top:20px">
         <h2>📋 Today's plan</h2>
@@ -138,7 +144,7 @@
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js?v=7"></script>
-<script src="assets/js/sync.js?v=17"></script>
+<script src="assets/js/sync.js?v=18"></script>
 <script src="assets/js/ai.js?v=18"></script>
 <script src="assets/js/lessons-b.js?v=3"></script>
 <script src="assets/js/lessons-i.js?v=4"></script>
@@ -146,8 +152,8 @@
 <script src="assets/js/learn-core.js?v=11"></script>
 <script src="assets/js/review.js?v=9"></script>
 <script src="assets/js/mastery.js?v=4"></script>
-<script src="assets/js/learn.js?v=15"></script>
+<script src="assets/js/learn.js?v=16"></script>
 <script src="assets/js/practice-data.js?v=4"></script>
-<script src="assets/js/dashboard.js?v=19"></script>
+<script src="assets/js/dashboard.js?v=20"></script>
 </body>
 </html>

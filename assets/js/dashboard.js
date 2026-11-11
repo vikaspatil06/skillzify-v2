@@ -120,6 +120,21 @@
      the engine's top-ranked step with the reason why. Falls back to the
      first incomplete lesson when mastery.js didn't load. */
   var dashNuIdx = 0;
+  /* Concept Map amplification (Part A3): "Show on map" beside the Next
+     Up button, deep-linking at the step's lesson (?lesson=) — a review
+     step lands on its oldest due lesson. Steps with no lesson (a drill,
+     an intro exercise, all-done) hide the link instead of linking
+     nowhere useful. */
+  function setNextUpMapLink(lessonId) {
+    var mp = document.getElementById("dash-next-map");
+    if (!mp) return;
+    if (lessonId) {
+      mp.href = "map.html?lesson=" + encodeURIComponent(lessonId);
+      mp.hidden = false;
+    } else {
+      mp.hidden = true;
+    }
+  }
   function renderNextUp() {
     var t = document.getElementById("dash-next-title"),
         sub = document.getElementById("dash-next-sub"),
@@ -134,6 +149,8 @@
     t.textContent = step.title;
     sub.textContent = step.reason;
     if (b) { b.href = step.href; b.textContent = step.cta || "Go \u2192"; }
+    setNextUpMapLink(step.kind === "lesson" ? step.lessonId :
+      (step.kind === "review" && step.reviewIds && step.reviewIds[0]) ? step.reviewIds[0] : null);
     if (c) {
       c.hidden = steps.length <= 1;
       if (!c.dataset.wired) {
@@ -160,6 +177,7 @@
       : "Time to build something of your own.";
     if (b) { b.href = "learn.html"; b.textContent = "Resume lesson \u2192"; }
     if (c) c.hidden = true;
+    setNextUpMapLink(next ? next.id : null);
   }
 
   function renderUpgrades() {

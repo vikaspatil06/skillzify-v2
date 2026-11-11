@@ -21,8 +21,11 @@
      since unasked questions count as unanswered (P2-26: the old
      asked-total fraction inflated short stages — B 1/2 scored as
      Object Castle instead of Tool Shed).
-   - Result lives in localStorage `skillzify_placement`, local-only,
-     wiped on logout (Phase 3 adds the wipe). Works signed-out.
+   - Result lives in localStorage `skillzify_placement`, wiped on
+     logout (Phase 3 adds the wipe). Works signed-out. When signed in,
+     save() also pushes it to the cloud doc (users/{uid} `placement`,
+     last-write-wins by date) via sync.js, so the map's focus agrees
+     across devices — see mergePlacement in sync.js.
 
    API (spec §8, with two noted refinements):
    - selectQuestions(opts) -> {a: [...3], b: [...4], c: [...3], all: [...10]}
@@ -226,6 +229,17 @@
       stages: result.stages || { a: { correct: 0, total: 0 }, b: { correct: 0, total: 0 }, c: { correct: 0, total: 0 } },
       date: Date.now() };
     try { localStorage.setItem(PLACEMENT_KEY, JSON.stringify(rec)); } catch (e) { return null; }
+    /* Concept Map amplification (Part A2): the placement is a pointer
+       the map focuses on, so it syncs to the cloud doc (users/{uid}
+       `placement` field — owner-only rules, no field restriction) via
+       the existing sync path. markDirty debounces a syncCycle, which
+       merges it last-write-wins by date; signed-out it is a no-op and
+       the record stays local-only. placement-page.js finish() is the
+       only caller, so this fires exactly when the test completes. */
+    try {
+      if (window.SkillzifySync && typeof window.SkillzifySync.markDirty === "function")
+        window.SkillzifySync.markDirty("placement");
+    } catch (e) {}
     return rec;
   }
 

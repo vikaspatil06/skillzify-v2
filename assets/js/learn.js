@@ -297,6 +297,13 @@
         '<span class="t-chev" aria-hidden="true">\u25BE</span>');
       head.setAttribute("aria-expanded", "true");
       sec.appendChild(head);
+      /* Concept Map amplification (Part A3): every section header links
+         into the map at that section. A sibling link, not content inside
+         the head button — a link inside a <button> would be invalid HTML
+         and the head's collapse toggle would swallow the click. */
+      var mapLink = el("a", "track-map-link", "🗺️ Show on map");
+      mapLink.href = "map.html?section=" + encodeURIComponent(t.id);
+      sec.appendChild(mapLink);
       if (!sectionUnlocked(t.id)) {
         sec.appendChild(lockedTrackCard(t));
         /* Hidden lesson rows so search can find locked-section lessons

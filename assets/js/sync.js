@@ -24,6 +24,9 @@
    - projects: union of keys, per-project earliest non-zero wins
      (same rule as doneAt; 0 = done, date unknown, and survives)
    - profile: last-write-wins by updatedAt (whole document)
+   - placement: last-write-wins by `date` (whole record — a pointer,
+     not progress; see mergePlacement). Null when neither side has one,
+     so a fresh device never pushes an empty placement.
    - customPaths: last-write-wins by updatedAt (whole document —
      same shape as profile). Definitions live in localStorage
      `skillzify_custom_paths` (array of {id, title, steps, ...});
@@ -430,6 +433,42 @@
     });
     return { items: items, updatedAt: Math.max(l.updatedAt, c.updatedAt) };
   }
+
+  /* ---------- placement (Concept Map amplification, Part A2) ----------
+     The placement test result is a POINTER, not progress (placement.js):
+     { section, score, total, stages, date }. It syncs as a top-level
+     `placement` field on users/{uid} — firestore.rules allows any field
+     on the owner's own doc, so no rules change is needed. Whole-record
+     last-write-wins by `date` (the save timestamp); tie -> local.
+     A side with no valid record carries no information and never wipes
+     the other side, so a fresh device can't erase a placement and a
+     stale device can't resurrect one. Returns null when neither side
+     has a valid record, so the caller omits the field from the push
+     payload instead of poisoning the cloud with an empty value. */
+  var PLACEMENT_SECTIONS = ["base-camp", "tool-shed", "object-castle", "algorithm-arena", "power-lab", "data-lab", "launch-pad"];
+  function normalizePlacement(doc) {
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) return null;
+    if (typeof doc.section !== "string" || PLACEMENT_SECTIONS.indexOf(doc.section) < 0) return null;
+    var stages = (doc.stages && typeof doc.stages === "object" && !Array.isArray(doc.stages)) ? doc.stages : {};
+    function stage(s) {
+      s = (s && typeof s === "object") ? s : {};
+      return { correct: num(s.correct), total: num(s.total) };
+    }
+    return {
+      section: doc.section,
+      score: num(doc.score),
+      total: num(doc.total),
+      stages: { a: stage(stages.a), b: stage(stages.b), c: stage(stages.c) },
+      date: num(doc.date)
+    };
+  }
+  function mergePlacement(localDoc, cloudDoc) {
+    var l = normalizePlacement(localDoc), c = normalizePlacement(cloudDoc);
+    if (!l && !c) return null;
+    if (!l) return c;
+    if (!c) return l;
+    return (l.date >= c.date) ? l : c; // tie -> local
+  }
   function reviewsTooBig(doc) {
     try { return unescape(encodeURIComponent(JSON.stringify((doc && doc.items) || {}))).length > 100 * 1024; }
     catch (e) { return false; }
@@ -474,6 +513,7 @@
     mergeCustomPaths: mergeCustomPaths,
     mergeWorkspace: mergeWorkspace,
     mergeReviews: mergeReviews,
+    mergePlacement: mergePlacement,
     reviewsTooBig: reviewsTooBig,
     workspaceTooBig: workspaceTooBig,
     contentChanged: contentChanged
@@ -723,6 +763,16 @@
     storeSet(LS.REVIEWS, (doc && doc.items) || {});
     lsSet(LS.REVIEWS_TS, String((doc && doc.updatedAt) || 0));
   }
+  function readLocalPlacement() {
+    // The raw record (or null); mergePlacement normalizes + validates,
+    // so a corrupt or foreign section degrades to "no information".
+    var v = storeGet(LS.PLACEMENT, null);
+    return (v && typeof v === "object" && !Array.isArray(v)) ? v : null;
+  }
+  function writeLocalPlacement(doc) {
+    if (!doc) return; // never wipe a local placement with "no information"
+    storeSet(LS.PLACEMENT, doc);
+  }
 
   /* ---------- Firebase guards ---------- */
   function db() {
@@ -741,7 +791,8 @@
   function userDoc(d, u) {
     // Layout: ONE document per user at users/{uid} with map fields:
     // { profile: {...}, progress: {...}, exercises: {...}, paths: {...},
-    //   customPaths: {...}, workspace: {...}, projects: {...} }. The Android app reads its fields by name
+    //   customPaths: {...}, workspace: {...}, projects: {...},
+    //   placement: {...} }. The Android app reads its fields by name
     // and ignores the rest, so the extra customPaths/workspace fields are safe.
     // NOTE: `workspace` is website-only for now — the Android app has its
     // own local compiler workspace and does not read this field.
@@ -785,6 +836,9 @@
     var mergedWorkspace = mergeWorkspace(readLocalWorkspace(), cloud[5]);
     var mergedReviews = mergeReviews(readLocalReviews(), cloud[6]);
     var mergedProjects = mergeProjects(readLocalProjects(), cloud[7]);
+    // Placement: last-write-wins by date; null when neither side has a
+    // valid record (omitted from the payload, never pushed as empty).
+    var mergedPlacement = mergePlacement(readLocalPlacement(), data.placement || null);
     // Profile and customPaths are whole-document last-write-wins by
     // updatedAt, so ONLY stamp them when this device actually contributed
     // a change — re-stamping an unchanged doc let an idle device's old
@@ -840,6 +894,10 @@
     var flatPaths = Object.assign({}, mergedPaths.paths, { updatedAt: now });
     var flatProjects = Object.assign({}, mergedProjects.projects, { updatedAt: now });
     var payload = { profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises, paths: flatPaths, customPaths: mergedCustomPaths, projects: flatProjects };
+    // Placement carries its own date as the last-write-wins key, so it
+    // needs no re-stamping — the merged record is pushed as-is, and only
+    // when at least one side actually holds a placement.
+    if (mergedPlacement) payload.placement = mergedPlacement;
     var wsSkipped = false;
     if (wsHasFiles && !workspaceTooBig(mergedWorkspace)) {
       payload.workspace = mergedWorkspace;
@@ -850,7 +908,7 @@
     return {
       profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises,
       paths: mergedPaths, customPaths: mergedCustomPaths, workspace: mergedWorkspace,
-      reviews: mergedReviews, projects: mergedProjects, payload: payload, wsSkipped: wsSkipped
+      reviews: mergedReviews, projects: mergedProjects, placement: mergedPlacement, payload: payload, wsSkipped: wsSkipped
     };
   }
   // Write a merged result locally + report success. Runs only after the
@@ -864,6 +922,7 @@
     writeLocalWorkspace(m.workspace);
     writeLocalReviews(m.reviews);
     writeLocalProjects(m.projects);
+    writeLocalPlacement(m.placement);
     if (m.wsSkipped) setStatus("Workspace too large to sync (700 KB limit)");
     else setStatus("Synced \u2713 " + fmtTime(Date.now()));
     try {
@@ -953,6 +1012,7 @@
     writeLocalWorkspace(mergeWorkspace(readLocalWorkspace(), data.workspace || null));
     writeLocalReviews(mergeReviews(readLocalReviews(), data.reviews || null));
     writeLocalProjects(mergeProjects(readLocalProjects(), data.projects || null));
+    writeLocalPlacement(mergePlacement(readLocalPlacement(), data.placement || null));
     setStatus("Synced ✓ " + fmtTime(Date.now()));
     try {
       if (typeof CustomEvent === "function")
