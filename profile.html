@@ -14,7 +14,7 @@
   <meta name="description" content="Your Skillzify profile — stats, activity, pins and achievements.">
   <title>Profile — Skillzify</title>
   <link rel="icon" href="assets/logo-light.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=32">
+  <link rel="stylesheet" href="assets/css/style.css?v=37">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -66,7 +66,17 @@
       </div>
 
       <div class="dash-card" style="margin-top:20px">
-        <h2>🏆 Achievements <span class="muted small" id="ach-count"></span></h2>
+        <div class="card-head">
+          <h2>🏆 Achievements <span class="muted small" id="ach-count"></span></h2>
+          <div class="card-drop" id="ach-drop">
+            <button type="button" class="card-drop-btn" id="ach-drop-btn" aria-haspopup="true" aria-expanded="false" aria-controls="ach-drop-menu"><span id="ach-drop-label">All badges</span> <span class="caret">▾</span></button>
+            <div class="card-menu" id="ach-drop-menu" role="menu">
+              <button type="button" role="menuitemradio" aria-checked="true" id="ach-filter-all" data-filter="all">All badges <span class="tick">✓</span></button>
+              <button type="button" role="menuitemradio" aria-checked="false" id="ach-filter-unlocked" data-filter="unlocked">Unlocked only <span class="tick">✓</span></button>
+              <button type="button" role="menuitemradio" aria-checked="false" id="ach-filter-locked" data-filter="locked">Locked only <span class="tick">✓</span></button>
+            </div>
+          </div>
+        </div>
         <div id="profile-achievements" class="ach-grid"></div>
       </div>
 
@@ -135,7 +145,7 @@
 <script src="assets/js/practice-data.js?v=4"></script>
 <script src="assets/js/mastery.js?v=4"></script>
 <script src="assets/js/projects-data.js?v=2"></script>
-<script src="assets/js/passport.js?v=2"></script>
-<script src="assets/js/profile.js?v=13"></script>
+<script src="assets/js/passport.js?v=3"></script>
+<script src="assets/js/profile.js?v=14"></script>
 </body>
 </html>

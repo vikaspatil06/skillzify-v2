@@ -6,6 +6,106 @@
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
 
+  /* ---------- Achievements dropdown (filter) ----------
+     The header count is the TOTAL (never the filtered count); the
+     grid below is the filtered view. The choice persists in
+     localStorage so it survives reloads; a fresh device defaults
+     to "All badges". */
+  var ACH_FILTER_KEY = "skillzify_profile_filter_achievements";
+  var ACH_FILTERS = { all: "All badges", unlocked: "Unlocked only", locked: "Locked only" };
+  function getAchFilter() {
+    var v = null;
+    try { v = localStorage.getItem(ACH_FILTER_KEY); } catch (e) {}
+    return ACH_FILTERS[v] ? v : "all";
+  }
+  function achEmptyHtml(f) {
+    if (f === "unlocked") return '<p class="muted">No unlocked badges yet — complete a lesson or run some code to earn one.</p>';
+    return '<p class="muted">No locked badges — everything\u2019s unlocked! \u{1F389}</p>';
+  }
+  function paintAchFilter(f) {
+    var btn = document.getElementById("ach-drop-btn");
+    var label = document.getElementById("ach-drop-label");
+    if (btn) btn.setAttribute("data-filter", f);
+    if (label) label.textContent = ACH_FILTERS[f] || ACH_FILTERS.all;
+    ["all", "unlocked", "locked"].forEach(function (k) {
+      var it = document.getElementById("ach-filter-" + k);
+      if (it) it.setAttribute("aria-checked", k === f ? "true" : "false");
+    });
+  }
+
+  /* Card dropdown behaviour — same idiom as the navbar dropdowns
+     (nav.js): click toggles, outside click / Escape closes (focus
+     returns to the button), arrow keys move between items with wrap.
+     Items are looked up by id (not a descendant query) so the audit
+     harness stub and real browsers see the same elements. The twin
+     of this helper lives in passport.js (Proof of work dropdown). */
+  function wireCardDropdown(dropId, itemIds, onPick) {
+    var drop = document.getElementById(dropId);
+    if (!drop) return;
+    var btn = document.getElementById(dropId + "-btn");
+    var menu = document.getElementById(dropId + "-menu");
+    if (!btn || !menu) return;
+    var items = itemIds.map(function (id) { return document.getElementById(id); })
+      .filter(function (el) { return !!el; });
+    if (!items.length) return;
+    function isOpen() { return drop.classList.contains("open"); }
+    function closeDrop() {
+      drop.classList.remove("open");
+      btn.setAttribute("aria-expanded", "false");
+    }
+    function openDrop() {
+      document.querySelectorAll(".card-drop.open").forEach(function (d) {
+        if (d !== drop) {
+          d.classList.remove("open");
+          var b = d.querySelector(".card-drop-btn");
+          if (b) b.setAttribute("aria-expanded", "false");
+        }
+      });
+      drop.classList.add("open");
+      btn.setAttribute("aria-expanded", "true");
+    }
+    btn.addEventListener("click", function (e) {
+      if (e.stopPropagation) e.stopPropagation();
+      if (isOpen()) closeDrop(); else openDrop();
+    });
+    items.forEach(function (item) {
+      item.addEventListener("click", function () {
+        closeDrop();
+        if (typeof onPick === "function") onPick(item);
+      });
+    });
+    document.addEventListener("click", function (e) {
+      if (!isOpen()) return;
+      if (!e.target || !e.target.closest || !e.target.closest("#" + dropId)) closeDrop();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        if (!isOpen()) return;
+        closeDrop();
+        btn.focus();
+        return;
+      }
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
+      if (!isOpen()) return;
+      var i = items.indexOf(document.activeElement);
+      if (i < 0) return;
+      if (e.key === "ArrowDown") i = (i + 1) % items.length;
+      else if (e.key === "ArrowUp") i = (i - 1 + items.length) % items.length;
+      else if (e.key === "Home") i = 0;
+      else if (e.key === "End") i = items.length - 1;
+      if (e.preventDefault) e.preventDefault();
+      items[i].focus();
+    });
+  }
+  function wireAchDropdown() {
+    wireCardDropdown("ach-drop", ["ach-filter-all", "ach-filter-unlocked", "ach-filter-locked"], function (item) {
+      var f = item.getAttribute("data-filter");
+      if (!ACH_FILTERS[f]) return;
+      try { localStorage.setItem(ACH_FILTER_KEY, f); } catch (e) {}
+      render();
+    });
+  }
+
   function render() {
     var prof = A.profile();
     var user = null;
@@ -73,7 +173,15 @@
 
     var ach = A.achievements(), un = ach.filter(function (a) { return a.unlocked; });
     document.getElementById("ach-count").textContent = un.length + "/" + ach.length + " unlocked";
-    document.getElementById("profile-achievements").innerHTML = ach.map(function (a) {
+    // Achievements dropdown: the header count above is the TOTAL; the
+    // grid below is the filtered view (see getAchFilter).
+    var achFilter = getAchFilter();
+    var shown = ach.filter(function (a) {
+      if (achFilter === "unlocked") return a.unlocked;
+      if (achFilter === "locked") return !a.unlocked;
+      return true;
+    });
+    document.getElementById("profile-achievements").innerHTML = shown.length ? shown.map(function (a) {
       // Locked badges show how close you are (X/Y + thin bar); unlocked
       // ones stay clean — the date is already in the tooltip.
       var prog = (!a.unlocked && a.progress) ? a.progress : null;
@@ -82,7 +190,8 @@
         '<span class="ach-ico">' + (a.unlocked ? a.icon : "🔒") + '</span><span class="ach-name">' + esc(a.name) + '</span>' +
         (prog ? '<span class="ach-prog">' + prog.done + "/" + prog.total + '</span><span class="ach-bar"><span style="width:' + pct + '%"></span></span>' : "") +
         '</div>';
-    }).join("");
+    }).join("") : achEmptyHtml(achFilter);
+    paintAchFilter(achFilter);
 
     var feed = A.feed(15);
     var icons = { lesson: "📚", run: "▶️", snippet: "📝", achievement: "🏆", star: "⭐", xp: "⚡", practice: "✍️", review: "🔁" };
@@ -428,6 +537,7 @@
     } else {
       decideView();
     }
+    wireAchDropdown();
     var drawer = document.getElementById("profile-modal");
     function openDrawer() {
       var p = A.profile();

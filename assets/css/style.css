@@ -145,6 +145,46 @@ img { max-width: 100%; }
   padding: 10px 12px; border-radius: 10px; white-space: nowrap;
 }
 .nav-menu a .mi { font-size: 1.05rem; }
+
+/* ---------- Card dropdowns (profile Achievements + passport Proof of work) ----------
+   Same idiom as the navbar dropdowns (nav.js): click toggles, outside
+   click / Escape closes (focus returns to the button), arrow keys move
+   between items with wrap. Right-aligned inside the card head so the
+   menu never overflows the card on mobile; the menu anchors to the
+   card-head (not the button) so it drops below the whole header and
+   never covers the title, even when the title wraps on mobile. */
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: nowrap; position: relative; }
+.card-head h2 { margin: 0; flex: 1 1 auto; min-width: 0; }
+.card-drop { position: static; flex: none; }
+.card-drop-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 12px; border-radius: 10px; border: 1px solid var(--card-border);
+  background: var(--card); color: var(--text); font-family: inherit; font-size: 0.86rem; font-weight: 600;
+  cursor: pointer; white-space: nowrap; transition: 0.15s;
+}
+.card-drop-btn:hover, .card-drop.open .card-drop-btn { border-color: var(--primary); }
+.card-drop-btn .caret { font-size: 0.7rem; transition: transform 0.2s; }
+.card-drop.open .card-drop-btn .caret { transform: rotate(180deg); }
+.card-menu {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  min-width: 200px; max-width: calc(100vw - 48px);
+  background: var(--bg-soft); border: 1px solid var(--card-border);
+  border-radius: 14px; box-shadow: var(--shadow); padding: 6px;
+  opacity: 0; visibility: hidden; transform: translateY(-4px);
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+  z-index: 50;
+}
+.card-drop.open .card-menu { opacity: 1; visibility: visible; transform: none; }
+.card-menu button {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; padding: 10px 12px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--text); font-family: inherit; font-size: 0.95rem; font-weight: 600;
+  cursor: pointer; text-align: left; white-space: nowrap;
+}
+.card-menu button:hover, .card-menu button:focus-visible { background: var(--card); outline: none; }
+.card-menu button .tick { opacity: 0; color: var(--accent); }
+.card-menu button[aria-checked="true"] .tick { opacity: 1; }
+.card-menu .menu-sep { height: 1px; background: var(--card-border); margin: 6px 4px; }
 .nav-actions { display: flex; align-items: center; gap: clamp(8px, 0.8vw, 12px); flex: none; }
 #account-link { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 .icon-btn {
@@ -1020,8 +1060,6 @@ p.fail { color: #e74c3c; font-weight: 600; }
 /   selector leaks into Mermaid's <g class="node"> elements. */
 #map-root .cmap-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
 #map-root .cmap-search { flex: 1; min-width: 200px; background: var(--card); color: var(--text); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 14px; font: inherit; font-size: 0.95rem; }
-#map-root .cmap-zoom { display: inline-flex; gap: 6px; align-items: center; }
-#map-root .cmap-zoom-label { min-width: 44px; text-align: center; font-weight: 700; color: var(--muted); font-size: 0.9rem; }
 #map-root .cmap-legend { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; font-size: 0.85rem; color: var(--muted); margin-bottom: 18px; }
 #map-root .cmap-legend span { display: inline-flex; align-items: center; gap: 6px; }
 #map-root .cmap-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--card-border); background: var(--card); }
@@ -1031,19 +1069,18 @@ p.fail { color: #e74c3c; font-weight: 600; }
 #map-root .cmap-dot.cmap-state-locked { background: var(--bg-soft); opacity: 0.65; }
 #map-root .cmap-dot.cmap-state-weak { background: #fb923c; border-color: #ea580c; }
 #map-root .cmap-dot.cmap-state-rusty { background: #a16207; border-color: #854d0e; }
-#map-root .cmap-edge-sample { display: inline-block; width: 22px; border-top: 2px dashed var(--accent); vertical-align: middle; }
+#map-root .cmap-edge-sample { display: inline-block; width: 22px; border-top: 2px dashed #8ea2ff; vertical-align: middle; }
 #map-root .cmap-crumb { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; color: var(--muted); }
 #map-root .cmap-secpath { position: relative; display: flex; gap: 28px; align-items: stretch; padding: 24px 8px 48px; overflow: visible; }
 #map-root .cmap-lessonpath { position: relative; display: flex; flex-direction: column; align-items: center; padding: 24px 0; overflow: visible; }
 #map-root .cmap-edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; overflow: visible; }
-#map-root .cmap-edge-seq { fill: none; stroke: var(--card-border); stroke-width: 3; stroke-linecap: round; }
-#map-root .cmap-edge-cross { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 7 6; opacity: 0.75; }
+#map-root .cmap-edge-seq { fill: none; stroke: #7c8cff; stroke-opacity: 0.45; stroke-width: 2.5; stroke-linecap: round; }
+#map-root .cmap-edge-cross { fill: none; stroke: #8ea2ff; stroke-width: 2; stroke-dasharray: 7 6; opacity: 0.75; }
 #map-root .cmap-secnode, #map-root .cmap-lessonnode { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; cursor: pointer; font: inherit; color: var(--text); background: var(--card); border: 2px solid var(--card-border); box-shadow: var(--shadow); transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease; }
 #map-root .cmap-secnode { flex: 1 1 0; min-width: 110px; border-radius: var(--radius); padding: 18px 10px; }
-#map-root .cmap-lessonnode { width: min(560px, 92%); border-radius: 14px; padding: 10px 16px; margin: 9px 0; flex-direction: row; justify-content: flex-start; text-align: left; transform: translateX(var(--ox, 0px)); }
+#map-root .cmap-lessonnode { width: min(560px, 92%); border-radius: 14px; padding: 10px 16px; margin: 9px 0; flex-direction: row; justify-content: flex-start; text-align: left; }
 #map-root a.cmap-lessonnode, #map-root a.cmap-lessonnode:hover { text-decoration: none; }
-#map-root .cmap-secnode:hover:not(:disabled), #map-root .cmap-lessonnode:hover:not(:disabled) { transform: scale(1.03); }
-#map-root .cmap-lessonnode:hover:not(:disabled) { transform: translateX(var(--ox, 0px)) scale(1.03); }
+#map-root .cmap-secnode:hover:not(:disabled), #map-root .cmap-lessonnode:hover:not(:disabled) { transform: translateY(-2px); }
 #map-root .cmap-secnode:focus-visible, #map-root .cmap-lessonnode:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 #map-root .cmap-sec-ico { font-size: 2rem; line-height: 1; }
 #map-root .cmap-sec-name { font-weight: 800; font-size: 1rem; }
@@ -1056,11 +1093,11 @@ p.fail { color: #e74c3c; font-weight: 600; }
 #map-root .cmap-state-done { background: linear-gradient(135deg, #fbbf24, #f59e0b); border-color: #fbbf24; color: #3a2b00; }
 #map-root .cmap-state-done .cmap-sec-meta, #map-root .cmap-state-done .cmap-lesson-num { color: rgba(58, 43, 0, 0.75); }
 #map-root .cmap-state-current { background: var(--gradient); border-color: transparent; color: #fff; animation: cmap-pulse 2.2s infinite; }
-#map-root .cmap-state-open { border-color: var(--accent); background: linear-gradient(135deg, rgba(108, 123, 255, 0.16), rgba(108, 123, 255, 0.05)); }
+#map-root .cmap-state-open { border-color: var(--accent); background: linear-gradient(135deg, rgba(108, 123, 255, 0.16), rgba(108, 123, 255, 0.05)), var(--card); }
 #map-root .cmap-state-current .cmap-sec-meta, #map-root .cmap-state-current .cmap-lesson-num { color: rgba(255, 255, 255, 0.85); }
 #map-root .cmap-state-locked { background: var(--bg-soft); color: var(--muted); cursor: not-allowed; filter: grayscale(0.7); opacity: 0.65; }
-#map-root .cmap-state-weak { border-color: #ea580c; background: linear-gradient(135deg, rgba(251, 146, 60, 0.25), rgba(251, 146, 60, 0.08)); }
-#map-root .cmap-state-rusty { border-color: #854d0e; border-style: dashed; background: linear-gradient(135deg, rgba(161, 98, 7, 0.28), rgba(161, 98, 7, 0.08)); }
+#map-root .cmap-state-weak { border-color: #ea580c; background: linear-gradient(135deg, rgba(251, 146, 60, 0.25), rgba(251, 146, 60, 0.08)), var(--card); }
+#map-root .cmap-state-rusty { border-color: #854d0e; border-style: dashed; background: linear-gradient(135deg, rgba(161, 98, 7, 0.28), rgba(161, 98, 7, 0.08)), var(--card); }
 #map-root .cmap-band-mastered .cmap-sec-band { background: rgba(52, 211, 153, 0.2); color: #34d399; }
 #map-root .cmap-band-solid .cmap-sec-band { background: rgba(34, 211, 238, 0.15); color: #22d3ee; }
 #map-root .cmap-band-building .cmap-sec-band { background: rgba(251, 191, 36, 0.18); color: #fbbf24; }
@@ -1072,7 +1109,8 @@ p.fail { color: #e74c3c; font-weight: 600; }
 #map-root .cmap-stat-val { font-weight: 800; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
 #map-root .cmap-stat-lbl { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
 #map-root .cmap-lesson-title { flex: 1; }
-#map-root .cmap-lesson-review { flex: none; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.03em; color: #ea580c; border: 1px solid #ea580c; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+#map-root .cmap-lesson-review { flex: none; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.03em; color: #ea580c; border: 1px solid #ea580c; border-radius: 999px; padding: 2px 8px; white-space: nowrap; opacity: 0; transition: opacity 0.15s ease; }
+#map-root .cmap-lessonnode:hover .cmap-lesson-review, #map-root .cmap-lessonnode:focus-visible .cmap-lesson-review, #map-root .cmap-lessonnode:focus-within .cmap-lesson-review { opacity: 1; }
 #map-root .cmap-hint { margin-top: 6px; }
 @keyframes cmap-pulse { 0% { box-shadow: 0 0 0 0 rgba(108, 123, 255, 0.55); } 70% { box-shadow: 0 0 0 18px rgba(108, 123, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(108, 123, 255, 0); } }
 @media (prefers-reduced-motion: reduce) {
@@ -1082,5 +1120,6 @@ p.fail { color: #e74c3c; font-weight: 600; }
 @media (max-width: 720px) {
   #map-root .cmap-secpath { flex-direction: column; gap: 18px; }
   #map-root .cmap-secnode { width: 100%; }
+  #map-root .cmap-lessonpath { padding: 24px 16px; }
   #map-root .cmap-lessonnode { width: 100%; }
 }

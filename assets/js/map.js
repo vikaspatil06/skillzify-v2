@@ -7,7 +7,7 @@
    behaviour changed. Plain DOM nodes + one SVG layer for edges;
    no Mermaid, no graph library (see concept-map-spec.md).
    Exposes window.SkillzifyMap: buildGraph, render, centreOnCurrent,
-   expand, collapse, setZoom, applySearch, openLesson, initFromQuery,
+   expand, collapse, applySearch, openLesson, initFromQuery,
    firstWeakOrRusty, stats, refresh.
    ------------------------------------------------------------
    State rules (spec §3–4):
@@ -31,7 +31,7 @@
    - Live re-render: while the map is open it listens for `storage`
      events (another tab completing a lesson) and `skillzify-sync`
      (a cross-device sync pull) and re-renders the current view in
-     place, preserving expanded section, zoom and search.
+     place, preserving expanded section and search.
    - Deep links: ?section=<id> and ?lesson=<id> (unknown ids and
      locked lessons fall back to the section view, never a broken
      render). "Show on map" links on Learn and Dashboard land here.
@@ -47,7 +47,6 @@
 
   var RUST_DAYS = 21;
   var DAY_MS = 86400000;
-  var ZOOM_MIN = 0.5, ZOOM_MAX = 2;
 
   /* Curated cross-links (~40, spec §3). Verified against the
      catalog at build time by buildGraph(); see skipped[]. */
@@ -101,7 +100,6 @@
 
   var level = "sections";      /* "sections" | "lessons" */
   var focusSection = null;     /* expanded section at lesson level */
-  var zoom = 1, panX = 0, panY = 0;
   var query = "";
   var wired = false;
 
@@ -330,11 +328,7 @@
       '<button type="button" class="btn btn-sm cmap-btn" id="cmap-centre">◎ Centre on me</button>' +
       '<button type="button" class="btn btn-sm cmap-btn" id="cmap-review-weak"' + (weak ? "" : " disabled") +
         ' title="' + (weak ? "Jump to your first weak or rusty lesson: " + esc(weak.title) : "No weak or rusty lessons right now") + '">🍂 Review weak spots</button>' +
-      '<span class="cmap-zoom">' +
-      '<button type="button" class="btn btn-sm cmap-btn" id="cmap-zoom-out" aria-label="Zoom out">−</button>' +
-      '<span id="cmap-zoom-label" aria-live="polite">' + Math.round(zoom * 100) + '%</span>' +
-      '<button type="button" class="btn btn-sm cmap-btn" id="cmap-zoom-in" aria-label="Zoom in">+</button>' +
-      '<button type="button" class="btn btn-sm cmap-btn" id="cmap-zoom-reset">Reset</button></span></div>';
+      '</div>';
   }
 
   function sectionNodeHtml(sec, graph) {
@@ -398,7 +392,7 @@
       seen[key] = true;
       cross.push({ from: e.fromSection, to: e.toSection, label: "uses", fromSection: e.fromSection, toSection: e.toSection });
     });
-    return '<div class="cmap-secpath" id="cmap-canvas" style="transform:translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')">' +
+    return '<div class="cmap-secpath" id="cmap-canvas">' +
       edgeSvgHtml(cross, "cross") + nodes + '</div>' +
       '<p class="hint cmap-hint">Click a section to see its lessons. Dashed curves show concept links between sections.</p>';
   }
@@ -414,7 +408,7 @@
     var crumb = '<div class="cmap-crumb"><button type="button" class="btn btn-sm btn-ghost cmap-btn" id="cmap-back">← All sections</button>' +
       '<span><strong>' + esc(sec.icon) + ' ' + esc(sec.name) + '</strong> · ' + sec.done + '/' + sec.total + ' lessons · ' + sec.pct + '%</span></div>';
     return crumb +
-      '<div class="cmap-lessonpath" id="cmap-canvas" style="transform:translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')">' +
+      '<div class="cmap-lessonpath" id="cmap-canvas">' +
       edgeSvgHtml(seq, "seq") + edgeSvgHtml(cross, "cross") + nodes + '</div>' +
       '<p class="hint cmap-hint">Click a lesson to open it. Solid lines follow the journey; dashed “uses” curves link related lessons.</p>';
   }
@@ -432,7 +426,6 @@
     else { level = "sections"; html += renderSections(graph); }
     root.innerHTML = html;
     wire(root);
-    applyTransform();
     scheduleDraw();
     return graph;
   }
@@ -442,8 +435,18 @@
     try {
       var r = node.getBoundingClientRect();
       return { x: r.left + r.width / 2 - canvasRect.left, y: r.top + r.height / 2 - canvasRect.top,
-               top: r.top - canvasRect.top, bottom: r.bottom - canvasRect.top };
+               top: r.top - canvasRect.top, bottom: r.bottom - canvasRect.top,
+               left: r.left - canvasRect.left, right: r.right - canvasRect.left };
     } catch (e) { return null; }
+  }
+  /* "uses" curve at lesson level: from the right edge of A, out to a
+     lane right of the node column, down, and back into the right edge
+     of B. Pure (x/y in canvas pixels) so the harness can unit-test
+     it: no point of the path ever goes left of the nodes' right
+     edges, so it can never cut through a card. */
+  function crossLaneD(a, b, laneX) {
+    return "M" + a.right + " " + a.y + " C" + laneX + " " + a.y + "," +
+      laneX + " " + b.y + "," + b.right + " " + b.y;
   }
   function drawEdges() {
     var canvas = document.getElementById("cmap-canvas");
@@ -472,9 +475,18 @@
       var a = nodeCentre(from, canvasRect), b = nodeCentre(to, canvasRect);
       if (!a || !b) continue;
       var mx, my;
-      /* Section-level "uses" curves arc BELOW the nodes (a straight
-         centre-to-centre line would strike through the card text). */
-      if (level === "sections" && p.classList && p.classList.contains("cmap-edge-cross")) {
+      /* Lesson-level "uses" curves run in a lane OUTSIDE the node
+         column (right edge -> lane -> right edge). A long-span link
+         drawn centre-to-centre strikes straight through every card
+         between its endpoints — the yellow line in the 11 Nov
+         screenshots. The lane sits just right of the column; on
+         narrow screens it clamps to the canvas edge. */
+      if (level === "lessons" && p.classList && p.classList.contains("cmap-edge-cross")) {
+        var lane = Math.min(canvasRect.width - 6, Math.max(a.right, b.right) + 28);
+        p.setAttribute("d", crossLaneD(a, b, lane));
+      } else if (level === "sections" && p.classList && p.classList.contains("cmap-edge-cross")) {
+        /* Section-level "uses" curves arc BELOW the nodes (a straight
+           centre-to-centre line would strike through the card text). */
         var dip = 36;
         p.setAttribute("d", "M" + a.x + " " + a.bottom + " C" + a.x + " " + (a.bottom + dip) + "," + b.x + " " + (b.bottom + dip) + "," + b.x + " " + b.bottom);
       } else if (horizontal) { mx = (a.x + b.x) / 2; my = (a.y + b.y) / 2; p.setAttribute("d", "M" + a.x + " " + a.y + " C" + mx + " " + a.y + "," + mx + " " + b.y + "," + b.x + " " + b.y); }
@@ -488,18 +500,7 @@
     } catch (e) {}
   }
 
-  /* ---------- zoom / pan / search ---------- */
-  function applyTransform() {
-    var canvas = document.getElementById("cmap-canvas");
-    if (canvas) canvas.style.transform = "translate(" + panX + "px," + panY + "px) scale(" + zoom + ")";
-    var label = document.getElementById("cmap-zoom-label");
-    if (label) label.textContent = Math.round(zoom * 100) + "%";
-  }
-  function setZoom(z) {
-    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Number(z) || 1));
-    applyTransform();
-    return zoom;
-  }
+  /* ---------- search ---------- */
   function applySearch(q) {
     query = String(q == null ? "" : q);
     /* Re-render so dimming is in the HTML (and survives re-renders);
@@ -513,7 +514,7 @@
   }
 
   /* Live re-render (Part A1): re-render the current view in place.
-     render() preserves level, focus section, zoom and search; the
+     render() preserves level, focus section and search; the
      search box keeps focus when it had it. */
   function refreshFromExternal() {
     var searchFocused = false;
@@ -558,8 +559,7 @@
           /* Lesson links navigate on their own — never intercept. */
           if (t.getAttribute("data-lesson")) return;
           if (t.getAttribute("data-section") && t.tagName === "BUTTON") { btn = t; break; }
-          if (t.id === "cmap-back" || t.id === "cmap-centre" || t.id === "cmap-review-weak" || t.id === "cmap-zoom-in" ||
-              t.id === "cmap-zoom-out" || t.id === "cmap-zoom-reset") { btn = t; break; }
+          if (t.id === "cmap-back" || t.id === "cmap-centre" || t.id === "cmap-review-weak") { btn = t; break; }
         }
         t = t.parentNode;
       }
@@ -571,37 +571,12 @@
         if (w) { try { window.location.href = "lesson.html?id=" + encodeURIComponent(w.lessonId); } catch (e) {} }
         return;
       }
-      if (btn.id === "cmap-zoom-in") { setZoom(zoom + 0.25); scheduleDraw(); return; }
-      if (btn.id === "cmap-zoom-out") { setZoom(zoom - 0.25); scheduleDraw(); return; }
-      if (btn.id === "cmap-zoom-reset") { zoom = 1; panX = 0; panY = 0; applyTransform(); scheduleDraw(); return; }
       if (btn.getAttribute("data-section") && level === "sections") { expand(btn.getAttribute("data-section")); return; }
       if (btn.getAttribute("data-section") && level === "lessons") { collapse(); return; }
     });
     root.addEventListener("input", function (ev) {
       if (ev.target && ev.target.id === "cmap-search") applySearch(ev.target.value);
     });
-    /* Wheel zoom (ctrl/cmd + wheel) and drag pan on the viewport. */
-    var viewport = root;
-    viewport.addEventListener("wheel", function (ev) {
-      if (!ev.ctrlKey && !ev.metaKey) return;
-      ev.preventDefault();
-      setZoom(zoom + (ev.deltaY < 0 ? 0.1 : -0.1));
-      scheduleDraw();
-    }, { passive: false });
-    var dragging = null;
-    viewport.addEventListener("pointerdown", function (ev) {
-      if (ev.target && ev.target.closest && ev.target.closest("button, a, input")) return;
-      dragging = { x: ev.clientX, y: ev.clientY, px: panX, py: panY };
-    });
-    viewport.addEventListener("pointermove", function (ev) {
-      if (!dragging) return;
-      panX = dragging.px + (ev.clientX - dragging.x);
-      panY = dragging.py + (ev.clientY - dragging.y);
-      applyTransform();
-    });
-    function endDrag() { dragging = null; scheduleDraw(); }
-    viewport.addEventListener("pointerup", endDrag);
-    viewport.addEventListener("pointercancel", endDrag);
     window.addEventListener("resize", scheduleDraw);
     /* Live re-render (Part A1): the map goes stale while open when a
        lesson completes in another tab or a sync pull lands. Both arrive
@@ -672,7 +647,6 @@
     expand: expand,
     collapse: collapse,
     centreOnCurrent: centreOnCurrent,
-    setZoom: setZoom,
     applySearch: applySearch,
     openLesson: openLesson,
     initFromQuery: initFromQuery,
@@ -680,10 +654,11 @@
     stats: statsData,
     refresh: refreshFromExternal,
     /* test seams */
+    crossLaneD: crossLaneD,
     lessonStateFor: lessonStateFor,
     lastTouch: lastTouch,
     isRusty: isRusty,
-    state: function () { return { level: level, focusSection: focusSection, zoom: zoom, query: query }; }
+    state: function () { return { level: level, focusSection: focusSection, query: query }; }
   };
 
   if (typeof document !== "undefined" && document.addEventListener) {

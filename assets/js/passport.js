@@ -336,6 +336,159 @@
   }
 
   /* ---------------- render the public page (§6) ---------------- */
+  /* ---------- Proof of work dropdown (filter + copy link) ----------
+     Same card-dropdown idiom as the navbar (nav.js) and the twin in
+     profile.js (Achievements filter). The exercises table body lives
+     in #proof-exercises so the filter re-renders just the table,
+     never the card or the menu. The choice persists in localStorage;
+     a fresh device defaults to "All topics". The action item copies
+     this passport's link — there is no "View public passport" item
+     here because this card IS the public passport page. */
+  var PROOF_FILTER_KEY = "skillzify_profile_filter_proof";
+  var PROOF_FILTERS = { all: "All topics", solved: "Solved only", unsolved: "Unsolved only" };
+  var lastProofEx = null;
+  function getProofFilter() {
+    var v = storeGet(PROOF_FILTER_KEY, "all");
+    return PROOF_FILTERS[v] ? v : "all";
+  }
+  function proofExercisesHtml(ex, filter) {
+    var topics = Object.keys((ex && ex.byTopic) || {}).sort();
+    var rows = topics.filter(function (t) {
+      var r = ex.byTopic[t] || {};
+      if (filter === "solved") return (r.solved || 0) > 0;
+      if (filter === "unsolved") return (r.solved || 0) === 0;
+      return true;
+    });
+    var html = "<h3>Exercises — " + num(ex.solved) + "/" + num(ex.total) + " solved</h3>";
+    if (!topics.length) {
+      html += '<p class="hint">No exercises attempted yet.</p>';
+      return html;
+    }
+    if (!rows.length) {
+      html += filter === "solved"
+        ? '<p class="hint">No solved topics yet — solve an exercise and it will show here.</p>'
+        : '<p class="hint">Every topic has at least one solve. 🎉</p>';
+      return html;
+    }
+    html += '<table class="passport-table"><thead><tr><th>Topic</th><th>Solved</th><th>First solve</th><th>Last solve</th></tr></thead><tbody>' +
+      rows.map(function (t) {
+        var row = ex.byTopic[t];
+        return "<tr><td>" + esc(t) + "</td><td>" + num(row.solved) + "/" + num(row.total) +
+          "</td><td>" + esc(fmtDate(row.first)) + "</td><td>" + esc(fmtDate(row.last)) + "</td></tr>";
+      }).join("") + "</tbody></table>";
+    return html;
+  }
+  function paintProofFilter(f) {
+    var btn = document.getElementById("proof-drop-btn");
+    var label = document.getElementById("proof-drop-label");
+    if (btn) btn.setAttribute("data-filter", f);
+    if (label) label.textContent = PROOF_FILTERS[f] || PROOF_FILTERS.all;
+    ["all", "solved", "unsolved"].forEach(function (k) {
+      var it = document.getElementById("proof-filter-" + k);
+      if (it) it.setAttribute("aria-checked", k === f ? "true" : "false");
+    });
+  }
+  function applyProofFilter(f, save) {
+    if (save) storeSet(PROOF_FILTER_KEY, f);
+    var box = document.getElementById("proof-exercises");
+    if (box && lastProofEx) box.innerHTML = proofExercisesHtml(lastProofEx, f);
+    paintProofFilter(f);
+  }
+  function copyPassportLink() {
+    var url = "";
+    try { url = location.href; } catch (e) {}
+    function done(ok) {
+      try {
+        if (window.Skillzify && window.Skillzify.toast)
+          window.Skillzify.toast(ok ? "Passport link copied \u{1F4CB}" : "Copy the link from your address bar — clipboard isn\u2019t available here.", ok ? "success" : "info");
+      } catch (e2) {}
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        var p = navigator.clipboard.writeText(url);
+        if (p && typeof p.then === "function") { p.then(function () { done(true); }, function () { done(false); }); return; }
+        done(true);
+      } else {
+        done(false);
+      }
+    } catch (e) { done(false); }
+  }
+
+  /* Card dropdown behaviour — same idiom as the navbar dropdowns
+     (nav.js): click toggles, outside click / Escape closes (focus
+     returns to the button), arrow keys move between items with wrap.
+     Items are looked up by id (not a descendant query) so the audit
+     harness stub and real browsers see the same elements. The twin
+     of this helper lives in profile.js (Achievements filter). */
+  function wireCardDropdown(dropId, itemIds, onPick) {
+    var drop = document.getElementById(dropId);
+    if (!drop) return;
+    var btn = document.getElementById(dropId + "-btn");
+    var menu = document.getElementById(dropId + "-menu");
+    if (!btn || !menu) return;
+    var items = itemIds.map(function (id) { return document.getElementById(id); })
+      .filter(function (el) { return !!el; });
+    if (!items.length) return;
+    function isOpen() { return drop.classList.contains("open"); }
+    function closeDrop() {
+      drop.classList.remove("open");
+      btn.setAttribute("aria-expanded", "false");
+    }
+    function openDrop() {
+      document.querySelectorAll(".card-drop.open").forEach(function (d) {
+        if (d !== drop) {
+          d.classList.remove("open");
+          var b = d.querySelector(".card-drop-btn");
+          if (b) b.setAttribute("aria-expanded", "false");
+        }
+      });
+      drop.classList.add("open");
+      btn.setAttribute("aria-expanded", "true");
+    }
+    btn.addEventListener("click", function (e) {
+      if (e.stopPropagation) e.stopPropagation();
+      if (isOpen()) closeDrop(); else openDrop();
+    });
+    items.forEach(function (item) {
+      item.addEventListener("click", function () {
+        closeDrop();
+        if (typeof onPick === "function") onPick(item);
+      });
+    });
+    document.addEventListener("click", function (e) {
+      if (!isOpen()) return;
+      if (!e.target || !e.target.closest || !e.target.closest("#" + dropId)) closeDrop();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        if (!isOpen()) return;
+        closeDrop();
+        btn.focus();
+        return;
+      }
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
+      if (!isOpen()) return;
+      var i = items.indexOf(document.activeElement);
+      if (i < 0) return;
+      if (e.key === "ArrowDown") i = (i + 1) % items.length;
+      else if (e.key === "ArrowUp") i = (i - 1 + items.length) % items.length;
+      else if (e.key === "Home") i = 0;
+      else if (e.key === "End") i = items.length - 1;
+      if (e.preventDefault) e.preventDefault();
+      items[i].focus();
+    });
+  }
+  function wireProofDropdown() {
+    wireCardDropdown("proof-drop", ["proof-filter-all", "proof-filter-solved", "proof-filter-unsolved", "proof-copy-link"], function (item) {
+      var action = item.getAttribute("data-action");
+      if (action === "copy-link") { copyPassportLink(); return; }
+      var f = item.getAttribute("data-filter");
+      if (!PROOF_FILTERS[f]) return;
+      applyProofFilter(f, true);
+    });
+    applyProofFilter(getProofFilter(), false);
+  }
+
   function renderPublic(uid) {
     var root = null;
     try { root = document.getElementById("passport-root"); } catch (e) {}
@@ -368,6 +521,7 @@
         return false;
       }
       show(renderDoc(p));
+      wireProofDropdown();
       return true;
     }).catch(function () {
       show('<div class="dash-card"><h2>Couldn\u2019t load this passport</h2>' +
@@ -419,20 +573,22 @@
     }
     html += "</div>";
 
-    // Proof tables
-    html += '<div class="dash-card" style="margin-top:20px"><h2>\u{1F50D} Proof of work</h2>';
-    html += "<h3>Exercises — " + num(ex.solved) + "/" + num(ex.total) + " solved</h3>";
-    var topics = Object.keys(ex.byTopic || {}).sort();
-    if (!topics.length) {
-      html += '<p class="hint">No exercises attempted yet.</p>';
-    } else {
-      html += '<table class="passport-table"><thead><tr><th>Topic</th><th>Solved</th><th>First solve</th><th>Last solve</th></tr></thead><tbody>' +
-        topics.map(function (t) {
-          var row = ex.byTopic[t];
-          return "<tr><td>" + esc(t) + "</td><td>" + num(row.solved) + "/" + num(row.total) +
-            "</td><td>" + esc(fmtDate(row.first)) + "</td><td>" + esc(fmtDate(row.last)) + "</td></tr>";
-        }).join("") + "</tbody></table>";
-    }
+    // Proof tables — the exercises table has a filter dropdown in the
+    // card header; the table body lives in #proof-exercises so the
+    // filter re-renders just the table (see proofExercisesHtml).
+    lastProofEx = ex;
+    html += '<div class="dash-card" style="margin-top:20px">' +
+      '<div class="card-head"><h2>\u{1F50D} Proof of work</h2>' +
+      '<div class="card-drop" id="proof-drop">' +
+      '<button type="button" class="card-drop-btn" id="proof-drop-btn" aria-haspopup="true" aria-expanded="false" aria-controls="proof-drop-menu"><span id="proof-drop-label">All topics</span> <span class="caret">▾</span></button>' +
+      '<div class="card-menu" id="proof-drop-menu" role="menu">' +
+      '<button type="button" role="menuitemradio" aria-checked="true" id="proof-filter-all" data-filter="all">All topics <span class="tick">✓</span></button>' +
+      '<button type="button" role="menuitemradio" aria-checked="false" id="proof-filter-solved" data-filter="solved">Solved only <span class="tick">✓</span></button>' +
+      '<button type="button" role="menuitemradio" aria-checked="false" id="proof-filter-unsolved" data-filter="unsolved">Unsolved only <span class="tick">✓</span></button>' +
+      '<div class="menu-sep" role="separator"></div>' +
+      '<button type="button" role="menuitem" id="proof-copy-link" data-action="copy-link">📋 Copy passport link</button>' +
+      "</div></div></div>" +
+      '<div id="proof-exercises">' + proofExercisesHtml(ex, getProofFilter()) + "</div>";
     html += "<h3>Projects — " + (proj.done || []).length + "/" + num(proj.total) + " done</h3>";
     if (!(proj.done || []).length) {
       html += '<p class="hint">No projects completed yet.</p>';
