@@ -12,9 +12,12 @@
    JSON modes return { explanation, json } where `json` is the
    parsed, shape-validated object the UI renders from.
    Limits: 30 AI req/min per IP (abuse guard) + 200 AI calls/day
-   per signed-in user (uid), 20/day for anonymous users. The admin
-   (ADMIN_EMAIL, below) has a 60,000/day cap and can see their usage
-   at GET /api/usage.
+   per signed-in user (uid), 20/day for anonymous users. The day's
+   ~60,000 provider capacity is split (owner's division, 12 Nov
+   2026): a 10,000/day admin reserve (ADMIN_EMAIL, below; usage at
+   GET /api/usage) and a shared 50,000/day pool that every non-admin
+   answer reserves from, so learner traffic can never eat the
+   reserve — and admin answers never touch the pool.
    Usage is logged as counts only — never code content.
    Cap persistence: counts live in Firestore (collection
    "aiDailyCaps") when a Firebase service-account credential is
@@ -52,22 +55,40 @@ const GEMINI_API_KEY = (process.env || {})["GEMINI_API_KEY"] || "";
 // multiplies the daily budget; a second API key (second Google Cloud
 // project) multiplies it again. Order is preference order: the proven six
 // first, then the newer free-tier models. Free-tier text models on the
-// Gemini API (Nov 2026): 3.8 Flash, 3.6 Flash, 3.5 Flash-Lite, 3.1
-// Flash-Lite, 3 Flash Preview, Gemma 4 (31b + 26b-a4b). 2.5 Flash /
-// Flash-Lite stay for projects that already used them — since 18 Sep 2026
-// new projects cannot use them (they 404 and are skipped). NOT listed:
-// gemini-2.0-flash/-lite (SHUT DOWN 1 Jun 2026), Pro models (2.5 Pro left
-// the free tier Apr 2026; 3.1 Pro Preview, 4 Argon/Carbon are paid only),
-// 3.5/3.7 Flash (aliases of 3.6/3.8). 3.1-flash-lite shuts down 7 May
-// 2027. 2.5-flash is deprecated: from 1 Dec 2026 Google auto-routes it to
-// 3.5-flash-lite, which is already in this list, so nothing breaks then.
-// A model with no quota on a project costs one fast 404/429 skip — the
-// loop has no attempt cap, only the shared time budget — so listing a
-// model that turns out dead is harmless.
+// Gemini API failover order — arranged by MEASURED reliability on
+// this project's keys (staging logs, 12 Nov 2026), fastest healthy
+// model first:
+//   3.1-flash-lite — zero failures all day; the workhorse.
+//   3.5-flash-lite — serves often; occasional OVERLOADED.
+//   3.6-flash — serves often; occasional timeout.
+//   3.8-flash — DEMOTED: the best model when healthy, but on the
+//     free tier it failed every attempt that day (OVERLOADED 503s
+//     and responses slower than the 12 s attempt timeout). Kept in
+//     the list — if it recovers, later slots still reach it.
+//   3-flash-preview — works, but only ~20 requests/day; kept late
+//     so its tiny quota is spent only when the front of the chain
+//     is down.
+//   gemma-4-31b-it / gemma-4-26b-a4b-it — the capacity backbone:
+//     14,400 requests/day EACH per project. Slower, plainer answers
+//     than the Flash models, so they sit last as the deep reserve
+//     that keeps the site answering when everything Flash is down.
+// REMOVED 12 Nov 2026: gemini-2.5-flash / gemini-2.5-flash-lite —
+// MODEL_NOT_FOUND on every attempt on this project (since 18 Sep
+// 2026 they only serve projects that already used them; this one
+// never did). They failed fast, but a model that can never succeed
+// here does not belong in the chain. Also NOT listed:
+// gemini-2.0-flash/-lite (SHUT DOWN 1 Jun 2026), Pro models (2.5 Pro
+// left the free tier Apr 2026; 3.1 Pro Preview, 4 Argon/Carbon are
+// paid only), 3.5/3.7 Flash (aliases of 3.6/3.8). 3.1-flash-lite
+// shuts down 7 May 2027 — revisit this order before then.
+// A model with no quota on a project costs one fast 404/429 skip —
+// the loop has no attempt cap, only the shared time budget — but a
+// SLOW model costs its full attempt timeout per key, which is why
+// the order above is by reliability, not by model prestige.
 // Override the list with GEMINI_MODELS="model-a,model-b"; GEMINI_MODEL
 // still overrides just the primary.
 const MODELS = (process.env.GEMINI_MODELS ||
-  "gemini-3.8-flash,gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.5-flash-lite,gemini-3.6-flash,gemini-3.1-flash-lite,gemini-3-flash-preview,gemma-4-31b-it,gemma-4-26b-a4b-it")
+  "gemini-3.1-flash-lite,gemini-3.5-flash-lite,gemini-3.6-flash,gemini-3.8-flash,gemini-3-flash-preview,gemma-4-31b-it,gemma-4-26b-a4b-it")
   .split(",").map(function (s) { return s.trim(); }).filter(Boolean);
 if (process.env.GEMINI_MODEL) MODELS[0] = process.env.GEMINI_MODEL;
 const MODEL = MODELS[0];
@@ -107,19 +128,28 @@ const FAILOVER_BUDGET_MS = 40000;
 const MAX_TOKENS_DEADLINE_MS = Number(process.env.MAX_TOKENS_DEADLINE_MS) || 55000;
 const DAILY_CAP_USER = 200;
 const DAILY_CAP_ANON = 20;
-// Skillzify admin (Vikas — patil.vikas6306@gmail.com): a 60,000/day
-// cap (his number, not "unlimited") + a usage view at GET /api/usage.
-// The check needs BOTH the signed-in uid AND the matching email — an
-// email alone (no uid) is anonymous and stays capped at 20/day.
-// Identity here is client-supplied, the same trust model as uid
-// everywhere else in this file (N5: the server does not verify
-// Firebase ID tokens) — anyone who sends this email + any uid in a
-// hand-made request would also get the 60,000 cap. The real fix is
-// server-side ID-token verification (needs the Firebase
-// service-account key). Override the address with ADMIN_EMAIL env,
-// the number with ADMIN_DAILY_CAP env.
+// Skillzify admin (Vikas — patil.vikas6306@gmail.com): a 10,000/day
+// cap + a usage view at GET /api/usage. The check needs BOTH the
+// signed-in uid AND the matching email — an email alone (no uid) is
+// anonymous and stays capped at 20/day. On a server with the
+// Firebase credential configured, identity comes from the VERIFIED
+// ID token (resolveIdentity), so the email can't be claimed; the
+// client-supplied fallback applies only with no credential set.
+// Override the address with ADMIN_EMAIL env, the number with
+// ADMIN_DAILY_CAP env.
 const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || "patil.vikas6306@gmail.com").trim().toLowerCase();
-const ADMIN_DAILY_CAP = Number(process.env.ADMIN_DAILY_CAP) || 60000;
+const ADMIN_DAILY_CAP = Number(process.env.ADMIN_DAILY_CAP) || 10000;
+// The capacity division (owner, 12 Nov 2026): the providers give
+// roughly 60,000 answers/day in total (two Gemini projects at
+// ~29,880 each + ~1,000 Groq). Of that, ADMIN_DAILY_CAP above is
+// the admin's reserve and the rest is ONE shared pool for every
+// learner answer (signed-in or anonymous), enforced by a single
+// daily counter (poolKey) alongside the per-identity caps — a
+// learner still can't pass their own 200/20, and all learners
+// together can't pass the pool. Override with DAILY_CAPACITY_TOTAL
+// / USER_POOL_DAILY_CAP env.
+const DAILY_CAPACITY_TOTAL = Number(process.env.DAILY_CAPACITY_TOTAL) || 60000;
+const USER_POOL_DAILY_CAP = Number(process.env.USER_POOL_DAILY_CAP) || Math.max(0, DAILY_CAPACITY_TOTAL - ADMIN_DAILY_CAP);
 
 const app = express();
 // Render terminates TLS behind a proxy/load balancer: without this,
@@ -379,9 +409,17 @@ function dailyKey(uid, ip) { return (uid ? "u:" + uid : "a:" + ip) + "|" + daySt
 // most one count per in-flight request, and the memory store resets
 // on restart anyway.
 async function dailyReserve(uid, ip, isAdmin) {
-  initCapStore();
-  var key = dailyKey(uid, ip);
   var cap = isAdmin ? ADMIN_DAILY_CAP : (uid ? DAILY_CAP_USER : DAILY_CAP_ANON);
+  return reserveKey(dailyKey(uid, ip), cap);
+}
+// The shared learner pool: ONE counter that every non-admin answer
+// reserves from (see USER_POOL_DAILY_CAP). Same reserve/release
+// mechanics as a per-identity cap, under its own key.
+function poolKey() { return "pool|" + dayStr(); }
+async function dailyReservePool() { return reserveKey(poolKey(), USER_POOL_DAILY_CAP); }
+async function dailyReleasePool() { return releaseKey(poolKey()); }
+async function reserveKey(key, cap) {
+  initCapStore();
   if (capStore === "firestore" && capDb) {
     try {
       if (typeof capDb.runTransaction === "function") {
@@ -416,7 +454,9 @@ async function dailyReserve(uid, ip, isAdmin) {
 // Undo a reservation: any failure return, or a success the client never
 // received because it disconnected first (P1-23). Never drops below 0.
 async function dailyRelease(uid, ip) {
-  var key = dailyKey(uid, ip);
+  return releaseKey(dailyKey(uid, ip));
+}
+async function releaseKey(key) {
   if (capStore === "firestore" && capDb) {
     try {
       var doc = capDb.collection(CAP_COLLECTION).doc(capDocId(key));
@@ -442,7 +482,7 @@ app.get("/api/health", (req, res) => {
 });
 // GET /api/usage — today's AI usage for the REQUESTER only:
 // { ok, date (IST), used, cap, admin }. Signed-in users are keyed by
-// uid, anonymous by IP. The admin (ADMIN_EMAIL + uid) gets cap 60,000
+// uid, anonymous by IP. The admin (ADMIN_EMAIL + uid) gets cap 10,000
 // and admin: true. Identity comes from resolveIdentity: a verified
 // Firebase ID token when the server has a credential configured
 // (the client sends it as ?token=), legacy uid/email params only
@@ -472,6 +512,7 @@ async function capSnapshot() {
         var m = id.match(/_(\d{4}-\d{2}-\d{2})$/);
         if (!m) return;
         var head = id.slice(0, id.length - m[0].length);
+        if (head === "pool") return; // control counter, not an identity
         out.push({ type: head.charAt(0) === "u" ? "user" : "anon", who: head.slice(2), date: m[1], count: typeof data.count === "number" ? data.count : 0 });
       });
       return out;
@@ -482,6 +523,7 @@ async function capSnapshot() {
   daily.forEach(function (rec, key) {
     var parts = String(key).split("|");
     if (parts.length !== 2) return;
+    if (parts[0] === "pool") return; // control counter, not an identity
     out.push({ type: parts[0].charAt(0) === "u" ? "user" : "anon", who: parts[0].slice(2), date: parts[1], count: rec && typeof rec.count === "number" ? rec.count : 0 });
   });
   return out;
@@ -525,6 +567,7 @@ app.get("/api/admin/overview", async (req, res) => {
     date: today,
     server: { ai: GEMINI_KEYS.length > 0 || GROQ_API_KEY !== "", capStore: capStore, authVerify: !!fbAuth, uptimeSec: Math.floor(process.uptime()), geminiKeys: GEMINI_KEYS.length, models: MODELS, groq: GROQ_API_KEY !== "", groqModels: GROQ_MODELS },
     caps: { anon: DAILY_CAP_ANON, user: DAILY_CAP_USER, admin: ADMIN_DAILY_CAP, adminEmail: ADMIN_EMAIL },
+    plan: { capacity: DAILY_CAPACITY_TOTAL, adminReserved: ADMIN_DAILY_CAP, userPool: USER_POOL_DAILY_CAP, userPoolUsed: Math.max(0, t.total - myUsed) },
     me: { uid: ident.uid, email: ident.email, used: myUsed, cap: ADMIN_DAILY_CAP },
     today: { total: t.total, userAnswers: t.userAnswers, anonAnswers: t.anonAnswers, users: Object.keys(t.users).length, identities: todayIds.slice(0, 25) },
     days: days
@@ -662,8 +705,9 @@ app.post("/api/explain", async (req, res) => {
   const ident = await resolveIdentity(req, req.body || {}, null);
   const uid = ident.uid;
   const email = ident.email;
-  // Admin (ADMIN_EMAIL, signed in): a 60,000/day cap (ADMIN_DAILY_CAP),
-  // reserved like everyone else — no bypass, just a much bigger bucket.
+  // Admin (ADMIN_EMAIL, signed in): a 10,000/day reserve
+  // (ADMIN_DAILY_CAP), counted like everyone else — no bypass, just
+  // a much bigger bucket, and it never draws from the learner pool.
   // On a credential-configured server the identity is the VERIFIED
   // token's (see resolveIdentity): the body's uid/email alone grant
   // nothing there.
@@ -677,7 +721,23 @@ app.post("/api/explain", async (req, res) => {
   if (!reserved) {
     return res.status(429).json({ error: "You've used your " + myCap.toLocaleString("en-IN") + " AI answers for today — they reset tomorrow.", code: "DAILY_CAP" });
   }
-  async function releaseCap() { if (reserved) { reserved = false; await dailyRelease(uid, req.ip); } }
+  // Capacity division: every non-admin answer ALSO reserves from
+  // the shared learner pool, so all learners together can never
+  // consume the admin reserve. Admin answers skip the pool. A pool
+  // refusal releases the identity reservation again — the caller
+  // used nothing.
+  var poolReserved = false;
+  if (!isAdminUser) {
+    poolReserved = await dailyReservePool();
+    if (!poolReserved) {
+      await dailyRelease(uid, req.ip);
+      return res.status(429).json({ error: "Skillzify's shared pool of " + USER_POOL_DAILY_CAP.toLocaleString("en-IN") + " AI answers for today is used up — it resets tomorrow.", code: "POOL_CAP" });
+    }
+  }
+  async function releaseCap() {
+    if (reserved) { reserved = false; await dailyRelease(uid, req.ip); }
+    if (poolReserved) { poolReserved = false; await dailyReleasePool(); }
+  }
   // A success the client never received (disconnected before delivery —
   // P1-23) releases the reservation instead of burning a daily answer
   // the client can't use; a delivered success keeps it (no second count).

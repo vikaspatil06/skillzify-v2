@@ -196,7 +196,7 @@
   }
 
   // AI usage today — one small line at the bottom of the Daily card:
-  // "N / cap", with "(admin)" for the admin's 60,000 cap. Fetched
+  // "N / cap", with "(admin)" for the admin's 10,000 reserve. Fetched
   // from /api/usage via SkillzifyAI.usage; silent on failure (the line
   // just doesn't appear — usage is informational, never blocking).
   // Re-runs on auth change (the cap changes when you sign in), replacing

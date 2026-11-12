@@ -172,15 +172,30 @@
 
     /* config */
     var models = (sv.models || []).map(function (m) { return "<li>" + esc(m) + "</li>"; }).join("");
+    var plan = d.plan || null;
+    var poolPct = plan && plan.userPool ? Math.min(100, Math.round((plan.userPoolUsed / plan.userPool) * 1000) / 10) : 0;
+    var planRows = "";
+    var planBar = "";
+    if (plan) {
+      planRows =
+        '<div class="row"><span>Daily capacity (providers)</span><b>' + fmt(plan.capacity) + " / day</b></div>" +
+        '<div class="row"><span>Admin reserve</span><b>' + fmt(plan.adminReserved) + " / day</b></div>" +
+        '<div class="row"><span>Learner pool (shared)</span><b>' + fmt(plan.userPool) + " / day</b></div>" +
+        '<div class="row"><span>Learner pool used today</span><b>' + fmt(plan.userPoolUsed) + " (" + poolPct + "%)</b></div>";
+      planBar = '<div class="usage-bar" title="Learner pool used today"><span style="width:' + poolPct + '%"></span></div>' +
+        '<p class="hint" style="margin:4px 0 0">Every learner answer — signed-in or anonymous — reserves from the shared pool, so learner traffic can never consume the admin reserve. Your answers never touch the pool.</p>';
+    }
     el("admin-config").innerHTML =
       '<div class="kv">' +
       '<div class="row"><span>Anonymous cap</span><b>' + fmt(d.caps.anon) + " / day</b></div>" +
       '<div class="row"><span>Signed-in cap</span><b>' + fmt(d.caps.user) + " / day</b></div>" +
       '<div class="row"><span>Admin cap</span><b>' + fmt(d.caps.admin) + " / day</b></div>" +
       '<div class="row"><span>Admin email</span><b>' + esc(d.caps.adminEmail) + "</b></div>" +
+      planRows +
       '<div class="row"><span>Gemini keys configured</span><b>' + fmt(sv.geminiKeys) + "</b></div>" +
       '<div class="row"><span>Groq spillover</span><b>' + (sv.groq ? "On" : "Off") + "</b></div>" +
       "</div>" +
+      planBar +
       "<p style=\"margin:14px 0 4px\"><b>Gemini failover order</b> <span class=\"hint\">(first success wins; quota/overload moves to the next)</span></p>" +
       "<ol class=\"models\">" + models + "</ol>" +
       (sv.groq ? "<p style=\"margin:10px 0 0\"><b>Groq models:</b> <span class=\"who\">" + esc((sv.groqModels || []).join(", ")) + "</span></p>" : "");
@@ -208,8 +223,9 @@
   /* ---------------- tools ---------------- */
   function summaryText(d) {
     var t = d.today || {};
+    var poolLine = d.plan ? "\nLearner pool today: " + fmt(d.plan.userPoolUsed) + " / " + fmt(d.plan.userPool) + " (admin reserve " + fmt(d.plan.adminReserved) + " of " + fmt(d.plan.capacity) + " total)" : "";
     return "Skillzify admin — " + d.date + " (IST)\n" +
-      "AI answers today: " + fmt(t.total) + " (signed-in " + fmt(t.userAnswers) + " · anonymous " + fmt(t.anonAnswers) + " · " + fmt(t.users) + " learner(s))\n" +
+      "AI answers today: " + fmt(t.total) + " (signed-in " + fmt(t.userAnswers) + " · anonymous " + fmt(t.anonAnswers) + " · " + fmt(t.users) + " learner(s))" + poolLine + "\n" +
       "My usage: " + fmt(d.me.used) + " / " + fmt(d.me.cap) + " (admin)\n" +
       "Cap store: " + d.server.capStore + " · Token verification: " + (d.server.authVerify ? "on" : "off") +
       " · Gemini keys: " + d.server.geminiKeys + " · Groq: " + (d.server.groq ? "on" : "off");

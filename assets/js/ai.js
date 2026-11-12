@@ -521,6 +521,14 @@
       if (msg) return { code: code, message: msg };
       return { code: code, message: "You've used your AI answers for today — they reset tomorrow." };
     }
+    if (code === "POOL_CAP") {
+      // The shared learner pool is used up for today. The server's
+      // message carries the pool size — keep it verbatim. Signing in
+      // does NOT refill the pool (it binds everyone), so this code
+      // never gets the sign-in capLink.
+      if (msg) return { code: code, message: msg };
+      return { code: code, message: "Skillzify's AI pool for today is used up — it resets tomorrow." };
+    }
     if (code === "QUOTA") return { code: code, message: "The AI is out of quota right now. Try again in a bit." };
     if (code === "OVERLOADED" || code === "TIMEOUT") return { code: code, message: "The AI is busy or slow to wake on the free tier. Try again in a moment." };
     if (code === "KEY_ERROR" || code === "MODEL_NOT_FOUND") return { code: code, message: "The AI backend needs attention (configuration problem)." };
@@ -603,11 +611,11 @@
           safeCb(cb, friendlyError(ke), null);
           return;
         }
-        // DAILY_CAP / RATE_LIMIT must reach the student verbatim — never
+        // DAILY_CAP / POOL_CAP / RATE_LIMIT must reach the student verbatim — never
         // let the offline heuristic mask them with generic tips, even
         // when opts.error matches a heuristic rule. (A saved personal
         // key already had its chance above and bypasses the cap.)
-        if (be && (be.code === "DAILY_CAP" || be.code === "RATE_LIMIT")) {
+        if (be && (be.code === "DAILY_CAP" || be.code === "POOL_CAP" || be.code === "RATE_LIMIT")) {
           setStatus("offline");
           safeCb(cb, friendlyError(be), null);
           return;
