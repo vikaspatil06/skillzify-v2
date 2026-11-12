@@ -76,6 +76,23 @@
     } catch (e) {}
     return "";
   }
+  /* The signed-in user's Firebase ID token, or "". The server
+     verifies it and derives uid/email from it (server.js
+     resolveIdentity) — the uid/email fields in the payload are now
+     only a fallback for a server without verification configured.
+     Raced against a 3 s timer: a stuck token fetch must never wedge
+     the ask queue; the call then goes out tokenless and the server
+     treats it as anonymous. */
+  function idToken() {
+    try {
+      var A = window.SkillzifyAuth;
+      if (!A || typeof A.idToken !== "function") return Promise.resolve("");
+      var p = A.idToken();
+      if (!p || typeof p.then !== "function") return Promise.resolve("");
+      var timeoutP = new Promise(function (resolve) { setTimeout(function () { resolve(""); }, 3000); });
+      return Promise.race([p, timeoutP]).catch(function () { return ""; });
+    } catch (e) { return Promise.resolve(""); }
+  }
 
   /* P2-54 + P2-49: auth readiness and cache clearing.
      - uid() is gated on SkillzifyAuth.onReady: an early tap in the
@@ -130,13 +147,16 @@
   }
 
   // Today's AI usage for the requester (GET /api/usage): { used, cap,
-  // unlimited } — the admin sees unlimited: true. Callback-style like
-  // the rest of this module; cb(new Error) on any failure, so callers
-  // treat usage as informational and never block on it.
+  // admin }. Waits for auth readiness and sends the ID token — on a
+  // token-verifying server the uid/email params alone prove nothing.
+  // Callback-style like the rest of this module; cb(new Error) on any
+  // failure, so callers treat usage as informational and never block.
   function usage(cb) {
     try {
-      var q = "uid=" + encodeURIComponent(uid()) + "&email=" + encodeURIComponent(email());
-      fetch(BASE + "/api/usage?" + q).then(function (r) { return r.json(); }).then(function (d) {
+      whenAuthReady().then(function () { return idToken(); }).then(function (tok) {
+        var q = "uid=" + encodeURIComponent(uid()) + "&email=" + encodeURIComponent(email()) + "&token=" + encodeURIComponent(tok || "");
+        return fetch(BASE + "/api/usage?" + q);
+      }).then(function (r) { return r.json(); }).then(function (d) {
         if (d && d.ok) { try { cb(null, d); } catch (e) {} }
         else { try { cb(new Error("usage")); } catch (e) {} }
       }).catch(function () { try { cb(new Error("usage")); } catch (e) {} });
@@ -529,7 +549,7 @@
     setStatus("working");
     // P2-54: wait until Firebase has restored the session before the
     // uid is resolved — an early tap must not burn the anonymous cap.
-    return whenAuthReady().then(function () {
+    return whenAuthReady().then(function () { return idToken(); }).then(function (tok) {
     // Resolve the learner context ONCE: the cache key and the payload
     // must see the same string (opts.extra folds in via buildContext).
     var ctx = String(opts.context || buildContext(opts.extra)).slice(0, 2000);
@@ -556,6 +576,7 @@
       context: ctx,
       uid: uid(),
       email: email(),
+      token: tok,
       json: !!opts.json
     };
     return backendAsk(payload, 0).then(function (d) {

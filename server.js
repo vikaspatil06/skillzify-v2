@@ -222,6 +222,7 @@ var capDb = null;         // Firestore instance when the Firestore store is acti
 var capFieldValue = null; // admin.firestore.FieldValue (for atomic increments)
 var capStore = "memory";  // "memory" | "firestore" — reported by /api/health
 var capInitDone = false;  // true once this process has decided (either way)
+var fbAuth = null;        // firebase-admin Auth, set when a credential is configured — verifies ID tokens
 
 // Firestore document IDs allow ":" and "|" but a sanitised id is
 // cheaper to reason about; the mapping stays injective for our keys
@@ -263,12 +264,58 @@ function initCapStore() {
     capFieldValue = admin.fsMod.FieldValue || null;
     capStore = "firestore";
     console.log("[cap] Daily cap store: Firestore (collection " + CAP_COLLECTION + ") — counts survive restarts.");
+    // The same credential enables ID-token verification (the N5 fix):
+    // caps + admin are then decided from the VERIFIED token instead
+    // of client-supplied uid/email. Separate try on purpose — if the
+    // auth module is unavailable the cap store must still work, and
+    // identity falls back to the legacy model (see resolveIdentity).
+    try {
+      var authMod = require("firebase-admin/auth");
+      fbAuth = authMod.getAuth();
+      console.log("[auth] ID-token verification: ON — uid/email come from verified Firebase tokens.");
+    } catch (e2) {
+      fbAuth = null;
+      console.log("[auth] ID-token verification unavailable (" + (e2 && e2.message ? e2.message : e2) + ") — identity stays client-supplied.");
+    }
   } catch (e) {
     capDb = null;
     capFieldValue = null;
     capStore = "memory";
     console.log("[cap] Firestore cap store failed to initialise (" + (e && e.message ? e.message : e) + ") — daily cap stays in-memory (resets on restart). Check the service-account JSON.");
   }
+}
+
+// Identity for cap/admin decisions (the N5 fix). ai.js sends the
+// signed-in user's Firebase ID token with every call (body `token`
+// on POSTs, query `token` on GETs; an Authorization: Bearer header
+// is also accepted). When this server has a credential configured
+// (fbAuth set), the uid/email INSIDE the verified token are the
+// identity: client-supplied uid/email fields are ignored, a missing
+// token is anonymous, and an invalid/expired token is anonymous too
+// — never a fallback to whatever the request claims. Only when NO
+// credential is configured (local dev, tests) does the legacy
+// client-supplied uid/email apply, so nothing changes before the
+// service-account key is added.
+async function resolveIdentity(req, bodyObj, queryObj) {
+  initCapStore();
+  var token = "";
+  var authz = String((req.headers && req.headers.authorization) || "");
+  if (authz.slice(0, 7).toLowerCase() === "bearer ") token = authz.slice(7).trim();
+  if (!token && bodyObj && bodyObj.token) token = String(bodyObj.token);
+  if (!token && queryObj && queryObj.token) token = String(queryObj.token);
+  token = token.slice(0, 4096);
+  if (token && fbAuth) {
+    try {
+      var decoded = await fbAuth.verifyIdToken(token);
+      return { uid: String((decoded && decoded.uid) || "").slice(0, 128), email: String((decoded && decoded.email) || "").trim().toLowerCase().slice(0, 128) };
+    } catch (e) {
+      console.log("[auth] ID token rejected (" + (e && e.code ? e.code + ": " : "") + (e && e.message ? e.message : e) + ") — treating the request as anonymous.");
+      return { uid: "", email: "" };
+    }
+  }
+  if (fbAuth) return { uid: "", email: "" }; // verification on, no token: anonymous
+  var src = bodyObj || queryObj || {};
+  return { uid: String(src.uid || "").slice(0, 128), email: String(src.email || "").trim().toLowerCase().slice(0, 128) };
 }
 
 // Read one day's count. On a Firestore error, fall back to the
@@ -391,18 +438,19 @@ async function dailyRelease(uid, ip) {
 
 app.get("/api/health", (req, res) => {
   initCapStore(); // local-only; reports which cap store is active
-  res.json({ ok: true, ai: GEMINI_KEYS.length > 0 || GROQ_API_KEY !== "", model: MODEL, models: MODELS, groq: GROQ_API_KEY !== "", groqModels: GROQ_MODELS, capStore: capStore, uptimeSec: Math.floor(process.uptime()) });
+  res.json({ ok: true, ai: GEMINI_KEYS.length > 0 || GROQ_API_KEY !== "", model: MODEL, models: MODELS, groq: GROQ_API_KEY !== "", groqModels: GROQ_MODELS, capStore: capStore, authVerify: !!fbAuth, uptimeSec: Math.floor(process.uptime()) });
 });
 // GET /api/usage — today's AI usage for the REQUESTER only:
 // { ok, date (IST), used, cap, admin }. Signed-in users are keyed by
 // uid, anonymous by IP. The admin (ADMIN_EMAIL + uid) gets cap 60,000
-// and admin: true. Identity is client-supplied (uid + email query
-// params), same trust model as /api/explain (N5) — this endpoint
-// never returns anyone else's count.
+// and admin: true. Identity comes from resolveIdentity: a verified
+// Firebase ID token when the server has a credential configured
+// (the client sends it as ?token=), legacy uid/email params only
+// when it does not — this endpoint never returns anyone else's count.
 app.get("/api/usage", async (req, res) => {
-  initCapStore();
-  var uid = String((req.query && req.query.uid) || "").slice(0, 128);
-  var email = String((req.query && req.query.email) || "").trim().toLowerCase().slice(0, 128);
+  var ident = await resolveIdentity(req, null, req.query || {});
+  var uid = ident.uid;
+  var email = ident.email;
   var admin = !!uid && email === ADMIN_EMAIL;
   var used = await capGetCount(dailyKey(uid, req.ip));
   res.json({ ok: true, date: dayStr(), used: used, cap: admin ? ADMIN_DAILY_CAP : (uid ? DAILY_CAP_USER : DAILY_CAP_ANON), admin: admin });
@@ -536,10 +584,14 @@ app.post("/api/explain", async (req, res) => {
   const context = String((req.body && req.body.context) || "").slice(0, 2000);
   const mode = String((req.body && req.body.mode) || "");
   const stage = String((req.body && req.body.stage) || "");
-  const uid = String((req.body && req.body.uid) || "").slice(0, 128);
-  const email = String((req.body && req.body.email) || "").trim().toLowerCase().slice(0, 128);
+  const ident = await resolveIdentity(req, req.body || {}, null);
+  const uid = ident.uid;
+  const email = ident.email;
   // Admin (ADMIN_EMAIL, signed in): a 60,000/day cap (ADMIN_DAILY_CAP),
   // reserved like everyone else — no bypass, just a much bigger bucket.
+  // On a credential-configured server the identity is the VERIFIED
+  // token's (see resolveIdentity): the body's uid/email alone grant
+  // nothing there.
   const isAdminUser = !!uid && email === ADMIN_EMAIL;
   const spec = Object.prototype.hasOwnProperty.call(MODES, mode) ? MODES[mode] : MODES[""];
   if (!code.trim() && !errText.trim()) return res.status(400).json({ error: "Nothing to explain.", code: "EMPTY" });

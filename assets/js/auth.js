@@ -85,6 +85,21 @@
 
   function currentUser() { return toUser(fbUser); }
 
+  // The signed-in user's Firebase ID token ("" when signed out).
+  // ai.js sends it with every backend call; the server verifies it
+  // and takes uid/email from the TOKEN, not from anything the page
+  // claims — that's what makes the daily caps and the admin role
+  // real instead of client-asserted. The SDK caches the token and
+  // refreshes it automatically, so calling this per request is cheap.
+  function idToken() {
+    return new Promise(function (resolve) {
+      try {
+        if (!fbUser || typeof fbUser.getIdToken !== "function") { resolve(""); return; }
+        fbUser.getIdToken().then(function (t) { resolve(t || ""); }, function () { resolve(""); });
+      } catch (e) { resolve(""); }
+    });
+  }
+
   function friendly(err) {
     var code = (err && err.code) || "";
     var map = {
@@ -283,6 +298,7 @@
     loginUser: loginUser,
     logoutUser: logoutUser,
     currentUser: currentUser,
+    idToken: idToken,
     onReady: onReady,
     onAuthChange: onAuthChange,
     refreshAccountUI: refreshAccountUI,
