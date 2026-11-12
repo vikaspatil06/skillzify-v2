@@ -1,0 +1,194 @@
+[
+  {
+    "id": "first_steps",
+    "icon": "🌱",
+    "name": "First Steps",
+    "desc": "Complete your first lesson"
+  },
+  {
+    "id": "scholar",
+    "icon": "🎓",
+    "name": "Scholar",
+    "desc": "Complete all 250 lessons"
+  },
+  {
+    "id": "xp_100",
+    "icon": "💯",
+    "name": "Century",
+    "desc": "Earn 100 XP"
+  },
+  {
+    "id": "xp_500",
+    "icon": "⚡",
+    "name": "Charged",
+    "desc": "Earn 500 XP"
+  },
+  {
+    "id": "xp_1000",
+    "icon": "🚀",
+    "name": "Rocket",
+    "desc": "Earn 1,000 XP"
+  },
+  {
+    "id": "xp_5000",
+    "icon": "🌟",
+    "name": "Superstar",
+    "desc": "Earn 5,000 XP"
+  },
+  {
+    "id": "xp_10000",
+    "icon": "🌟",
+    "name": "Legend",
+    "desc": "Earn 10,000 XP"
+  },
+  {
+    "id": "streak_3",
+    "icon": "🔥",
+    "name": "Warming Up",
+    "desc": "3-day learning streak"
+  },
+  {
+    "id": "streak_7",
+    "icon": "🔥",
+    "name": "On Fire",
+    "desc": "7-day learning streak"
+  },
+  {
+    "id": "streak_30",
+    "icon": "🔥",
+    "name": "Unstoppable",
+    "desc": "30-day learning streak"
+  },
+  {
+    "id": "runner_10",
+    "icon": "▶️",
+    "name": "Tinkerer",
+    "desc": "Run code 10 times"
+  },
+  {
+    "id": "runner_50",
+    "icon": "⚙️",
+    "name": "Engineer",
+    "desc": "Run code 50 times"
+  },
+  {
+    "id": "snippet_saver",
+    "icon": "📝",
+    "name": "Curator",
+    "desc": "Save your first snippet"
+  },
+  {
+    "id": "night_owl",
+    "icon": "🦉",
+    "name": "Night Owl",
+    "desc": "Code between midnight and 5 AM"
+  },
+  {
+    "id": "early_bird",
+    "icon": "🌅",
+    "name": "Early Bird",
+    "desc": "Code between 5 and 8 AM"
+  },
+  {
+    "id": "ex_first",
+    "icon": "🏋️",
+    "name": "Problem Solver",
+    "desc": "Solve your first exercise"
+  },
+  {
+    "id": "ex_10",
+    "icon": "💪",
+    "name": "Decathlete",
+    "desc": "Solve 10 exercises"
+  },
+  {
+    "id": "ex_25",
+    "icon": "🔥",
+    "name": "On a Roll",
+    "desc": "Solve 25 exercises"
+  },
+  {
+    "id": "ex_all",
+    "icon": "🏆",
+    "name": "Completionist",
+    "desc": "Solve every exercise"
+  },
+  {
+    "id": "topic_master",
+    "icon": "🎯",
+    "name": "Topic Master",
+    "desc": "Solve every exercise in one topic"
+  },
+  {
+    "id": "lessons_25",
+    "icon": "📚",
+    "name": "Bookworm",
+    "desc": "Complete 25 lessons"
+  },
+  {
+    "id": "lessons_50",
+    "icon": "📖",
+    "name": "Dedicated",
+    "desc": "Complete 50 lessons"
+  },
+  {
+    "id": "lessons_100",
+    "icon": "🏛️",
+    "name": "Centurion",
+    "desc": "Complete 100 lessons"
+  },
+  {
+    "id": "review_7",
+    "icon": "🔁",
+    "name": "Regular Reviewer",
+    "desc": "Complete 7 reviews"
+  },
+  {
+    "id": "review_30",
+    "icon": "🧠",
+    "name": "Memory Master",
+    "desc": "Complete 30 reviews"
+  },
+  {
+    "id": "mastery_solid",
+    "icon": "🎯",
+    "name": "Solid Start",
+    "desc": "Reach 60% mastery in any topic"
+  },
+  {
+    "id": "mastery_mastered",
+    "icon": "👑",
+    "name": "True Master",
+    "desc": "Reach 85% mastery in any topic"
+  },
+  {
+    "id": "path_first",
+    "icon": "🗺️",
+    "name": "Pathfinder",
+    "desc": "Complete your first learning path"
+  },
+  {
+    "id": "best_answer",
+    "icon": "💡",
+    "name": "Best Answer",
+    "desc": "Have an answer marked as best"
+  },
+  {
+    "id": "showcase_star",
+    "icon": "⭐",
+    "name": "Starred",
+    "desc": "Get your first star on a showcase project"
+  },
+  {
+    "id": "flowchart_first",
+    "icon": "📊",
+    "name": "First Flowchart",
+    "desc": "Render your first flowchart"
+  },
+  {
+    "id": "plan_7",
+    "icon": "📋",
+    "name": "Plan Keeper",
+    "desc": "Finish 7 daily plans"
+  }
+]
