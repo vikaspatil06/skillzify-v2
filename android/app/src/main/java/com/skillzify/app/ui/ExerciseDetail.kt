@@ -82,6 +82,18 @@ fun ExerciseDetail(vm: AppViewModel, id: String, nav: NavController) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row { Text(if (att.solved) "✅ " else "", fontSize = 20.sp); Text(ex.title, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold) }
+        // Meta chips: topic · difficulty (website colours) · kind · XP
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (ex.topic.isNotBlank()) WebChip(ex.topic.replaceFirstChar { it.uppercase() })
+            WebChip(
+                when (ex.diff) { 1 -> "Easy"; 2 -> "Medium"; else -> "Hard" },
+                when (ex.diff) { 1 -> Success; 2 -> Warning; else -> MaterialTheme.colorScheme.error }
+            )
+            WebChip(ex.kind)
+            WebChip("${ex.xp} XP")
+            if (att.solved) WebChip("Solved ✓", Success)
+            else if (att.attempts > 0) WebChip("${att.attempts} tries")
+        }
         Text(ex.prompt, fontSize = 14.sp, lineHeight = 21.sp)
         if (xpMsg.isNotBlank()) Text(xpMsg, color = Success, fontWeight = FontWeight.Bold)
 

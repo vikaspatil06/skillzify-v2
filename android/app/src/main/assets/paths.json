@@ -1,417 +1,1900 @@
 [
- {
-  "id": "fundamentals",
-  "title": "Python Fundamentals",
-  "desc": "Zero to confident: every core concept in the right order, with practice after each step.",
-  "icon": "🌱",
-  "color": "#34d399",
-  "level": "Beginner",
-  "steps": [
-   {
-    "type": "lesson",
-    "ref": "b1",
-    "title": "Hello, Python! Your First Program"
-   },
-   {
-    "type": "lesson",
-    "ref": "b2",
-    "title": "Variables & Data Types"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-variables-01",
-    "title": "Reassignment relay"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-variables-04",
-    "title": "F-string forecast"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-variables-05",
-    "title": "The score that never grows"
-   },
-   {
-    "type": "lesson",
-    "ref": "b3",
-    "title": "Strings & f-strings"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-strings-01",
-    "title": "Index detective"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-strings-05",
-    "title": "The messy greeting"
-   },
-   {
-    "type": "lesson",
-    "ref": "b8",
-    "title": "Conditionals & Logic"
-   },
-   {
-    "type": "lesson",
-    "ref": "b6",
-    "title": "Lists & Tuples"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-collections-01",
-    "title": "First and last"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-collections-06",
-    "title": "Zip into a dict"
-   },
-   {
-    "type": "lesson",
-    "ref": "b9",
-    "title": "Loops: for & while"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-loops-01",
-    "title": "Sum of evens"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-loops-05",
-    "title": "First even, please"
-   },
-   {
-    "type": "lesson",
-    "ref": "b7",
-    "title": "Dictionaries & Sets"
-   },
-   {
-    "type": "lesson",
-    "ref": "b10",
-    "title": "Functions"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-functions-01",
-    "title": "Area of a circle"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-functions-04",
-    "title": "Add them all"
-   }
-  ]
- },
- {
-  "id": "dsa",
-  "title": "DSA with Python",
-  "desc": "Data structures and algorithms the Pythonic way — from lists to binary search.",
-  "icon": "🧠",
-  "color": "#9d6bff",
-  "level": "Intermediate",
-  "steps": [
-   {
-    "type": "lesson",
-    "ref": "b6",
-    "title": "Lists & Tuples"
-   },
-   {
-    "type": "lesson",
-    "ref": "b9",
-    "title": "Loops: for & while"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-loops-03",
-    "title": "FizzBuzz list"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-loops-04",
-    "title": "Counting with enumerate"
-   },
-   {
-    "type": "lesson",
-    "ref": "i7",
-    "title": "List Comprehensions"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-collections-02",
-    "title": "Mutating the list"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-collections-04",
-    "title": "Safe lookups"
-   },
-   {
-    "type": "lesson",
-    "ref": "a8",
-    "title": "Recursion"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-dsa-01",
-    "title": "Linear search"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-dsa-04",
-    "title": "Mirror, mirror"
-   },
-   {
-    "type": "lesson",
-    "ref": "a9",
-    "title": "Sorting & Searching"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-dsa-02",
-    "title": "Palindrome check"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-functions-06",
-    "title": "Runaway recursion"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-dsa-05",
-    "title": "Binary search, off by one"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-dsa-03",
-    "title": "Binary search trace"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-dsa-06",
-    "title": "Two sum"
-   }
-  ]
- },
- {
-  "id": "automation",
-  "title": "Automation & Scripting",
-  "desc": "Make Python do your boring work: files, scripts, and bulletproof error handling.",
-  "icon": "🤖",
-  "color": "#22d3ee",
-  "level": "Intermediate",
-  "steps": [
-   {
-    "type": "lesson",
-    "ref": "b10",
-    "title": "Functions"
-   },
-   {
-    "type": "lesson",
-    "ref": "i9",
-    "title": "File Handling"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-exceptions-02",
-    "title": "Safe divide"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-exceptions-05",
-    "title": "Catch the right culprit"
-   },
-   {
-    "type": "lesson",
-    "ref": "i8",
-    "title": "Error Handling"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-exceptions-03",
-    "title": "Catching the wrong error"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-exceptions-04",
-    "title": "The full try story"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-exceptions-06",
-    "title": "Raise your own flag"
-   },
-   {
-    "type": "lesson",
-    "ref": "i11",
-    "title": "Modules & Imports"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-functions-03",
-    "title": "Nowhere to return"
-   }
-  ]
- },
- {
-  "id": "data",
-  "title": "Data Analysis Basics",
-  "desc": "From raw data to answers: collections, comprehensions, and file wrangling.",
-  "icon": "📊",
-  "color": "#fbbf24",
-  "level": "Intermediate",
-  "steps": [
-   {
-    "type": "lesson",
-    "ref": "b6",
-    "title": "Lists & Tuples"
-   },
-   {
-    "type": "lesson",
-    "ref": "b7",
-    "title": "Dictionaries & Sets"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-collections-03",
-    "title": "Missing the first item"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-collections-04",
-    "title": "Safe lookups"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-collections-05",
-    "title": "Common ground"
-   },
-   {
-    "type": "lesson",
-    "ref": "i7",
-    "title": "List Comprehensions"
-   },
-   {
-    "type": "lesson",
-    "ref": "i12",
-    "title": "Lambda, map, filter"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-strings-02",
-    "title": "Shout it back"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-strings-04",
-    "title": "Slice, then repeat"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-strings-06",
-    "title": "Mask that email"
-   },
-   {
-    "type": "lesson",
-    "ref": "i9",
-    "title": "File Handling"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-functions-02",
-    "title": "Default greeting"
-   }
-  ]
- },
- {
-  "id": "interview",
-  "title": "Interview Prep",
-  "desc": "The highest-yield problems and patterns for Python coding interviews.",
-  "icon": "🎯",
-  "color": "#f472b6",
-  "level": "Advanced",
-  "steps": [
-   {
-    "type": "lesson",
-    "ref": "i7",
-    "title": "List Comprehensions"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-strings-03",
-    "title": "Silent vowel counter"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-strings-06",
-    "title": "Mask that email"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-collections-02",
-    "title": "Mutating the list"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-collections-05",
-    "title": "Common ground"
-   },
-   {
-    "type": "lesson",
-    "ref": "a8",
-    "title": "Recursion"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-dsa-01",
-    "title": "Linear search"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-dsa-04",
-    "title": "Mirror, mirror"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-dsa-02",
-    "title": "Palindrome check"
-   },
-   {
-    "type": "lesson",
-    "ref": "a9",
-    "title": "Sorting & Searching"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-dsa-06",
-    "title": "Two sum"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-loops-03",
-    "title": "FizzBuzz list"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-functions-05",
-    "title": "The adder factory"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-oop-03",
-    "title": "Lost coordinates"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-oop-04",
-    "title": "Whose count is it?"
-   },
-   {
-    "type": "ex",
-    "ref": "ex-oop-06",
-    "title": "Louder bark"
-   }
-  ]
- }
+  {
+    "id": "fundamentals",
+    "title": "Python Fundamentals",
+    "desc": "Zero to confident: every core concept in the right order, with practice after each step.",
+    "icon": "🌱",
+    "steps": [
+      {
+        "type": "lesson",
+        "ref": "b1",
+        "title": "Hello, Python! Your First Program"
+      },
+      {
+        "type": "lesson",
+        "ref": "b2",
+        "title": "Variables & Data Types"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-variables-01",
+        "title": "Reassignment relay"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-variables-04",
+        "title": "F-string forecast"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-variables-05",
+        "title": "The score that never grows"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-variables-07",
+        "title": "Who does name hold now?"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-variables-08",
+        "title": "Copying a value, not sharing it"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-variables-09",
+        "title": "Price times quantity"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-variables-10",
+        "title": "Swap without losing a value"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-variables-11",
+        "title": "Rectangle area and perimeter"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-variables-12",
+        "title": "Average of three scores"
+      },
+      {
+        "type": "lesson",
+        "ref": "b3",
+        "title": "Strings & f-strings"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-strings-01",
+        "title": "Index detective"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-strings-05",
+        "title": "The messy greeting"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-strings-07",
+        "title": "How long is hello?"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-strings-08",
+        "title": "Slice surprise"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-strings-09",
+        "title": "Uppercase, not the method itself"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-strings-10",
+        "title": "Join the words"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-strings-11",
+        "title": "Reverse the word"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-strings-12",
+        "title": "Is it a palindrome?"
+      },
+      {
+        "type": "lesson",
+        "ref": "b6",
+        "title": "Lists & Tuples"
+      },
+      {
+        "type": "lesson",
+        "ref": "b8",
+        "title": "Conditionals & Logic"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-collections-01",
+        "title": "First and last"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-collections-06",
+        "title": "Zip into a dict"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-collections-07",
+        "title": "Shared list, shared change"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-collections-08",
+        "title": "Only the long names survive"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-collections-09",
+        "title": "Duplicates out, order stays"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-collections-10",
+        "title": "Add, don't overwrite"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-collections-11",
+        "title": "Count the evens"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-collections-12",
+        "title": "Words to lengths"
+      },
+      {
+        "type": "lesson",
+        "ref": "b7",
+        "title": "Dictionaries & Sets"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-loops-01",
+        "title": "Sum of evens"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-loops-05",
+        "title": "First even, please"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-loops-07",
+        "title": "Break stops the adding"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-loops-08",
+        "title": "Adding 0 to 3"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-loops-09",
+        "title": "Counting the wrong side"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-loops-10",
+        "title": "Missing the last number"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-loops-11",
+        "title": "Squares, added up"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-loops-12",
+        "title": "First repeat wins"
+      },
+      {
+        "type": "lesson",
+        "ref": "b9",
+        "title": "Loops: for & while — Practice"
+      },
+      {
+        "type": "lesson",
+        "ref": "b10",
+        "title": "Functions"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-functions-01",
+        "title": "Area of a circle"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-functions-04",
+        "title": "Add them all"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-functions-07",
+        "title": "Say hello back"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-functions-08",
+        "title": "The three look-alike lambdas"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-functions-09",
+        "title": "Return, don't just print"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-functions-10",
+        "title": "A fresh list every time"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-functions-11",
+        "title": "Count the vowels"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-functions-12",
+        "title": "Average of anything"
+      },
+      {
+        "type": "lesson",
+        "ref": "b11",
+        "title": "Numbers & Math in Python"
+      },
+      {
+        "type": "lesson",
+        "ref": "b12",
+        "title": "String Methods You Will Use Daily"
+      },
+      {
+        "type": "lesson",
+        "ref": "b13",
+        "title": "Slicing & Indexing Strings"
+      },
+      {
+        "type": "lesson",
+        "ref": "b18",
+        "title": "Type Conversion & the input() Function"
+      },
+      {
+        "type": "lesson",
+        "ref": "b19",
+        "title": "Boolean Logic: and, or, not"
+      },
+      {
+        "type": "lesson",
+        "ref": "b20",
+        "title": "Nested Loops & Patterns"
+      },
+      {
+        "type": "lesson",
+        "ref": "b21",
+        "title": "break, continue & Loop else"
+      },
+      {
+        "type": "lesson",
+        "ref": "b22",
+        "title": "Function Arguments: Defaults & Keywords"
+      },
+      {
+        "type": "lesson",
+        "ref": "b23",
+        "title": "Scope: Local vs Global"
+      },
+      {
+        "type": "lesson",
+        "ref": "b24",
+        "title": "Docstrings & Getting Help"
+      },
+      {
+        "type": "lesson",
+        "ref": "b25",
+        "title": "The random Module: Build a Guessing Game"
+      },
+      {
+        "type": "lesson",
+        "ref": "b26",
+        "title": "Dates & Times with datetime"
+      },
+      {
+        "type": "lesson",
+        "ref": "b27",
+        "title": "None & Checking for Nothing"
+      },
+      {
+        "type": "lesson",
+        "ref": "b28",
+        "title": "Comments & Clean Code Style"
+      },
+      {
+        "type": "lesson",
+        "ref": "b29",
+        "title": "Reading Tracebacks: Debugging Basics"
+      },
+      {
+        "type": "lesson",
+        "ref": "b30",
+        "title": "Capstone: Command-Line To-Do App"
+      },
+      {
+        "type": "lesson",
+        "ref": "b31",
+        "title": "F-strings in Depth: Formatting Numbers & Dates"
+      },
+      {
+        "type": "lesson",
+        "ref": "b32",
+        "title": "String Building: join() vs + in Loops"
+      },
+      {
+        "type": "lesson",
+        "ref": "b33",
+        "title": "Working with User Input: Validation Basics"
+      },
+      {
+        "type": "lesson",
+        "ref": "b34",
+        "title": "Numbers: Rounding, abs, min/max in Practice"
+      },
+      {
+        "type": "lesson",
+        "ref": "b35",
+        "title": "Comparisons & Chaining Conditions"
+      },
+      {
+        "type": "lesson",
+        "ref": "b36",
+        "title": "Truthiness: What Counts as False?"
+      },
+      {
+        "type": "lesson",
+        "ref": "b37",
+        "title": "while Loops: Sentinels & Menus"
+      },
+      {
+        "type": "lesson",
+        "ref": "b38",
+        "title": "for Loops over Dictionaries"
+      },
+      {
+        "type": "lesson",
+        "ref": "b39",
+        "title": "List Comprehension: A Gentle First Look"
+      },
+      {
+        "type": "lesson",
+        "ref": "b43",
+        "title": "Functions: Return vs Print"
+      },
+      {
+        "type": "lesson",
+        "ref": "b44",
+        "title": "Functions: Passing Lists & Dicts"
+      },
+      {
+        "type": "lesson",
+        "ref": "b45",
+        "title": "Default Arguments & the Mutable Default Trap"
+      },
+      {
+        "type": "lesson",
+        "ref": "b46",
+        "title": "Errors You Will Meet: NameError, TypeError, IndexError"
+      },
+      {
+        "type": "lesson",
+        "ref": "b48",
+        "title": "The math Module: Everyday Helpers"
+      },
+      {
+        "type": "lesson",
+        "ref": "b49",
+        "title": "The string Module & Constants"
+      },
+      {
+        "type": "lesson",
+        "ref": "b50",
+        "title": "Guided Project: Number Guessing Game"
+      },
+      {
+        "type": "lesson",
+        "ref": "b51",
+        "title": "Guided Project: Simple Quiz App"
+      },
+      {
+        "type": "lesson",
+        "ref": "b52",
+        "title": "Guided Project: Rock, Paper, Scissors"
+      },
+      {
+        "type": "lesson",
+        "ref": "b53",
+        "title": "Guided Project: Password Generator"
+      },
+      {
+        "type": "lesson",
+        "ref": "b54",
+        "title": "Guided Project: Simple Calculator with Functions"
+      },
+      {
+        "type": "lesson",
+        "ref": "b55",
+        "title": "Guided Project: Word Counter Script"
+      },
+      {
+        "type": "lesson",
+        "ref": "b62",
+        "title": "Working with Dates: Birthdays & Deadlines"
+      },
+      {
+        "type": "lesson",
+        "ref": "b63",
+        "title": "Time Delays & Timers with time"
+      },
+      {
+        "type": "lesson",
+        "ref": "b64",
+        "title": "Command-Line Arguments Basics (sys.argv)"
+      },
+      {
+        "type": "lesson",
+        "ref": "b65",
+        "title": "Environment Variables & Secrets Basics"
+      },
+      {
+        "type": "lesson",
+        "ref": "b67",
+        "title": "Debugging with print(): A Systematic Approach"
+      },
+      {
+        "type": "lesson",
+        "ref": "b68",
+        "title": "Code Style: Naming Things Well"
+      },
+      {
+        "type": "lesson",
+        "ref": "b69",
+        "title": "Capstone: Personal Expense Tracker"
+      },
+      {
+        "type": "lesson",
+        "ref": "b70",
+        "title": "Capstone: Flashcard Quiz App"
+      },
+      {
+        "type": "lesson",
+        "ref": "i1",
+        "title": "Functions & Return Values"
+      }
+    ]
+  },
+  {
+    "id": "dsa",
+    "title": "DSA with Python",
+    "desc": "Data structures and algorithms the Pythonic way — from lists and Big-O to trees, graphs, dynamic programming and interview patterns.",
+    "icon": "🧠",
+    "steps": [
+      {
+        "type": "lesson",
+        "ref": "b6",
+        "title": "Lists & Tuples"
+      },
+      {
+        "type": "lesson",
+        "ref": "b9",
+        "title": "Loops: for & while — Practice"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-loops-03",
+        "title": "FizzBuzz list"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-loops-04",
+        "title": "Counting with enumerate"
+      },
+      {
+        "type": "lesson",
+        "ref": "i7",
+        "title": "List Comprehensions"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-collections-02",
+        "title": "Mutating the list"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-collections-04",
+        "title": "Safe lookups"
+      },
+      {
+        "type": "lesson",
+        "ref": "i33",
+        "title": "Big-O Intuition & Timing Code"
+      },
+      {
+        "type": "lesson",
+        "ref": "i36",
+        "title": "Big-O in Practice: Measuring What Matters"
+      },
+      {
+        "type": "lesson",
+        "ref": "i37",
+        "title": "Arrays vs Lists: How Python Lists Work"
+      },
+      {
+        "type": "lesson",
+        "ref": "i38",
+        "title": "Two Pointers Technique"
+      },
+      {
+        "type": "lesson",
+        "ref": "i39",
+        "title": "Sliding Window Technique"
+      },
+      {
+        "type": "lesson",
+        "ref": "i40",
+        "title": "Prefix Sums"
+      },
+      {
+        "type": "lesson",
+        "ref": "i41",
+        "title": "Hash Maps in Practice: Frequency Counting"
+      },
+      {
+        "type": "lesson",
+        "ref": "i42",
+        "title": "Anagram & Grouping Problems"
+      },
+      {
+        "type": "lesson",
+        "ref": "i43",
+        "title": "Stacks: Balanced Parentheses"
+      },
+      {
+        "type": "lesson",
+        "ref": "i44",
+        "title": "Queues: Print Spooler Simulation"
+      },
+      {
+        "type": "lesson",
+        "ref": "i45",
+        "title": "Deques with collections.deque"
+      },
+      {
+        "type": "lesson",
+        "ref": "i46",
+        "title": "Linked Lists: Building Your Own"
+      },
+      {
+        "type": "lesson",
+        "ref": "i47",
+        "title": "Linked Lists: Reversal & Cycle Detection"
+      },
+      {
+        "type": "lesson",
+        "ref": "i48",
+        "title": "Recursion: Base Cases & the Call Stack"
+      },
+      {
+        "type": "lesson",
+        "ref": "i49",
+        "title": "Recursion: Memoization Basics"
+      },
+      {
+        "type": "lesson",
+        "ref": "i50",
+        "title": "Binary Search, Step by Step"
+      },
+      {
+        "type": "lesson",
+        "ref": "i51",
+        "title": "Sorting: Bubble, Selection, Insertion"
+      },
+      {
+        "type": "lesson",
+        "ref": "i52",
+        "title": "Sorting: Merge Sort"
+      },
+      {
+        "type": "lesson",
+        "ref": "i53",
+        "title": "Sorting: Quick Sort"
+      },
+      {
+        "type": "lesson",
+        "ref": "i54",
+        "title": "Sorting in Python: sorted() & sort() Deep Dive"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-sorting-01",
+        "title": "Sort by Length, Not by Alphabet"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-sorting-02",
+        "title": "Stable Sort Keeps Ties in Order"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-sorting-03",
+        "title": "Biggest First, Please"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-sorting-04",
+        "title": "Top Scorers First, Alphabet as Tie-Breaker"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-sorting-05",
+        "title": "Bubble Sort From Scratch"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-sorting-06",
+        "title": "Custom Priority Order With cmp_to_key"
+      },
+      {
+        "type": "lesson",
+        "ref": "i55",
+        "title": "Trees: Binary Tree Basics"
+      },
+      {
+        "type": "lesson",
+        "ref": "i56",
+        "title": "Trees: Traversals (Preorder, Inorder, Postorder)"
+      },
+      {
+        "type": "lesson",
+        "ref": "i57",
+        "title": "Trees: Binary Search Trees"
+      },
+      {
+        "type": "lesson",
+        "ref": "i58",
+        "title": "Heaps: Priority Queues with heapq"
+      },
+      {
+        "type": "lesson",
+        "ref": "i59",
+        "title": "Graphs: Adjacency Lists & Matrices"
+      },
+      {
+        "type": "lesson",
+        "ref": "i60",
+        "title": "Graphs: BFS"
+      },
+      {
+        "type": "lesson",
+        "ref": "i61",
+        "title": "Graphs: DFS"
+      },
+      {
+        "type": "lesson",
+        "ref": "i62",
+        "title": "Graphs: Shortest Path Intuition (Dijkstra)"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-trees-graphs-01",
+        "title": "Preorder: root first"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-trees-graphs-02",
+        "title": "BFS visits level by level"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-trees-graphs-03",
+        "title": "Count every node"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-trees-graphs-04",
+        "title": "Shortest path is off by one"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-trees-graphs-05",
+        "title": "Inorder traversal"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-trees-graphs-06",
+        "title": "Depth-first search"
+      },
+      {
+        "type": "lesson",
+        "ref": "i63",
+        "title": "Dynamic Programming: Fibonacci & Climbing Stairs"
+      },
+      {
+        "type": "lesson",
+        "ref": "i64",
+        "title": "Dynamic Programming: Knapsack Intuition"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dynamic-programming-01",
+        "title": "Memoized Fibonacci — What Does fib(10) Print?"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dynamic-programming-02",
+        "title": "Climbing Stairs — How Many Ways to Reach Step 5?"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dynamic-programming-03",
+        "title": "Fix the Greedy Coin Change"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dynamic-programming-04",
+        "title": "Fix the Off-by-One Stair Count"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dynamic-programming-05",
+        "title": "Pack the Knapsack for Maximum Value"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dynamic-programming-06",
+        "title": "Find the Longest Common Subsequence"
+      },
+      {
+        "type": "lesson",
+        "ref": "i65",
+        "title": "Greedy Algorithms: When Greedy Works"
+      },
+      {
+        "type": "lesson",
+        "ref": "i66",
+        "title": "Backtracking: N-Queens Intuition"
+      },
+      {
+        "type": "lesson",
+        "ref": "i67",
+        "title": "Bit Manipulation Basics"
+      },
+      {
+        "type": "lesson",
+        "ref": "i68",
+        "title": "Strings: Palindromes & Reversals"
+      },
+      {
+        "type": "lesson",
+        "ref": "i69",
+        "title": "Strings: Pattern Matching Basics"
+      },
+      {
+        "type": "lesson",
+        "ref": "i70",
+        "title": "Interview Patterns: Top K Elements"
+      },
+      {
+        "type": "lesson",
+        "ref": "i71",
+        "title": "Interview Patterns: Fast & Slow Pointers"
+      },
+      {
+        "type": "lesson",
+        "ref": "i72",
+        "title": "Interview Patterns: Intervals"
+      },
+      {
+        "type": "lesson",
+        "ref": "i73",
+        "title": "Complexity Analysis: Time vs Space"
+      },
+      {
+        "type": "lesson",
+        "ref": "i78",
+        "title": "functools: Caching Recursive Functions"
+      },
+      {
+        "type": "lesson",
+        "ref": "i88",
+        "title": "Capstone: Phonebook with Search"
+      },
+      {
+        "type": "lesson",
+        "ref": "i89",
+        "title": "Capstone: Sorting Visualizer (Text-Based)"
+      },
+      {
+        "type": "lesson",
+        "ref": "i90",
+        "title": "Capstone: Mini Search Engine"
+      },
+      {
+        "type": "lesson",
+        "ref": "a8",
+        "title": "Recursion"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-recursion-01",
+        "title": "Factorial, step by step"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-recursion-02",
+        "title": "How fast does Fibonacci grow?"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-recursion-03",
+        "title": "Fix the endless sum"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-recursion-04",
+        "title": "Fix the missing Fibonacci base case"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-recursion-05",
+        "title": "Add up a list, recursively"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-recursion-06",
+        "title": "Add up a nested list"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-01",
+        "title": "Linear search"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-04",
+        "title": "Mirror, mirror"
+      },
+      {
+        "type": "lesson",
+        "ref": "a9",
+        "title": "Sorting & Searching"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-02",
+        "title": "Palindrome check"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-07",
+        "title": "Stack pop order"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-08",
+        "title": "Slice the middle"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-09",
+        "title": "Find the maximum, negatives included"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-10",
+        "title": "Merge two sorted lists"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-11",
+        "title": "Second largest number"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-12",
+        "title": "Balanced brackets"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-functions-06",
+        "title": "Runaway recursion"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-05",
+        "title": "Binary search, off by one"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-03",
+        "title": "Binary search trace"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-06",
+        "title": "Two sum"
+      },
+      {
+        "type": "lesson",
+        "ref": "i74",
+        "title": "Testing Your Algorithms: Writing Good Tests"
+      }
+    ]
+  },
+  {
+    "id": "automation",
+    "title": "Automation & Scripting",
+    "desc": "Make Python do your boring work: files, scripts, and bulletproof error handling.",
+    "icon": "🤖",
+    "steps": [
+      {
+        "type": "lesson",
+        "ref": "b10",
+        "title": "Functions"
+      },
+      {
+        "type": "lesson",
+        "ref": "b64",
+        "title": "Command-Line Arguments Basics (sys.argv)"
+      },
+      {
+        "type": "lesson",
+        "ref": "b65",
+        "title": "Environment Variables & Secrets Basics"
+      },
+      {
+        "type": "lesson",
+        "ref": "b47",
+        "title": "Reading & Writing Text Files: A Gentle Start"
+      },
+      {
+        "type": "lesson",
+        "ref": "b66",
+        "title": "JSON Basics: Saving Your Data"
+      },
+      {
+        "type": "lesson",
+        "ref": "i9",
+        "title": "File Handling"
+      },
+      {
+        "type": "lesson",
+        "ref": "i24",
+        "title": "Files & Folders with pathlib"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-files-01",
+        "title": "Write, Rewind, Read"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-files-02",
+        "title": "Lines Keep Their Endings"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-files-03",
+        "title": "Count the Words, Not the Lines"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-files-04",
+        "title": "CSV With Commas Inside"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-files-05",
+        "title": "How Many Lines?"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-files-06",
+        "title": "JSON Round Trip"
+      },
+      {
+        "type": "lesson",
+        "ref": "i80",
+        "title": "Working with Large Files Efficiently"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-exceptions-02",
+        "title": "Safe divide"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-exceptions-05",
+        "title": "Catch the right culprit"
+      },
+      {
+        "type": "lesson",
+        "ref": "i11",
+        "title": "Modules & Imports"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-exceptions-03",
+        "title": "Catching the wrong error"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-exceptions-04",
+        "title": "The full try story"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-exceptions-06",
+        "title": "Raise your own flag"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-exceptions-07",
+        "title": "No error, no catch"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-exceptions-08",
+        "title": "First match wins"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-exceptions-09",
+        "title": "Skip the bad apples"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-exceptions-10",
+        "title": "Wrong net for a missing key"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-exceptions-11",
+        "title": "Safe text to number"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-exceptions-12",
+        "title": "Reject impossible ages"
+      },
+      {
+        "type": "lesson",
+        "ref": "i8",
+        "title": "Error Handling"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-functions-03",
+        "title": "Nowhere to return"
+      },
+      {
+        "type": "lesson",
+        "ref": "i81",
+        "title": "CSV in Depth: Real-World Data Cleaning"
+      },
+      {
+        "type": "lesson",
+        "ref": "i82",
+        "title": "JSON APIs: Fetching Real Data"
+      },
+      {
+        "type": "lesson",
+        "ref": "a26",
+        "title": "SQLite Databases with Python"
+      },
+      {
+        "type": "lesson",
+        "ref": "a27",
+        "title": "Talking to APIs: requests & JSON"
+      },
+      {
+        "type": "lesson",
+        "ref": "a71",
+        "title": "Automation: Scripting Your OS with os & shutil"
+      },
+      {
+        "type": "lesson",
+        "ref": "a72",
+        "title": "Automation: Web Scraping Basics"
+      },
+      {
+        "type": "lesson",
+        "ref": "a73",
+        "title": "Automation: Working with Excel Files (openpyxl)"
+      },
+      {
+        "type": "lesson",
+        "ref": "a74",
+        "title": "Automation: Sending Emails with Python"
+      },
+      {
+        "type": "lesson",
+        "ref": "a75",
+        "title": "Automation: Scheduling Tasks"
+      },
+      {
+        "type": "lesson",
+        "ref": "a86",
+        "title": "Asyncio: Web Scraping at Scale"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-async-01",
+        "title": "Two Tasks Take Turns"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-async-02",
+        "title": "Say Hello, Then Done"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-async-03",
+        "title": "The Missing await"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-async-04",
+        "title": "Await the Greeting"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-async-05",
+        "title": "Add After a Pause"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-async-06",
+        "title": "Gather and Combine"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-testing-01",
+        "title": "Catch the Failed Assert"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-testing-02",
+        "title": "Assert Guards the Input"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-testing-03",
+        "title": "Fix the Age Check"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-testing-04",
+        "title": "Add the Missing Digit Check"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-testing-05",
+        "title": "Build a Username Validator"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-testing-06",
+        "title": "Label a Fake User"
+      }
+    ]
+  },
+  {
+    "id": "data",
+    "title": "Data Analysis Basics",
+    "desc": "From raw data to answers: collections, files, NumPy, pandas, visualisation and your first machine-learning models.",
+    "icon": "📊",
+    "steps": [
+      {
+        "type": "lesson",
+        "ref": "b6",
+        "title": "Lists & Tuples"
+      },
+      {
+        "type": "lesson",
+        "ref": "b7",
+        "title": "Dictionaries & Sets"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-collections-03",
+        "title": "Missing the first item"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-collections-04",
+        "title": "Safe lookups"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-collections-05",
+        "title": "Common ground"
+      },
+      {
+        "type": "lesson",
+        "ref": "i7",
+        "title": "List Comprehensions"
+      },
+      {
+        "type": "lesson",
+        "ref": "i9",
+        "title": "File Handling"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-strings-02",
+        "title": "Shout it back"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-strings-04",
+        "title": "Slice, then repeat"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-strings-06",
+        "title": "Mask that email"
+      },
+      {
+        "type": "lesson",
+        "ref": "i12",
+        "title": "Lambda, map, filter"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-functions-02",
+        "title": "Default greeting"
+      },
+      {
+        "type": "lesson",
+        "ref": "i81",
+        "title": "CSV in Depth: Real-World Data Cleaning"
+      },
+      {
+        "type": "lesson",
+        "ref": "i82",
+        "title": "JSON APIs: Fetching Real Data"
+      },
+      {
+        "type": "lesson",
+        "ref": "a49",
+        "title": "Data Science: NumPy Arrays"
+      },
+      {
+        "type": "lesson",
+        "ref": "a50",
+        "title": "Data Science: NumPy Indexing & Broadcasting"
+      },
+      {
+        "type": "lesson",
+        "ref": "a51",
+        "title": "Data Science: pandas Series & DataFrames"
+      },
+      {
+        "type": "lesson",
+        "ref": "a52",
+        "title": "Data Science: Cleaning Data with pandas"
+      },
+      {
+        "type": "lesson",
+        "ref": "a53",
+        "title": "Data Science: GroupBy & Aggregation"
+      },
+      {
+        "type": "lesson",
+        "ref": "a54",
+        "title": "Data Science: Merging & Joining Data"
+      },
+      {
+        "type": "lesson",
+        "ref": "a55",
+        "title": "Data Science: Visualizing with matplotlib"
+      },
+      {
+        "type": "lesson",
+        "ref": "a56",
+        "title": "Data Science: Descriptive Statistics"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-data-science-01",
+        "title": "Mean of Four Scores"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-data-science-02",
+        "title": "Most Common Word"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-data-science-03",
+        "title": "Fix the Average"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-data-science-04",
+        "title": "Fix the Group-By"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-data-science-05",
+        "title": "Range of a List"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-data-science-06",
+        "title": "Parse CSV Text into Rows"
+      },
+      {
+        "type": "lesson",
+        "ref": "a57",
+        "title": "Data Science: Linear Regression Intuition"
+      },
+      {
+        "type": "lesson",
+        "ref": "a58",
+        "title": "Data Science: Train/Test Splits"
+      },
+      {
+        "type": "lesson",
+        "ref": "a59",
+        "title": "ML: scikit-learn First Model"
+      },
+      {
+        "type": "lesson",
+        "ref": "a60",
+        "title": "ML: Classification vs Regression"
+      },
+      {
+        "type": "lesson",
+        "ref": "a61",
+        "title": "ML: Feature Engineering Basics"
+      },
+      {
+        "type": "lesson",
+        "ref": "a62",
+        "title": "ML: Evaluating Models"
+      },
+      {
+        "type": "lesson",
+        "ref": "a84",
+        "title": "Capstone: Data Analysis Project (Real Dataset)"
+      },
+      {
+        "type": "lesson",
+        "ref": "a87",
+        "title": "ML: Text Classification Project"
+      },
+      {
+        "type": "lesson",
+        "ref": "a89",
+        "title": "Data Science: Time Series Basics"
+      }
+    ]
+  },
+  {
+    "id": "interview",
+    "title": "Interview Prep",
+    "desc": "The highest-yield problems and patterns for Python coding interviews.",
+    "icon": "🎯",
+    "steps": [
+      {
+        "type": "lesson",
+        "ref": "i7",
+        "title": "List Comprehensions"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-strings-03",
+        "title": "Silent vowel counter"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-strings-06",
+        "title": "Mask that email"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-collections-02",
+        "title": "Mutating the list"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-collections-05",
+        "title": "Common ground"
+      },
+      {
+        "type": "lesson",
+        "ref": "i33",
+        "title": "Big-O Intuition & Timing Code"
+      },
+      {
+        "type": "lesson",
+        "ref": "i36",
+        "title": "Big-O in Practice: Measuring What Matters"
+      },
+      {
+        "type": "lesson",
+        "ref": "i38",
+        "title": "Two Pointers Technique"
+      },
+      {
+        "type": "lesson",
+        "ref": "i39",
+        "title": "Sliding Window Technique"
+      },
+      {
+        "type": "lesson",
+        "ref": "i40",
+        "title": "Prefix Sums"
+      },
+      {
+        "type": "lesson",
+        "ref": "i41",
+        "title": "Hash Maps in Practice: Frequency Counting"
+      },
+      {
+        "type": "lesson",
+        "ref": "i42",
+        "title": "Anagram & Grouping Problems"
+      },
+      {
+        "type": "lesson",
+        "ref": "i50",
+        "title": "Binary Search, Step by Step"
+      },
+      {
+        "type": "lesson",
+        "ref": "i51",
+        "title": "Sorting: Bubble, Selection, Insertion"
+      },
+      {
+        "type": "lesson",
+        "ref": "i52",
+        "title": "Sorting: Merge Sort"
+      },
+      {
+        "type": "lesson",
+        "ref": "i53",
+        "title": "Sorting: Quick Sort"
+      },
+      {
+        "type": "lesson",
+        "ref": "i54",
+        "title": "Sorting in Python: sorted() & sort() Deep Dive"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-sorting-01",
+        "title": "Sort by Length, Not by Alphabet"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-sorting-02",
+        "title": "Stable Sort Keeps Ties in Order"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-sorting-03",
+        "title": "Biggest First, Please"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-sorting-04",
+        "title": "Top Scorers First, Alphabet as Tie-Breaker"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-sorting-05",
+        "title": "Bubble Sort From Scratch"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-sorting-06",
+        "title": "Custom Priority Order With cmp_to_key"
+      },
+      {
+        "type": "lesson",
+        "ref": "i55",
+        "title": "Trees: Binary Tree Basics"
+      },
+      {
+        "type": "lesson",
+        "ref": "i56",
+        "title": "Trees: Traversals (Preorder, Inorder, Postorder)"
+      },
+      {
+        "type": "lesson",
+        "ref": "i57",
+        "title": "Trees: Binary Search Trees"
+      },
+      {
+        "type": "lesson",
+        "ref": "i58",
+        "title": "Heaps: Priority Queues with heapq"
+      },
+      {
+        "type": "lesson",
+        "ref": "i59",
+        "title": "Graphs: Adjacency Lists & Matrices"
+      },
+      {
+        "type": "lesson",
+        "ref": "i60",
+        "title": "Graphs: BFS"
+      },
+      {
+        "type": "lesson",
+        "ref": "i61",
+        "title": "Graphs: DFS"
+      },
+      {
+        "type": "lesson",
+        "ref": "i62",
+        "title": "Graphs: Shortest Path Intuition (Dijkstra)"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-trees-graphs-01",
+        "title": "Preorder: root first"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-trees-graphs-02",
+        "title": "BFS visits level by level"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-trees-graphs-03",
+        "title": "Count every node"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-trees-graphs-04",
+        "title": "Shortest path is off by one"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-trees-graphs-05",
+        "title": "Inorder traversal"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-trees-graphs-06",
+        "title": "Depth-first search"
+      },
+      {
+        "type": "lesson",
+        "ref": "i63",
+        "title": "Dynamic Programming: Fibonacci & Climbing Stairs"
+      },
+      {
+        "type": "lesson",
+        "ref": "i64",
+        "title": "Dynamic Programming: Knapsack Intuition"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dynamic-programming-01",
+        "title": "Memoized Fibonacci — What Does fib(10) Print?"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dynamic-programming-02",
+        "title": "Climbing Stairs — How Many Ways to Reach Step 5?"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dynamic-programming-03",
+        "title": "Fix the Greedy Coin Change"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dynamic-programming-04",
+        "title": "Fix the Off-by-One Stair Count"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dynamic-programming-05",
+        "title": "Pack the Knapsack for Maximum Value"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dynamic-programming-06",
+        "title": "Find the Longest Common Subsequence"
+      },
+      {
+        "type": "lesson",
+        "ref": "i68",
+        "title": "Strings: Palindromes & Reversals"
+      },
+      {
+        "type": "lesson",
+        "ref": "i69",
+        "title": "Strings: Pattern Matching Basics"
+      },
+      {
+        "type": "lesson",
+        "ref": "i70",
+        "title": "Interview Patterns: Top K Elements"
+      },
+      {
+        "type": "lesson",
+        "ref": "i71",
+        "title": "Interview Patterns: Fast & Slow Pointers"
+      },
+      {
+        "type": "lesson",
+        "ref": "i72",
+        "title": "Interview Patterns: Intervals"
+      },
+      {
+        "type": "lesson",
+        "ref": "i73",
+        "title": "Complexity Analysis: Time vs Space"
+      },
+      {
+        "type": "lesson",
+        "ref": "i88",
+        "title": "Capstone: Phonebook with Search"
+      },
+      {
+        "type": "lesson",
+        "ref": "i89",
+        "title": "Capstone: Sorting Visualizer (Text-Based)"
+      },
+      {
+        "type": "lesson",
+        "ref": "i90",
+        "title": "Capstone: Mini Search Engine"
+      },
+      {
+        "type": "lesson",
+        "ref": "a8",
+        "title": "Recursion"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-recursion-01",
+        "title": "Factorial, step by step"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-recursion-02",
+        "title": "How fast does Fibonacci grow?"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-recursion-03",
+        "title": "Fix the endless sum"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-recursion-04",
+        "title": "Fix the missing Fibonacci base case"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-recursion-05",
+        "title": "Add up a list, recursively"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-recursion-06",
+        "title": "Add up a nested list"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-01",
+        "title": "Linear search"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-04",
+        "title": "Mirror, mirror"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-02",
+        "title": "Palindrome check"
+      },
+      {
+        "type": "lesson",
+        "ref": "a9",
+        "title": "Sorting & Searching"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-06",
+        "title": "Two sum"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-07",
+        "title": "Stack pop order"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-08",
+        "title": "Slice the middle"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-09",
+        "title": "Find the maximum, negatives included"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-10",
+        "title": "Merge two sorted lists"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-11",
+        "title": "Second largest number"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-dsa-12",
+        "title": "Balanced brackets"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-loops-03",
+        "title": "FizzBuzz list"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-functions-05",
+        "title": "The adder factory"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-oop-03",
+        "title": "Lost coordinates"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-oop-04",
+        "title": "Whose count is it?"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-oop-06",
+        "title": "Louder bark"
+      }
+    ]
+  },
+  {
+    "id": "web",
+    "title": "Web Development with Python",
+    "desc": "From HTTP to a deployed Flask app: routing, templates, forms, REST APIs, auth and databases.",
+    "icon": "🌐",
+    "steps": [
+      {
+        "type": "lesson",
+        "ref": "b10",
+        "title": "Functions"
+      },
+      {
+        "type": "lesson",
+        "ref": "a26",
+        "title": "SQLite Databases with Python"
+      },
+      {
+        "type": "lesson",
+        "ref": "a27",
+        "title": "Talking to APIs: requests & JSON"
+      },
+      {
+        "type": "lesson",
+        "ref": "a63",
+        "title": "Web: HTTP Basics for Python Devs"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-web-01",
+        "title": "What's in netloc?"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-web-02",
+        "title": "Repeated query values"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-web-03",
+        "title": "Build a safe query string"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-web-04",
+        "title": "First post title, safely"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-web-05",
+        "title": "Is this API response a success?"
+      },
+      {
+        "type": "ex",
+        "ref": "ex-web-06",
+        "title": "Split a URL into three parts"
+      },
+      {
+        "type": "lesson",
+        "ref": "a64",
+        "title": "Web: Flask First App"
+      },
+      {
+        "type": "lesson",
+        "ref": "a65",
+        "title": "Web: Flask Routing & Templates"
+      },
+      {
+        "type": "lesson",
+        "ref": "a66",
+        "title": "Web: Flask Forms & Validation"
+      },
+      {
+        "type": "lesson",
+        "ref": "a67",
+        "title": "Web: REST APIs with Flask"
+      },
+      {
+        "type": "lesson",
+        "ref": "a68",
+        "title": "Web: FastAPI First App"
+      },
+      {
+        "type": "lesson",
+        "ref": "a69",
+        "title": "Web: Authentication Basics (Sessions & Tokens)"
+      },
+      {
+        "type": "lesson",
+        "ref": "a70",
+        "title": "Web: Talking to Databases (SQLAlchemy Intro)"
+      },
+      {
+        "type": "lesson",
+        "ref": "a83",
+        "title": "Capstone: REST API with Flask & SQLite"
+      },
+      {
+        "type": "lesson",
+        "ref": "a85",
+        "title": "Capstone: Full-Stack Mini App"
+      },
+      {
+        "type": "lesson",
+        "ref": "a86",
+        "title": "Asyncio: Web Scraping at Scale"
+      },
+      {
+        "type": "lesson",
+        "ref": "a88",
+        "title": "Web: Deploying a Flask App"
+      }
+    ]
+  }
 ]

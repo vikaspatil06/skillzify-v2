@@ -111,6 +111,12 @@ fun FlowchartScreen(vm: AppViewModel, nav: NavController) {
         }
     }
 
+    // One line per the UI brief: a successfully rendered flowchart is
+    // recorded once per new graph (LaunchedEffect keyed on the graph).
+    androidx.compose.runtime.LaunchedEffect(graph) {
+        if (graph != null) vm.markFlowchartRendered()
+    }
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)

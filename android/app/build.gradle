@@ -15,8 +15,8 @@ android {
         applicationId 'com.skillzify.app'
         minSdk 24
         targetSdk 34
-        versionCode 5
-        versionName '1.2.3'
+        versionCode 6
+        versionName '1.3.0'
     }
 
     // Per-ABI APKs (Chaquopy's interpreter is native). arm64 covers virtually

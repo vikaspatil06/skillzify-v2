@@ -66,10 +66,12 @@ fun PracticeTab(vm: AppViewModel, nav: NavController) {
             modifier = Modifier.padding(bottom = 8.dp)
         ) {
             items(topics) { t ->
+                val count = if (t == "All") vm.exercises.size
+                    else vm.exercises.count { it.topic == t }
                 FilterChip(
                     selected = topic == t,
                     onClick = { topic = t },
-                    label = { Text(t.replaceFirstChar { it.uppercase() }) }
+                    label = { Text("${t.replaceFirstChar { it.uppercase() }} ($count)") }
                 )
             }
         }
@@ -84,35 +86,61 @@ fun PracticeTab(vm: AppViewModel, nav: NavController) {
                 Text("$done/${list.size}", color = TextMuted, fontSize = 13.sp)
             }
         }
+        // Grouped by topic with counts (the 150-exercise catalog) when
+        // "All" is selected; a single flat list under a topic filter.
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(list, key = { it.id }) { ex ->
-                val att = vm.getAttempt(ex.id)
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Card),
-                    modifier = Modifier.fillMaxWidth().animateItem().clickable { nav.navigate("exercise/${ex.id}") }
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (topic == "All") {
+                vm.exercises.groupBy { it.topic }.forEach { (t, exs) ->
+                    item(key = "topic-$t") {
+                        val tDone = exs.count { vm.getAttempt(it.id).solved }
+                        Row(
+                            Modifier.fillMaxWidth().padding(top = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                if (att.solved) "✅" else "⬜",
-                                fontSize = 16.sp
+                                t.replaceFirstChar { it.uppercase() },
+                                fontWeight = FontWeight.Bold, fontSize = 16.sp
                             )
-                            Spacer(Modifier.width(8.dp))
-                            Text(ex.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Row {
-                            Text(
-                                diffLabel(ex.diff),
-                                fontSize = 12.sp,
-                                color = when (ex.diff) { 1 -> Success; 2 -> Warning; else -> MaterialTheme.colorScheme.error }
-                            )
-                            Text(" · ${ex.kind} · ${ex.xp} XP", fontSize = 12.sp, color = TextMuted)
-                            if (att.attempts > 0 && !att.solved)
-                                Text(" · ${att.attempts} tries", fontSize = 12.sp, color = TextMuted)
+                            Text("$tDone/${exs.size} solved", color = TextMuted, fontSize = 12.sp)
                         }
                     }
+                    items(exs, key = { it.id }) { ex ->
+                        ExerciseRow(vm, ex) { nav.navigate("exercise/${ex.id}") }
+                    }
                 }
+            } else {
+                items(list, key = { it.id }) { ex ->
+                    ExerciseRow(vm, ex) { nav.navigate("exercise/${ex.id}") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExerciseRow(vm: AppViewModel, ex: com.skillzify.app.data.Exercise, onClick: () -> Unit) {
+    val att = vm.getAttempt(ex.id)
+    WebCard(onClick = onClick) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (att.solved) "✅" else "⬜",
+                    fontSize = 16.sp
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(ex.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                WebChip(
+                    diffLabel(ex.diff),
+                    when (ex.diff) { 1 -> Success; 2 -> Warning; else -> MaterialTheme.colorScheme.error }
+                )
+                WebChip(ex.kind)
+                WebChip("${ex.xp} XP")
+                if (att.attempts > 0 && !att.solved)
+                    Text("${att.attempts} tries", fontSize = 12.sp, color = TextMuted)
             }
         }
     }

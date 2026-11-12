@@ -153,13 +153,22 @@ fun CompilerTab(vm: AppViewModel) {
                     aiText = text
                 }
             }.onFailure { e ->
-                // AI down? Fall back to the instant local explainer for errors.
-                if (aiError.isNotEmpty()) {
+                // Server cap errors (DAILY_CAP / POOL_CAP, ai.js v21 parity):
+                // AiError.Provider carries the server's message VERBATIM +
+                // its code — cap messages are shown verbatim and alone,
+                // with no invented retry UI. Other failures fall back to
+                // the instant local explainer for errors.
+                val msg = e.message ?: "AI request failed."
+                val code = (e as? com.skillzify.app.data.AiRepository.AiError.Provider)?.code ?: ""
+                val isCap = code == "DAILY_CAP" || code == "POOL_CAP"
+                if (isCap) {
+                    aiText = msg
+                } else if (aiError.isNotEmpty()) {
                     val ex = Explainer.explain(aiError)
-                    aiText = "⚠️ AI unavailable right now (${e.message}) — local explanation:\n\n" +
+                    aiText = "⚠️ AI unavailable right now ($msg) — local explanation:\n\n" +
                         ex.title + "\n" + ex.tips.joinToString("\n") { "• $it" }
                 } else {
-                    aiText = "⚠️ AI unavailable right now (${e.message}). Try again in a bit."
+                    aiText = "⚠️ AI unavailable right now ($msg). Try again in a bit."
                 }
             }
         }
@@ -267,9 +276,9 @@ fun CompilerTab(vm: AppViewModel) {
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(pad).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text("🤖 Python Compiler", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+            Text("💻 Code Studio", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
             Text(
-                "Real Python 3.11 on-device · interactive terminal: input() asks right here, like Code Studio.",
+                "Real Python 3.11 on-device · interactive terminal: input() asks right here, like the website's Code Studio.",
                 color = TextMuted, fontSize = 13.sp
             )
 
@@ -364,11 +373,21 @@ fun CompilerTab(vm: AppViewModel) {
                 }
             }
 
+            // Editor chrome (web Code Studio parity): dark --code-bg
+            // surface, light code text, filename as the field label.
             OutlinedTextField(
                 value = code,
                 onValueChange = { code = it },
                 label = { Text("$activeFile") },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp),
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = CodeBg,
+                    unfocusedContainerColor = CodeBg,
+                    focusedTextColor = androidx.compose.ui.graphics.Color(0xFFCDD6FF),
+                    unfocusedTextColor = androidx.compose.ui.graphics.Color(0xFFCDD6FF),
+                    focusedLabelColor = TextMuted,
+                    unfocusedLabelColor = TextMuted
+                ),
                 textStyle = androidx.compose.ui.text.TextStyle(
                     fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 18.sp
                 )

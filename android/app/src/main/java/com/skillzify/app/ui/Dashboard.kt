@@ -1,10 +1,6 @@
 package com.skillzify.app.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,23 +8,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,215 +30,191 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import androidx.navigation.NavController
 import com.skillzify.app.AppViewModel
-import com.skillzify.app.ui.theme.BgSoft
-import com.skillzify.app.ui.theme.Card
-import com.skillzify.app.ui.theme.Danger
 import com.skillzify.app.ui.theme.Success
-import com.skillzify.app.ui.theme.TextMain
 import com.skillzify.app.ui.theme.TextMuted
 import com.skillzify.app.ui.theme.Warning
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/* Dashboard — website dashboard.html: greeting header, "Up next" card,
+   concept-map card, stat cards (progress / streak / level), today's
+   challenge, review queue, weak spots + mastery snapshot, progress by
+   section, latest achievements, activity, certificates.
+   AI usage line mirrors the web dashboard (ai.js v21): the line renders
+   ONLY when vm.aiUsage is non-null — an old backend / unreachable
+   server shows nothing at all, never a placeholder error. */
 @Composable
-fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
+fun DashboardTab(vm: AppViewModel, nav: NavController) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    // Which track's certificate was just saved (brief "✓ Saved" feedback).
-    var savedCert by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    var savedCert by remember { mutableStateOf<String?>(null) }
     val user by vm.firebaseUser.collectAsStateWithLifecycle()
     val level = vm.currentLevel()
     val next = vm.nextLevelInfo()
     val fmt = SimpleDateFormat("d MMM, HH:mm", Locale.getDefault())
 
+    // Refresh AI usage (+ admin overview) whenever the dashboard appears.
+    LaunchedEffect(Unit) { vm.refreshAiAndAdmin() }
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // User header
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Card),
-            modifier = Modifier.fillMaxWidth()
+        // ---- Greeting header ----
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                Modifier.fillMaxWidth().padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(Modifier.weight(1f)) {
+                Text("📊 My Dashboard", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                Text(
+                    "👋 ${vm.profileName().ifBlank { user?.displayName ?: "Learner" }} · ${user?.email ?: ""}",
+                    color = TextMuted, fontSize = 12.sp
+                )
+            }
+            OutlinedButton(
+                onClick = { vm.refreshSync() },
+                enabled = !vm.syncRefreshing
             ) {
-                Text("👤", fontSize = 32.sp)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        user?.displayName?.takeIf { it.isNotBlank() } ?: "Learner",
-                        fontWeight = FontWeight.Bold, fontSize = 16.sp
-                    )
-                    Text(user?.email ?: "", color = TextMuted, fontSize = 12.sp)
-                }
-                Button(
-                    onClick = { vm.logout() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Danger.copy(alpha = 0.15f)),
-                ) { Text("Logout", color = Danger, fontSize = 13.sp, maxLines = 1) }
+                Text(
+                    if (vm.syncRefreshing) "Syncing…" else "☁️ ${vm.syncStatus}",
+                    fontSize = 12.sp, maxLines = 1
+                )
+            }
+        }
+        if (vm.isAdminConfirmed) {
+            // Admin chip — shown ONLY on the server's word (overview 200).
+            Row {
+                WebChip("🛡️ Admin — open the control room")
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Open →", color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                    fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickableNoRipple { nav.navigate("admin") }
+                )
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            StatCard("⚡", "${vm.xp}", "Total XP", Modifier.weight(1f))
-            StatCard("🔥", "${vm.streak}", "Day streak", Modifier.weight(1f))
-            StatCard(
-                "🏅",
-                "${vm.doneIds.size}/${vm.catalog.lessons.size}",
-                "Lessons",
-                Modifier.weight(1f)
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            StatCard("🏋️", "${vm.solvedExerciseCount()}/${vm.exercises.size}", "Exercises", Modifier.weight(1f))
-            // Cloud sync card with manual refresh (↻) — retries a failed/offline sync.
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Card),
-                modifier = Modifier.weight(1f)
-            ) {
-                Column(
-                    Modifier.padding(14.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("☁️", fontSize = 22.sp)
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            if (vm.syncRefreshing) "…" else vm.syncStatus
-                                .replace("Syncing…", "…")
-                                .replace("Synced ✓", "✓")
-                                .replace("Synced", "✓"),
-                            fontSize = 20.sp, fontWeight = FontWeight.ExtraBold
-                        )
-                    }
-                    Text("Cloud sync", color = TextMuted, fontSize = 11.sp)
-                    Spacer(Modifier.height(6.dp))
-                    OutlinedButton(
-                        onClick = { vm.refreshSync() },
-                        enabled = !vm.syncRefreshing,
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (vm.syncRefreshing) "Syncing…" else "↻ Refresh sync", fontSize = 12.sp, maxLines = 1) }
-                }
-            }
-        }
-
-        // Profile editing
-        var editingProfile by remember { mutableStateOf(false) }
-        var editName by remember { mutableStateOf("") }
-        var editBio by remember { mutableStateOf("") }
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Card),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(Modifier.padding(16.dp)) {
+        // ---- AI usage line (web dashboard parity; hidden when null) ----
+        val ai = vm.aiUsage
+        if (ai != null) {
+            WebCard {
                 Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    Modifier.fillMaxWidth().padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("👤 Profile", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    OutlinedButton(onClick = {
-                        editName = vm.profileName()
-                        editBio = vm.profileBio()
-                        editingProfile = true
-                    }) { Text("Edit", fontSize = 13.sp, maxLines = 1) }
+                    Text(
+                        "🤖 AI answers today: ${ai.used} / ${ai.cap}" + if (ai.admin) " (admin)" else "",
+                        fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    val poolUsed = ai.poolUsed
+                    val poolCap = ai.poolCap
+                    if (poolUsed != null && poolCap != null && poolCap > 0) {
+                        Text("Pool $poolUsed/$poolCap", color = TextMuted, fontSize = 12.sp)
+                    }
                 }
-                Spacer(Modifier.height(6.dp))
-                Text(vm.profileName().ifBlank { "Learner" }, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                if (vm.profileBio().isNotBlank()) Text(vm.profileBio(), color = TextMuted, fontSize = 13.sp)
             }
         }
-        if (editingProfile) {
-            AlertDialog(
-                onDismissRequest = { editingProfile = false },
-                title = { Text("Edit profile") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = editName, onValueChange = { editName = it },
-                            label = { Text("Display name") }, singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = editBio, onValueChange = { editBio = it },
-                            label = { Text("Bio") }, modifier = Modifier.fillMaxWidth()
-                        )
+
+        // ---- Up next (website parity) ----
+        val upNext = vm.upNextLesson()
+        if (upNext != null) {
+            WebCard {
+                Column(Modifier.padding(16.dp)) {
+                    Text("🎯 Up next", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(upNext.title, fontWeight = FontWeight.Bold, fontSize = 17.sp,
+                        modifier = Modifier.padding(top = 4.dp))
+                    Text(
+                        "Lesson ${vm.lessonIndex(upNext.id) + 1} of ${vm.catalog.lessons.size} · ${upNext.section}",
+                        color = TextMuted, fontSize = 12.sp
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { nav.navigate("lesson/${upNext.id}") }) {
+                            Text("Resume lesson →", fontSize = 13.sp, maxLines = 1)
+                        }
+                        OutlinedButton(onClick = { nav.navigate("map") }) {
+                            Text("🗺️ Show on map", fontSize = 13.sp, maxLines = 1)
+                        }
                     }
-                },
-                confirmButton = {
-                    Button(onClick = {
-                        vm.saveProfile(editName, editBio)
-                        editingProfile = false
-                    }) { Text("Save", maxLines = 1) }
-                },
-                dismissButton = {
-                    OutlinedButton(onClick = { editingProfile = false }) { Text("Cancel", maxLines = 1) }
                 }
-            )
+            }
+        } else {
+            WebCard {
+                Column(Modifier.padding(16.dp)) {
+                    Text("🏆 All lessons complete!", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text("You've finished the whole journey — revisit the map or keep practising.",
+                        color = TextMuted, fontSize = 13.sp)
+                }
+            }
         }
 
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Card),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(Modifier.padding(18.dp)) {
-                Text("Current level", color = TextMuted, fontSize = 12.sp)
-                Text(level.name, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+        // ---- Placement CTA when no placement ----
+        if (vm.placement == null) {
+            WebCard(onClick = { nav.navigate("placement") }) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("🎯 Find your starting point", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text(
+                        "Take the 3-minute placement test — 10 quick questions place you at the right section, and sections below it unlock.",
+                        color = TextMuted, fontSize = 13.sp
+                    )
+                    Text("Take the test →", color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                }
+            }
+        }
+
+        // ---- Stat cards ----
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            StatCard("⚡", "${vm.xp}", "Total XP", Modifier.weight(1f))
+            StatCard("🔥", "${vm.streak}", "Day streak", Modifier.weight(1f))
+            StatCard("🏅", "${vm.doneIds.size}/${vm.catalog.lessons.size}", "Lessons", Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            StatCard("🏋️", "${vm.solvedExerciseCount()}/${vm.exercises.size}", "Exercises", Modifier.weight(1f))
+            StatCard("▶️", "${vm.store.getRunCount()}", "Code runs", Modifier.weight(1f))
+            val overall = if (vm.catalog.lessons.isEmpty()) 0
+                else vm.doneIds.size * 100 / vm.catalog.lessons.size
+            StatCard("📈", "$overall%", "Overall progress", Modifier.weight(1f))
+        }
+
+        // ---- Level ----
+        WebCard {
+            Column(Modifier.padding(16.dp)) {
+                Text("⚡ Level", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(level.name, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.padding(top = 4.dp))
                 if (next != null) {
-                    Spacer(Modifier.height(8.dp))
                     val frac = (vm.xp - level.xp).toFloat() / (next.xp - level.xp).coerceAtLeast(1).toFloat()
+                    Spacer(Modifier.height(8.dp))
                     LinearProgressIndicator(
                         progress = { frac.coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(99.dp))
                     )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "${next.xp - vm.xp} XP to ${next.name}",
-                        color = TextMuted, fontSize = 12.sp
-                    )
+                    Text("${next.xp - vm.xp} XP to ${next.name}", color = TextMuted, fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 6.dp))
                 } else {
                     Text("Max level reached! 🏆", color = Warning, fontSize = 13.sp)
                 }
             }
         }
 
-        // ---------- Up next (website parity) ----------
-        val upNext = vm.upNextLesson()
-        if (upNext != null) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Card),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("🎯 Up next", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    Spacer(Modifier.height(4.dp))
-                    Text(upNext.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                    Text(
-                        "Lesson ${vm.lessonIndex(upNext.id) + 1} of ${vm.catalog.lessons.size} · ${upNext.track} track",
-                        color = TextMuted, fontSize = 12.sp
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = { nav.navigate("lesson/${upNext.id}") }) {
-                        Text("Resume lesson →", fontSize = 13.sp)
-                    }
-                }
-            }
-        }
+        // ---- Mastery snapshot (mastery.js: weakest topic + section bands) ----
+        MasterySnapshot(vm, nav)
 
-        // ---------- Daily challenge (website parity: day % count) ----------
+        // ---- Daily challenge ----
         val daily = vm.dailyChallenge()
         if (daily != null) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Card),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            WebCard {
                 Column(Modifier.padding(16.dp)) {
-                    Text("🏋️ Today's challenge", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text("📅 Today's challenge", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Spacer(Modifier.height(4.dp))
                     Text(daily.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                     Text(daily.prompt.take(90) + "…", color = TextMuted, fontSize = 12.sp)
@@ -261,14 +226,11 @@ fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
             }
         }
 
-        // ---------- Revision queue (website parity) ----------
+        // ---- Revision queue ----
         val revision = vm.revisionQueue()
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Card),
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        WebCard {
             Column(Modifier.padding(16.dp)) {
-                Text("🔄 Review queue", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text("🔁 Review queue", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 Spacer(Modifier.height(6.dp))
                 if (revision.isEmpty()) {
                     Text("Nothing to review — clean slate!", color = TextMuted, fontSize = 13.sp)
@@ -289,20 +251,26 @@ fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
             }
         }
 
-        // ---------- Achievements (website parity) ----------
+        // ---- Quick links (Passport / Map / Community / Library) ----
+        Text("Quick links", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            QuickLink("🎓", "Passport", Modifier.weight(1f)) { nav.navigate("passport") }
+            QuickLink("🗺️", "Concept map", Modifier.weight(1f)) { nav.navigate("map") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            QuickLink("🤝", "Community", Modifier.weight(1f)) { nav.navigate("community") }
+            QuickLink("📚", "Library", Modifier.weight(1f)) { nav.navigate("library") }
+        }
+
+        // ---- Achievements preview ----
         val achievements = vm.achievements()
         val unlockedCount = achievements.count { it.unlocked }
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Card),
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        WebCard(onClick = { nav.navigate("passport") }) {
             Column(Modifier.padding(16.dp)) {
-                Text(
-                    "🏆 Achievements · $unlockedCount/${achievements.size}",
-                    fontWeight = FontWeight.Bold, fontSize = 15.sp
-                )
+                Text("🏆 Latest achievements · $unlockedCount/${achievements.size}",
+                    fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 Spacer(Modifier.height(10.dp))
-                achievements.chunked(3).forEach { row ->
+                achievements.take(6).chunked(3).forEach { row ->
                     Row(
                         Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -312,10 +280,11 @@ fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
                                 Modifier.weight(1f),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(a.icon, fontSize = 22.sp, color = if (a.unlocked) androidx.compose.ui.graphics.Color.Unspecified else TextMuted)
+                                Text(a.icon, fontSize = 22.sp,
+                                    color = if (a.unlocked) androidx.compose.ui.graphics.Color.Unspecified else TextMuted)
                                 Text(
                                     a.name, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                                    color = if (a.unlocked) TextMain else TextMuted
+                                    color = if (a.unlocked) androidx.compose.material3.MaterialTheme.colorScheme.onSurface else TextMuted
                                 )
                                 Text(
                                     a.desc, fontSize = 10.sp, color = TextMuted,
@@ -326,177 +295,20 @@ fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
                         repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
+                Text("See all in your Skill Passport →",
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                    fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
             }
         }
 
-        // ---------- Activity heatmap: last 12 weeks (website parity, compact) ----------
-        val activeDays = vm.store.activeDays()
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Card),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text("📅 Activity · last 12 weeks", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Spacer(Modifier.height(10.dp))
-                val cal = java.util.Calendar.getInstance()
-                cal.add(java.util.Calendar.DAY_OF_YEAR, -83)
-                // align to week start (Sunday)
-                while (cal.get(java.util.Calendar.DAY_OF_WEEK) != java.util.Calendar.SUNDAY) {
-                    cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
-                }
-                val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    for (w in 0 until 12) {
-                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            for (d in 0 until 7) {
-                                val dayStr = fmt.format(cal.time)
-                                val active = dayStr in activeDays
-                                androidx.compose.foundation.layout.Box(
-                                    Modifier.size(14.dp)
-                                        .clip(RoundedCornerShape(3.dp))
-                                        .background(if (active) Success else BgSoft)
-                                )
-                                cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "${activeDays.size} active days · keep the streak alive 🔥",
-                    color = TextMuted, fontSize = 12.sp
-                )
-            }
-        }
+        // ---- Activity heatmap ----
+        ActivityHeatmap(vm)
 
-        // ---------- Certificates (website parity: one per completed track) ----------
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Card),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text("🎓 Certificates", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Spacer(Modifier.height(6.dp))
-                var anyCert = false
-                vm.catalog.tracks.forEach { t ->
-                    if (vm.trackProgress(t.id) == 100) {
-                        anyCert = true
-                        Row(
-                            Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("${t.icon} ${t.name}", fontSize = 13.sp, modifier = Modifier.weight(1f))
-                            OutlinedButton(onClick = {
-                                // Bitmap rendering + file I/O off the main
-                                // thread: a 1200×800 canvas draw used to hitch
-                                // the UI on every tap.
-                                scope.launch {
-                                    withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                        downloadCertificate(ctx, vm.profileName().ifBlank { "Learner" }, t.name)
-                                    }
-                                    savedCert = t.id
-                                    kotlinx.coroutines.delay(2500)
-                                    if (savedCert == t.id) savedCert = null
-                                }
-                            }) { Text(if (savedCert == t.id) "✓ Saved" else "Download", fontSize = 12.sp, maxLines = 1) }
-                        }
-                    }
-                }
-                if (!anyCert) {
-                    Text(
-                        "Finish every lesson in a track to unlock its certificate.",
-                        color = TextMuted, fontSize = 13.sp
-                    )
-                }
-            }
-        }
-
-        // ---------- Topic mastery (website profile parity) ----------
-        val mastery = vm.topicAccuracy()
-        if (mastery.isNotEmpty()) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Card),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("🎯 Topic mastery", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    Spacer(Modifier.height(6.dp))
-                    mastery.toList().sortedByDescending { (_, st) ->
-                        val (s, total) = st
-                        if (total == 0) 0f else s / total.toFloat()
-                    }.forEach { (topic, st) ->
-                        val (s, total) = st
-                        val pct = if (total == 0) 0 else s * 100 / total
-                        Row(
-                            Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(topic.replaceFirstChar { it.uppercase() }, fontSize = 13.sp)
-                            Text("$pct% ($s/$total)", color = TextMuted, fontSize = 12.sp)
-                        }
-                        LinearProgressIndicator(
-                            progress = { pct / 100f },
-                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(99.dp))
-                        )
-                        Spacer(Modifier.height(4.dp))
-                    }
-                }
-            }
-        }
-
-        // ---------- Theme picker (website parity: dark/light + 6 accents) ----------
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Card),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text("🎨 Theme", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = { vm.setTheme(true, vm.themeAccent) },
-                        modifier = Modifier.weight(1f)
-                    ) { Text(if (vm.themeDark) "🌙 Dark ✓" else "🌙 Dark", fontSize = 13.sp, maxLines = 1) }
-                    OutlinedButton(
-                        onClick = { vm.setTheme(false, vm.themeAccent) },
-                        modifier = Modifier.weight(1f)
-                    ) { Text(if (!vm.themeDark) "☀️ Light ✓" else "☀️ Light", fontSize = 13.sp, maxLines = 1) }
-                }
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    com.skillzify.app.ui.theme.ACCENTS.forEachIndexed { i, a ->
-                        androidx.compose.foundation.layout.Box(
-                            Modifier.size(36.dp)
-                                .clip(androidx.compose.foundation.shape.CircleShape)
-                                .background(a.primary)
-                                .border(
-                                    width = if (i == vm.themeAccent) 3.dp else 0.dp,
-                                    color = if (i == vm.themeAccent) TextMain else androidx.compose.ui.graphics.Color.Transparent,
-                                    shape = androidx.compose.foundation.shape.CircleShape
-                                )
-                                .clickable { vm.setTheme(vm.themeDark, i) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (i == vm.themeAccent) Text("✓", color = androidx.compose.ui.graphics.Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    com.skillzify.app.ui.theme.ACCENTS[vm.themeAccent].name,
-                    color = TextMuted, fontSize = 12.sp
-                )
-            }
-        }
-
-        Text("📊 Track progress", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        // ---- Progress by section ----
+        Text("Progress by section", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         vm.catalog.tracks.forEach { t ->
             val pct = vm.trackProgress(t.id)
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Card),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            WebCard {
                 Column(Modifier.padding(14.dp)) {
                     Row(
                         Modifier.fillMaxWidth(),
@@ -515,20 +327,56 @@ fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
             }
         }
 
-        // Topic accuracy (Practice Mode)
+        // ---- Certificates (per completed track/section) ----
+        WebCard {
+            Column(Modifier.padding(16.dp)) {
+                Text("🎓 Certificates", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Spacer(Modifier.height(6.dp))
+                var anyCert = false
+                vm.catalog.tracks.forEach { t ->
+                    if (vm.trackProgress(t.id) == 100) {
+                        anyCert = true
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("${t.icon} ${t.name}", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            OutlinedButton(onClick = {
+                                scope.launch {
+                                    withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        downloadCertificate(ctx, vm.profileName().ifBlank { "Learner" }, t.name)
+                                    }
+                                    savedCert = t.id
+                                    kotlinx.coroutines.delay(2500)
+                                    if (savedCert == t.id) savedCert = null
+                                }
+                            }) { Text(if (savedCert == t.id) "✓ Saved" else "Download", fontSize = 12.sp, maxLines = 1) }
+                        }
+                    }
+                }
+                if (!anyCert) {
+                    Text(
+                        "Finish every lesson in a section to unlock its certificate — see your Skill Passport for progress.",
+                        color = TextMuted, fontSize = 13.sp
+                    )
+                }
+            }
+        }
+
+        // ---- Weak spots (topic accuracy, existing widget) ----
         val accuracy = vm.topicAccuracy()
         if (accuracy.isNotEmpty()) {
-            Text("🎯 Practice accuracy by topic", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("🎯 Weak spots", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("Exercise accuracy by topic — low scores need a revisit.",
+                color = TextMuted, fontSize = 12.sp)
             accuracy.toList().sortedByDescending { (_, st) ->
                 val (s, total) = st
                 if (total == 0) 0f else s / total.toFloat()
             }.forEach { (topic, st) ->
                 val (s, total) = st
                 val pct = if (total == 0) 0 else s * 100 / total
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Card),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                WebCard {
                     Column(Modifier.padding(14.dp)) {
                         Row(
                             Modifier.fillMaxWidth(),
@@ -554,10 +402,7 @@ fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
 
         if (vm.runs.isNotEmpty()) {
             Text("🕘 Recent runs", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Card),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            WebCard {
                 Column(Modifier.padding(14.dp)) {
                     vm.runs.take(10).forEach { run ->
                         Row(
@@ -583,12 +428,86 @@ fun DashboardTab(vm: AppViewModel, nav: androidx.navigation.NavController) {
     }
 }
 
+/** Mastery snapshot: weakest topic (vm.topicMastery) + per-section bands
+    (vm.sectionMastery) with the web's band names — Mastered / Solid /
+    Building / Starting out / Not tried yet. */
+@Composable
+private fun MasterySnapshot(vm: AppViewModel, nav: NavController) {
+    val topics = try { vm.topicMastery() } catch (e: Exception) { emptyList() }
+    val sections = try { vm.sectionMastery() } catch (e: Exception) { emptyList() }
+    if (topics.isEmpty() && sections.isEmpty()) return
+    // TopicMastery: score is a non-null Int (0 when untried), no label
+    // field — the topic id is capitalised for display like elsewhere.
+    val weakest = topics.filter { it.tried > 0 }.minByOrNull { it.score }
+    WebCard {
+        Column(Modifier.padding(16.dp)) {
+            Text("🎯 Mastery snapshot", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            if (weakest != null) {
+                val w = weakest
+                val wLabel = w.topic.replaceFirstChar { it.uppercase() }
+                Text(
+                    "Weakest topic: $wLabel — ${w.score}% mastery (${w.band})" + if (w.rusty) " · 🍂 rusty" else "",
+                    fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)
+                )
+                Row(Modifier.padding(top = 6.dp)) {
+                    OutlinedButton(onClick = { nav.navigate("practice") }) {
+                        Text("Practise $wLabel →", fontSize = 12.sp, maxLines = 1)
+                    }
+                }
+            } else {
+                Text(
+                    "No exercises tried yet — your mastery snapshot appears once you practise.",
+                    color = TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+            if (sections.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                sections.forEach { s ->
+                    // SectionMastery carries ids/counts only; the
+                    // section's name/icon come from the catalog.
+                    val track = vm.catalog.tracks.firstOrNull { it.id == s.sectionId }
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("${track?.icon ?: ""} ${track?.name ?: s.sectionId}", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        Text("${s.doneCount}/${s.totalCount}", color = TextMuted, fontSize = 12.sp)
+                        Spacer(Modifier.width(8.dp))
+                        WebChip(
+                            s.band + if (s.rusty) " 🍂" else "",
+                            when (s.band) {
+                                "Mastered" -> Success
+                                "Solid" -> Success
+                                "Building" -> Warning
+                                else -> TextMuted
+                            }
+                        )
+                    }
+                    LinearProgressIndicator(
+                        progress = { s.score / 100f },
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(99.dp))
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickLink(icon: String, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    WebCard(modifier = modifier, onClick = onClick) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(icon, fontSize = 20.sp)
+            Spacer(Modifier.width(8.dp))
+            Text(label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        }
+    }
+}
+
 @Composable
 private fun StatCard(emoji: String, big: String, label: String, modifier: Modifier = Modifier) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Card),
-        modifier = modifier
-    ) {
+    WebCard(modifier = modifier) {
         Column(
             Modifier.padding(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -599,6 +518,19 @@ private fun StatCard(emoji: String, big: String, label: String, modifier: Modifi
         }
     }
 }
+
+/** Small clickable-without-ripple helper for inline text links. */
+private fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier =
+    this.then(Modifier.clickableText(onClick))
+
+private fun Modifier.clickableText(onClick: () -> Unit): Modifier =
+    this.then(
+        androidx.compose.foundation.clickable(
+            interactionSource = androidx.compose.runtime.MutableInteractionSource(),
+            indication = null,
+            onClick = onClick
+        )
+    )
 
 /** Renders a track-completion certificate PNG into Downloads (website parity). */
 private fun downloadCertificate(ctx: android.content.Context, name: String, trackName: String) {

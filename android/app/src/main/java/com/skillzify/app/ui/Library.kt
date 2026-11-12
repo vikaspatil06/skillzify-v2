@@ -59,10 +59,7 @@ fun LibraryTab(vm: AppViewModel, nav: NavController) {
             LibCard("reference", "📖", "Python Reference", "${vm.reference.size} quick-lookup entries with examples — functions, types, control flow."),
             LibCard("flowchart", "🔀", "Flowchart Lab", "Turn Python code or an algorithm into a step-by-step flowchart — and trace it.")
         )) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Card),
-                modifier = Modifier.fillMaxWidth().clickable { nav.navigate(c.route) }
-            ) {
+            WebCard(onClick = { nav.navigate(c.route) }) {
                 Column(Modifier.fillMaxWidth().padding(16.dp)) {
                     Text("${c.icon} ${c.title}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     Spacer(Modifier.height(4.dp))
@@ -173,11 +170,21 @@ fun PathDetail(vm: AppViewModel, id: String, nav: NavController) {
                     Text(if (done) "✅" else if (pathUnlocked) "🔓" else "${i + 1}.", fontSize = 14.sp, modifier = Modifier.width(32.dp))
                     Column(Modifier.weight(1f)) {
                         Text(s.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        Text(
-                            (if (s.type == "lesson") "Lesson" else "Exercise") +
-                                if (pathUnlocked) " · unlocked by this path" else "",
-                            color = TextMuted, fontSize = 12.sp
-                        )
+                        Row(
+                            Modifier.padding(top = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Exercise steps open the exercise (Library brief);
+                            // lesson steps open the lesson — routing is in
+                            // the card's click handler above.
+                            WebChip(
+                                if (s.type == "lesson") "Lesson" else "Exercise",
+                                if (s.type == "lesson") TextMuted
+                                else androidx.compose.material3.MaterialTheme.colorScheme.primary
+                            )
+                            if (pathUnlocked) Text("unlocked by this path", color = TextMuted, fontSize = 12.sp)
+                        }
                     }
                 }
             }
@@ -205,8 +212,18 @@ fun ProjectsScreen(vm: AppViewModel, nav: NavController) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
                     Text("${pr.icon} ${pr.title}", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Text(pr.desc, color = TextMuted, fontSize = 13.sp)
-                    Spacer(Modifier.height(4.dp))
-                    Text("${pr.difficulty} · ${pr.milestones.size} milestones", fontSize = 12.sp, color = TextMuted)
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        WebChip(
+                            pr.difficulty,
+                            when {
+                                pr.difficulty.contains("Beginner", true) -> Success
+                                pr.difficulty.contains("Intermediate", true) -> com.skillzify.app.ui.theme.Warning
+                                else -> androidx.compose.material3.MaterialTheme.colorScheme.error
+                            }
+                        )
+                        WebChip("${pr.milestones.size} milestones")
+                    }
                 }
             }
         }

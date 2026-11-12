@@ -25,7 +25,16 @@ class Store(ctx: Context) {
 
     fun isDone(id: String): Boolean = prefs.getBoolean("done_$id", false)
 
-    fun markDone(id: String) = prefs.edit().putBoolean("done_$id", true).apply()
+    fun markDone(id: String) {
+        prefs.edit().putBoolean("done_$id", true).apply()
+        // Passport/sync parity: first completion time, earliest wins —
+        // recorded once, never overwritten (web progress.doneAt rule).
+        if (getLessonDoneAt(id) == null) {
+            val m = allLessonDoneAt().toMutableMap()
+            m[id] = System.currentTimeMillis()
+            saveLessonDoneAt(m)
+        }
+    }
 
     fun getXp(): Int = prefs.getInt("xp", 0)
 
@@ -92,7 +101,8 @@ class Store(ctx: Context) {
                 hintsUsed = o.optInt("hintsUsed", 0),
                 revealed = o.optBoolean("revealed", false),
                 bestMs = o.optLong("bestMs", 0),
-                lastTry = o.optLong("lastTry", 0)
+                lastTry = o.optLong("lastTry", 0),
+                at = o.optLong("at", 0)
             )
         } catch (e: Exception) { ExerciseAttempt() }
     }
@@ -102,6 +112,7 @@ class Store(ctx: Context) {
             put("attempts", a.attempts); put("solved", a.solved)
             put("hintsUsed", a.hintsUsed); put("revealed", a.revealed)
             put("bestMs", a.bestMs); put("lastTry", a.lastTry)
+            put("at", a.at)
         }
         prefs.edit().putString("ex_att_$id", o.toString()).apply()
     }
@@ -153,6 +164,15 @@ class Store(ctx: Context) {
 
     fun getEnrolledPaths(): Map<String, Pair<Boolean, Long>> {
         val raw = prefs.getString("skillzify_enrolled_paths", null) ?: return emptyMap()
+        // Legacy ARRAY shape (web pre-map enrollments: presence = enrolled,
+        // at = 0 so any real timestamped event wins) — migrate in memory,
+        // exactly like web sync.js readEnrollMap().
+        if (raw.trimStart().startsWith("[")) {
+            return try {
+                val arr = JSONArray(raw)
+                (0 until arr.length()).map { arr.getString(it) to (true to 0L) }.toMap()
+            } catch (e: Exception) { emptyMap() }
+        }
         return try {
             val o = JSONObject(raw)
             val out = mutableMapOf<String, Pair<Boolean, Long>>()
@@ -170,8 +190,12 @@ class Store(ctx: Context) {
     }
 
     fun setEnrollment(id: String, enrolled: Boolean, at: Long) {
-        val raw = prefs.getString("skillzify_enrolled_paths", null)
-        val o = try { if (raw != null) JSONObject(raw) else JSONObject() } catch (e: Exception) { JSONObject() }
+        // Seed from the parsed map so a legacy ARRAY-shaped store is
+        // migrated (not silently dropped) on the first write.
+        val o = JSONObject()
+        for ((k, v) in getEnrolledPaths()) {
+            o.put(k, JSONObject().put("enrolled", v.first).put("at", v.second))
+        }
         o.put(id, JSONObject().put("enrolled", enrolled).put("at", at))
         prefs.edit().putString("skillzify_enrolled_paths", o.toString()).apply()
     }
@@ -323,4 +347,192 @@ class Store(ctx: Context) {
         for ((k, v) in workspaceFiles()) o.put(if (k == old) new else k, v)
         prefs.edit().putString("workspace_files", o.toString()).apply()
     }
+
+    /* ---------- lesson completion times (syncs in progress.doneAt) ----------
+       {lessonId: ms}; per-lesson earliest non-zero wins in sync merges
+       (web mergeProgress/earliestMap). 0/absent = date unknown. */
+
+    fun allLessonDoneAt(): Map<String, Long> {
+        val raw = prefs.getString("lesson_done_at", null) ?: return emptyMap()
+        return try {
+            val o = JSONObject(raw)
+            val out = mutableMapOf<String, Long>()
+            val keys = o.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                out[k] = o.optLong(k, 0)
+            }
+            out
+        } catch (e: Exception) { emptyMap() }
+    }
+
+    fun getLessonDoneAt(id: String): Long? = allLessonDoneAt()[id]?.takeIf { it > 0 }
+
+    private fun saveLessonDoneAt(m: Map<String, Long>) {
+        val o = JSONObject()
+        for ((k, v) in m) o.put(k, v)
+        prefs.edit().putString("lesson_done_at", o.toString()).apply()
+    }
+
+    /** Applies the merged doneAt map from sync (already merge-resolved). */
+    fun applySyncedDoneAt(m: Map<String, Long>) = saveLessonDoneAt(m)
+
+    /** Run total as synced (progress.runCount, MAX merge — web parity). */
+    fun applySyncedRunCount(n: Int) {
+        if (n > getRunCount()) prefs.edit().putInt("run_count_total", n).apply()
+    }
+
+    /* ---------- placement record (syncs as users/{uid}.placement) ---------- */
+
+    fun getPlacement(): PlacementRecord? {
+        val raw = prefs.getString("placement", null) ?: return null
+        return try {
+            val o = JSONObject(raw)
+            val section = o.optString("section", "")
+            if (section.isBlank()) return null
+            val stages = mutableMapOf<String, StageScore>()
+            val so = o.optJSONObject("stages")
+            if (so != null) {
+                for (k in listOf("a", "b", "c")) {
+                    val s = so.optJSONObject(k)
+                    if (s != null) stages[k] = StageScore(s.optInt("correct", 0), s.optInt("total", 0))
+                }
+            }
+            PlacementRecord(
+                section = section,
+                score = o.optInt("score", 0),
+                total = o.optInt("total", 0),
+                date = o.optLong("date", 0),
+                stages = stages
+            )
+        } catch (e: Exception) { null }
+    }
+
+    fun setPlacement(rec: PlacementRecord) {
+        val stages = JSONObject()
+        for (k in listOf("a", "b", "c")) {
+            val s = rec.stages[k] ?: StageScore(0, 0)
+            stages.put(k, JSONObject().put("correct", s.correct).put("total", s.total))
+        }
+        val o = JSONObject().apply {
+            put("section", rec.section); put("score", rec.score)
+            put("total", rec.total); put("date", rec.date); put("stages", stages)
+        }
+        prefs.edit().putString("placement", o.toString()).apply()
+    }
+
+    fun clearPlacement() = prefs.edit().remove("placement").apply()
+
+    /* ---------- per-section completion dates (passport certificates) ----------
+       {sectionId: ms}. Recorded once — the FIRST time a section is fully
+       done; never backfilled/overwritten afterwards (cert id stability). */
+
+    private fun sectionCompletions(): Map<String, Long> {
+        val raw = prefs.getString("section_completed_at", null) ?: return emptyMap()
+        return try {
+            val o = JSONObject(raw)
+            val out = mutableMapOf<String, Long>()
+            val keys = o.keys()
+            while (keys.hasNext()) { val k = keys.next(); out[k] = o.optLong(k, 0) }
+            out
+        } catch (e: Exception) { emptyMap() }
+    }
+
+    fun recordSectionCompleted(sectionId: String, atMs: Long) {
+        if (sectionId.isBlank() || atMs <= 0) return
+        val m = sectionCompletions()
+        if (m.containsKey(sectionId)) return // first completion stands
+        val o = JSONObject()
+        for ((k, v) in m) o.put(k, v)
+        o.put(sectionId, atMs)
+        prefs.edit().putString("section_completed_at", o.toString()).apply()
+    }
+
+    fun getSectionCompletedAt(sectionId: String): Long? =
+        sectionCompletions()[sectionId]?.takeIf { it > 0 }
+
+    /* ---------- achievement counters (syncs as users/{uid}.counters) ----------
+       Web shape (sync.js mergeCounters): reviewsDone / plansDone /
+       bestAnswers / flowchartsDone are counts that only grow (MAX merge);
+       showcaseStarred is a boolean (OR merge). The task-level names
+       (reviewsCompleted, plansFinished, flowchartRendered, hasBestAnswer,
+       hasShowcaseStar) are views over this single web-shaped store, so
+       local state and the synced doc can never disagree. */
+
+    fun getCounters(): Counters = Counters(
+        reviewsDone = prefs.getInt("counters_reviews_done", 0),
+        plansDone = prefs.getInt("counters_plans_done", 0),
+        bestAnswers = prefs.getInt("counters_best_answers", 0),
+        showcaseStarred = prefs.getBoolean("counters_showcase_starred", false),
+        flowchartsDone = prefs.getInt("counters_flowcharts_done", 0)
+    )
+
+    fun applySyncedCounters(c: Counters) {
+        prefs.edit()
+            .putInt("counters_reviews_done", c.reviewsDone)
+            .putInt("counters_plans_done", c.plansDone)
+            .putInt("counters_best_answers", c.bestAnswers)
+            .putBoolean("counters_showcase_starred", c.showcaseStarred)
+            .putInt("counters_flowcharts_done", c.flowchartsDone)
+            .apply()
+    }
+
+    fun getReviewsCompleted(): Int = getCounters().reviewsDone
+    fun incReviewsCompleted() =
+        prefs.edit().putInt("counters_reviews_done", getReviewsCompleted() + 1).apply()
+
+    fun getPlansFinished(): Int = getCounters().plansDone
+    fun incPlansFinished() =
+        prefs.edit().putInt("counters_plans_done", getPlansFinished() + 1).apply()
+
+    fun incBestAnswers() =
+        prefs.edit().putInt("counters_best_answers", getCounters().bestAnswers + 1).apply()
+
+    fun incFlowchartsDone() =
+        prefs.edit().putInt("counters_flowcharts_done", getCounters().flowchartsDone + 1).apply()
+
+    /** Flag view: true once at least one flowchart has rendered. Setting
+        false is a no-op — web counters only grow (MAX merge would undo a
+        decrease on the next sync anyway). */
+    fun isFlowchartRendered(): Boolean = getCounters().flowchartsDone > 0
+    fun setFlowchartRendered(on: Boolean) { if (on && !isFlowchartRendered()) incFlowchartsDone() }
+
+    fun isHasBestAnswer(): Boolean = getCounters().bestAnswers > 0
+    fun setHasBestAnswer(on: Boolean) { if (on && !isHasBestAnswer()) incBestAnswers() }
+
+    fun isHasShowcaseStar(): Boolean = getCounters().showcaseStarred
+    fun setHasShowcaseStar(on: Boolean) {
+        if (on && !isHasShowcaseStar())
+            prefs.edit().putBoolean("counters_showcase_starred", true).apply()
+    }
+
+    /* ---------- last signed-in uid + sign-out wipe (web sync.js parity) ---------- */
+
+    fun getLastUid(): String? = prefs.getString("last_uid", null)?.ifEmpty { null }
+    fun setLastUid(uid: String) = prefs.edit().putString("last_uid", uid).apply()
+
+    /**
+     * Wipes ALL per-user data, mirroring web clearLocalUserData(): every
+     * key in this store is per-user EXCEPT the theme (device-level: web
+     * keeps skillzify_theme/accent across sign-outs), which is preserved.
+     * Per-uid keys the web keeps (passport privacy flag) have no app
+     * equivalent — nothing else survives. Call ONLY after a successful
+     * final push (web P1-25: a failed push keeps the data so the next
+     * sign-in can retry instead of losing unsynced progress).
+     */
+    fun clearUserData() {
+        val dark = getThemeDark()
+        val accent = getThemeAccent()
+        prefs.edit().clear().apply()
+        saveTheme(dark, accent)
+    }
 }
+
+/** Web-shaped achievement counters (sync.js `counters` field). */
+data class Counters(
+    val reviewsDone: Int = 0,
+    val plansDone: Int = 0,
+    val bestAnswers: Int = 0,
+    val showcaseStarred: Boolean = false,
+    val flowchartsDone: Int = 0
+)

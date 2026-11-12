@@ -6,19 +6,34 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.skillzify.app.data.AchievementDef
+import com.skillzify.app.data.AdminRepository
+import com.skillzify.app.data.AiRepository
 import com.skillzify.app.data.AuthRepository
 import com.skillzify.app.data.AuthResult
 import com.skillzify.app.data.Catalog
 import com.skillzify.app.data.Exercise
 import com.skillzify.app.data.ExerciseAttempt
 import com.skillzify.app.data.LearnPath
+import com.skillzify.app.data.LessonNode
+import com.skillzify.app.data.PassportEntry
+import com.skillzify.app.data.PlacementRecord
+import com.skillzify.app.data.PlacementResult
 import com.skillzify.app.data.Project
 import com.skillzify.app.data.RefEntry
 import com.skillzify.app.data.RunRecord
+import com.skillzify.app.data.SectionMastery
+import com.skillzify.app.data.SectionNode
 import com.skillzify.app.data.Snippet
 import com.skillzify.app.data.Store
 import com.skillzify.app.data.SyncRepository
+import com.skillzify.app.data.TopicMastery
+import com.skillzify.app.data.buildPassport
+import com.skillzify.app.data.computeSectionMastery
+import com.skillzify.app.data.computeTopicMastery
+import com.skillzify.app.data.lessonNodes
 import com.skillzify.app.data.levelFor
+import com.skillzify.app.data.loadAchievements
 import com.skillzify.app.data.loadCatalog
 import com.skillzify.app.data.loadExercises
 import com.skillzify.app.data.loadPaths
@@ -45,6 +60,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
        thread was the startup hitch. Screens are unreachable until the
        App-level gate sees catalogLoaded, so lateinit is safe here. */
     lateinit var catalog: Catalog; private set
+    lateinit var achievementDefs: List<AchievementDef>; private set
     lateinit var snippets: List<Snippet>; private set
     lateinit var exercises: List<Exercise>; private set
     lateinit var reference: List<RefEntry>; private set
@@ -65,6 +81,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             authRepo.userFlow.collect { user ->
                 if (user != null) {
+                    store.setLastUid(user.uid)
                     syncStatus = "Syncing..."
                     val ok = syncRepo.syncNow(user.uid)
                     refreshFromStore()
@@ -75,9 +92,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         refreshFromStore()
                         syncStatus = syncRepo.lastStatus
                     }
+                    refreshAiAndAdmin()
                 } else {
                     syncRepo.stopListening()
                     syncStatus = "Not synced"
+                    adminOverview = null
+                    refreshAiAndAdmin()
+                    // Web sync.js safety net (P1-25): a session that ended
+                    // WITHOUT logout() (revoked/expired) still gets one last
+                    // push attempt with the recorded uid; local data is
+                    // wiped ONLY when that push succeeds, otherwise kept
+                    // (with the uid marker) for the next sign-in to retry.
+                    // A plain logout() clears the marker first, so this
+                    // no-ops there; a never-signed-in device has no marker
+                    // and its anonymous progress is never wiped.
+                    val lastUid = store.getLastUid()
+                    if (lastUid != null) {
+                        viewModelScope.launch {
+                            val ok = try { syncRepo.syncNow(lastUid) } catch (e: Exception) { false }
+                            if (ok) {
+                                store.clearUserData()
+                                refreshFromStore()
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -122,6 +160,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         xp = store.getXp()
         streak = store.getStreak()
         runs = store.getRuns()
+        placement = store.getPlacement()
+        starredLessons = store.starredLessons()
+        pinnedLessons = store.pinnedLessons()
         if (::exercises.isInitialized) exerciseAttempts = exercises.associate { it.id to store.getAttempt(it.id) }
         refreshEnrollments()
     }
@@ -134,13 +175,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             // interpreter-startup hitch mid-interaction.
             try { com.chaquo.python.Python.getInstance() } catch (e: Exception) { /* starts on first use */ }
             val c = loadCatalog(app)
+            val ach = loadAchievements(app) // fail-soft: empty until the asset lands
             val sn = loadSnippets(app)
             val ex = loadExercises(app)
             val rf = loadReference(app)
             val pa = loadPaths(app)
             val pr = loadProjects(app)
             withContext(Dispatchers.Main) {
-                catalog = c; snippets = sn; exercises = ex
+                catalog = c; achievementDefs = ach; snippets = sn; exercises = ex
                 reference = rf; paths = pa; projects = pr
                 exerciseAttempts = ex.associate { it.id to store.getAttempt(it.id) }
                 refreshEnrollments()
@@ -155,7 +197,35 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun login(email: String, password: String): AuthResult =
         authRepo.login(email, password)
 
-    fun logout() = authRepo.logout()
+    /**
+     * Sign-out, web sync.js handleLogout parity: push pending state
+     * FIRST; only a successful push wipes local per-user data
+     * (Store.clearUserData — theme survives, everything else goes, so
+     * no account leaks into the next one on this device). A failed push
+     * keeps the data (and the last-uid marker) for the next sign-in to
+     * retry — but sign-out itself always proceeds, like the web.
+     */
+    fun logout() {
+        val uid = authRepo.currentUser()?.uid ?: store.getLastUid()
+        pushJob?.cancel()
+        syncRepo.stopListening()
+        if (uid == null) {
+            authRepo.logout()
+            return
+        }
+        viewModelScope.launch {
+            val ok = try { syncRepo.syncNow(uid) } catch (e: Exception) { false }
+            if (ok) store.clearUserData()
+            authRepo.logout()
+            adminOverview = null
+            if (ok) {
+                refreshFromStore()
+                syncStatus = "Not synced"
+            } else {
+                syncStatus = "Sync failed — progress kept on this device"
+            }
+        }
+    }
 
     suspend fun resetPassword(email: String): String? = authRepo.resetPassword(email)
 
@@ -195,6 +265,112 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         store.setEnrollment(pathId, false, System.currentTimeMillis())
         refreshEnrollments()
         markDirty()
+    }
+
+    /* ---------- placement (SmartSystems; syncs via users/{uid}.placement) ---------- */
+
+    var placement by mutableStateOf(store.getPlacement()); private set
+
+    /** Persists a finished placement test: Store first, then the
+        debounced sync push carries it (web placement.js save() parity —
+        the record is a pointer, never progress/XP). */
+    fun savePlacement(result: PlacementResult) {
+        val rec = PlacementRecord(
+            section = result.section, score = result.score, total = result.total,
+            date = System.currentTimeMillis(), stages = result.stages
+        )
+        store.setPlacement(rec)
+        placement = rec
+        markDirty()
+    }
+
+    fun clearPlacement() {
+        store.clearPlacement()
+        placement = null
+        markDirty()
+    }
+
+    /* ---------- smart systems: mastery / passport / concept map ---------- */
+
+    fun topicMastery(): List<TopicMastery> {
+        if (!::exercises.isInitialized) return emptyList()
+        return computeTopicMastery(exercises, { id -> getAttempt(id) }, System.currentTimeMillis())
+    }
+
+    fun sectionMastery(): List<SectionMastery> {
+        if (!::catalog.isInitialized) return emptyList()
+        return computeSectionMastery(catalog, doneIds, { id -> store.getLessonDoneAt(id) })
+    }
+
+    fun passportEntries(): List<PassportEntry> {
+        if (!::catalog.isInitialized) return emptyList()
+        return buildPassport(catalog, doneIds, { sec -> store.getSectionCompletedAt(sec) })
+    }
+
+    fun sectionNodes(): List<SectionNode> {
+        if (!::catalog.isInitialized) return emptyList()
+        val mastery = sectionMastery()
+        return com.skillzify.app.data.sectionNodes(
+            catalog = catalog,
+            doneIds = doneIds,
+            unlockedSections = catalog.tracks.filter { sectionUnlocked(it.id) }.map { it.id }.toSet(),
+            masteryBySection = mastery.associate { it.sectionId to it.score },
+            rustySections = mastery.filter { it.rusty }.map { it.sectionId }.toSet()
+        )
+    }
+
+    fun lessonNodes(sectionId: String): List<LessonNode> {
+        if (!::catalog.isInitialized) return emptyList()
+        return lessonNodes(catalog, sectionId, doneIds) { idx -> isUnlocked(idx) }
+    }
+
+    /* ---------- community-driven badge flags (UI layer calls these) ---------- */
+
+    /** Flowchart screen rendered a flowchart: First Flowchart badge +
+        the synced flowchartsDone counter. */
+    fun markFlowchartRendered() {
+        val before = store.isFlowchartRendered()
+        store.setFlowchartRendered(true)
+        if (!before) markDirty()
+    }
+
+    /** Community layer reports the signed-in user's flags (best-effort
+        fetch via CommunityRepository.fetchMyCommunityFlags). Flags only
+        ever turn ON — web counters never decrease. */
+    fun refreshCommunityBadges(hasBest: Boolean, hasStar: Boolean) {
+        if (hasBest) store.setHasBestAnswer(true)
+        if (hasStar) store.setHasShowcaseStar(true)
+        if (hasBest || hasStar) markDirty()
+    }
+
+    /* ---------- AI usage + admin overview ---------- */
+
+    var aiUsage by mutableStateOf<AiRepository.AiUsage?>(null); private set
+    var adminOverview by mutableStateOf<AdminRepository.AdminOverview?>(null); private set
+
+    /** Admin ONLY when the server said so (a 200 from
+        /api/admin/overview) — never from an email string. */
+    val isAdminConfirmed: Boolean get() = adminOverview != null
+
+    /**
+     * Fetches /api/usage (signed-in or anonymous) and, when signed in,
+     * the admin overview with a fresh ID token. Fail-soft: failures
+     * leave nulls. Against the OLD production server (Vikas: no deploy)
+     * /api/usage answers its basic shape (pool fields null) and
+     * /api/admin/overview 404s -> adminOverview stays null and the
+     * Admin entry stays hidden; both light up automatically once the
+     * new server is deployed. Also safe to call manually (Dashboard
+     * refresh).
+     */
+    fun refreshAiAndAdmin() {
+        viewModelScope.launch {
+            aiUsage = AiRepository.fetchUsage()
+            val user = authRepo.currentUser()
+            adminOverview = if (user != null) {
+                val token = AiRepository.freshIdToken()
+                if (token.isNotEmpty()) AdminRepository.fetchOverview(token) else null
+            } else null
+        }
     }
 
     /* ---------- starred / pinned lessons ---------- */
@@ -267,29 +443,75 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val runs = store.getRunCount()
         val streakBest = maxOf(streak, store.getLongestStreak())
         val snips = store.userSnippets().size
-        fun a(id: String, icon: String, name: String, desc: String, ok: Boolean) =
-            Achievement(id, icon, name, desc, ok)
-        return listOf(
-            a("first_steps", "🌱", "First Steps", "Complete your first lesson", done >= 1),
-            a("scholar", "🎓", "Scholar", "Complete all $totalLessons lessons", done >= totalLessons),
-            a("xp_100", "💯", "Century", "Earn 100 XP", xp >= 100),
-            a("xp_500", "⚡", "Charged", "Earn 500 XP", xp >= 500),
-            a("xp_1000", "🚀", "Rocket", "Earn 1,000 XP", xp >= 1000),
-            a("xp_5000", "🌟", "Superstar", "Earn 5,000 XP", xp >= 5000),
-            a("streak_3", "🔥", "Warming Up", "3-day learning streak", streakBest >= 3),
-            a("streak_7", "🔥", "On Fire", "7-day learning streak", streakBest >= 7),
-            a("streak_30", "🔥", "Unstoppable", "30-day learning streak", streakBest >= 30),
-            a("runner_10", "▶️", "Tinkerer", "Run code 10 times", runs >= 10),
-            a("runner_50", "⚙️", "Engineer", "Run code 50 times", runs >= 50),
-            a("snippet_saver", "📝", "Curator", "Save your first snippet", snips >= 1),
-            a("night_owl", "🦉", "Night Owl", "Code between midnight and 5 AM", store.hasNightOwl()),
-            a("early_bird", "🌅", "Early Bird", "Code between 5 and 8 AM", store.hasEarlyBird()),
-            a("ex_first", "🏋️", "Problem Solver", "Solve your first exercise", exSolved >= 1),
-            a("ex_10", "💪", "Decathlete", "Solve 10 exercises", exSolved >= 10),
-            a("ex_25", "🔥", "On Fire", "Solve 25 exercises", exSolved >= 25),
-            a("ex_all", "🏆", "Completionist", "Solve every exercise", exTotal > 0 && exSolved >= exTotal),
-            a("topic_master", "🎯", "Topic Master", "Solve every exercise in one topic", topicDone)
-        )
+        val masteryScores = if (::exercises.isInitialized) topicMastery().map { it.score } else emptyList()
+        // A learning path counts complete when every step is complete
+        // (lesson steps done, exercise steps solved) — web checkPathBonuses
+        // semantics over the built-in path catalog.
+        val pathDone = if (::paths.isInitialized) {
+            paths.any { p ->
+                p.steps.isNotEmpty() && p.steps.all { s ->
+                    when (s.type) {
+                        "lesson" -> isDone(s.ref)
+                        "ex" -> getAttempt(s.ref).solved
+                        else -> false
+                    }
+                }
+            }
+        } else false
+        fun unlocked(id: String): Boolean = when (id) {
+            "first_steps" -> done >= 1
+            "scholar" -> done >= totalLessons
+            "xp_100" -> xp >= 100
+            "xp_500" -> xp >= 500
+            "xp_1000" -> xp >= 1000
+            "xp_5000" -> xp >= 5000
+            "xp_10000" -> xp >= 10000
+            "streak_3" -> streakBest >= 3
+            "streak_7" -> streakBest >= 7
+            "streak_30" -> streakBest >= 30
+            "runner_10" -> runs >= 10
+            "runner_50" -> runs >= 50
+            "snippet_saver" -> snips >= 1
+            "night_owl" -> store.hasNightOwl()
+            "early_bird" -> store.hasEarlyBird()
+            "ex_first" -> exSolved >= 1
+            "ex_10" -> exSolved >= 10
+            "ex_25" -> exSolved >= 25
+            "ex_all" -> exTotal > 0 && exSolved >= exTotal
+            "topic_master" -> topicDone
+            "lessons_25" -> done >= 25
+            "lessons_50" -> done >= 50
+            "lessons_100" -> done >= 100
+            "review_7" -> store.getReviewsCompleted() >= 7
+            "review_30" -> store.getReviewsCompleted() >= 30
+            "mastery_solid" -> masteryScores.any { it >= 60 }
+            "mastery_mastered" -> masteryScores.any { it >= 85 }
+            "path_first" -> pathDone
+            "best_answer" -> store.isHasBestAnswer()
+            "showcase_star" -> store.isHasShowcaseStar()
+            "flowchart_first" -> store.isFlowchartRendered()
+            // plansFinished has no UI incrementing it yet — stays locked
+            // until a daily-plan surface lands (accepted in the brief).
+            "plan_7" -> store.getPlansFinished() >= 7
+            else -> false
+        }
+        // Definitions come from achievements.json (the 32 web
+        // definitions, loaded in init). Until that asset lands the
+        // loader returns empty and FALLBACK_ACHIEVEMENT_DEFS (the same
+        // 32, from web activity.js) keeps all checks live.
+        val defs = if (::achievementDefs.isInitialized && achievementDefs.isNotEmpty()) {
+            achievementDefs
+        } else {
+            FALLBACK_ACHIEVEMENT_DEFS
+        }
+        return defs.map { d ->
+            Achievement(
+                id = d.id, icon = d.icon, name = d.name,
+                // Scholar's target is the live catalog size, as before.
+                desc = if (d.id == "scholar") "Complete all $totalLessons lessons" else d.desc,
+                unlocked = unlocked(d.id)
+            )
+        }
     }
 
     /* ---------- compiler workspace + snippets ---------- */
@@ -326,18 +548,68 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun lessonIndex(id: String) = catalog.lessons.indexOfFirst { it.id == id }
 
-    /** Sequential unlocking across the whole catalog, OR unlocked via an
-        enrolled learning path (web parity with pathUnlockedLessons). */
-    fun isUnlocked(index: Int): Boolean {
-        if (index <= 0) return true
-        if (isDone(catalog.lessons[index - 1].id)) return true
-        return unlockMap.containsKey(catalog.lessons[index].id)
+    /* ----- unlock rules: web learn-core.js isUnlocked/sectionUnlocked ----- */
+
+    /** Index of the placed section in catalog.tracks (the sections), or -1. */
+    private fun placedSectionIndex(): Int {
+        val sec = placement?.section ?: return -1
+        return catalog.tracks.indexOfFirst { it.id == sec }
     }
 
-    /** True when this lesson is unlocked ONLY via an enrolled path. */
+    /** Web: every lesson in a section BEFORE the placed one is open. */
+    private fun isPlacementOpen(lesson: com.skillzify.app.data.Lesson): Boolean {
+        val pi = placedSectionIndex()
+        if (pi < 0 || lesson.section.isEmpty()) return false
+        val li = catalog.tracks.indexOfFirst { it.id == lesson.section }
+        return li >= 0 && li < pi
+    }
+
+    /** Web: the first lesson of an unlocked section is open. */
+    private fun isFirstOfUnlockedSection(lesson: com.skillzify.app.data.Lesson): Boolean {
+        if (lesson.section.isEmpty()) return false
+        val first = catalog.lessons.firstOrNull { it.section == lesson.section } ?: return false
+        return first.id == lesson.id && sectionUnlocked(lesson.section)
+    }
+
+    /**
+     * Web sectionUnlocked(): no-needs sections are open; a section at or
+     * before the placed section is open (placement overrides the chain);
+     * otherwise every lesson of the `needs` section must be done.
+     */
+    fun sectionUnlocked(sectionId: String): Boolean {
+        if (!::catalog.isInitialized) return false
+        val idx = catalog.tracks.indexOfFirst { it.id == sectionId }
+        if (idx < 0) return false
+        val placedIdx = placedSectionIndex()
+        if (placedIdx >= 0 && idx <= placedIdx) return true
+        val needs = catalog.tracks[idx].needs ?: return true
+        return catalog.lessons.filter { it.section == needs }.all { isDone(it.id) }
+    }
+
+    /** Web learn-core.js isUnlocked(): sequential (prev done) OR placement
+        (section before the placed one) OR first lesson of an unlocked
+        section OR unlocked via an enrolled learning path. */
+    fun isUnlocked(index: Int): Boolean {
+        if (index !in catalog.lessons.indices) return false
+        if (index <= 0) return true
+        if (isDone(catalog.lessons[index - 1].id)) return true
+        val lesson = catalog.lessons[index]
+        if (isPlacementOpen(lesson)) return true
+        if (isFirstOfUnlockedSection(lesson)) return true
+        return unlockMap.containsKey(lesson.id)
+    }
+
+    /** True when this lesson is unlocked ONLY via an enrolled path
+        (web isPathOnlyUnlocked, P2-04: placement/section-entry openings
+        are not path-only). */
     fun isPathOnlyUnlocked(index: Int): Boolean {
-        val id = catalog.lessons[index].id
-        return !isDone(id) && unlockMap.containsKey(id)
+        if (index !in catalog.lessons.indices) return false
+        if (index <= 0) return false
+        if (isDone(catalog.lessons[index - 1].id)) return false
+        val lesson = catalog.lessons[index]
+        if (isPlacementOpen(lesson)) return false
+        if (isFirstOfUnlockedSection(lesson)) return false
+        return unlockMap.containsKey(lesson.id)
     }
 
     fun trackUnlocked(trackId: String): Boolean {
@@ -364,6 +636,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         store.markDone(id)
         doneIds = store.doneIds()
         streak = store.bumpStreak()
+        // Passport: when this completion finishes the LAST lesson of a
+        // section, stamp the section's completion date (first time only —
+        // Store.recordSectionCompleted never overwrites).
+        if (::catalog.isInitialized) {
+            val lesson = catalog.lessons.firstOrNull { it.id == id }
+            val section = lesson?.section ?: ""
+            if (section.isNotEmpty()) {
+                val sectionLessons = catalog.lessons.filter { it.section == section }
+                if (sectionLessons.isNotEmpty() && sectionLessons.all { isDone(it.id) }) {
+                    store.recordSectionCompleted(section, System.currentTimeMillis())
+                }
+            }
+        }
         markDirty()
         return gain to (currentLevel().name != before)
     }
@@ -420,13 +705,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             streak = store.bumpStreak()
             g
         } else 0
+        // Reviews proxy: the web counts a "review" when spaced repetition
+        // is completed; the app has no review scheduler, so a re-attempted
+        // exercise that finally gets solved counts as one review
+        // (feeds the review_7 / review_30 badges + synced counters).
+        if (solved && !prev.solved && prev.attempts > 0) store.incReviewsCompleted()
+        val nowMs = System.currentTimeMillis()
         val next = prev.copy(
             attempts = prev.attempts + 1,
             solved = prev.solved || solved,
             hintsUsed = maxOf(prev.hintsUsed, hintsUsed),
             revealed = prev.revealed || revealed,
             bestMs = if (solved && ms > 0 && (prev.bestMs == 0L || ms < prev.bestMs)) ms else prev.bestMs,
-            lastTry = System.currentTimeMillis()
+            lastTry = nowMs,
+            // First-solve time (web attempt `at`): set once, on first solve.
+            at = if (firstSolve && prev.at == 0L) nowMs else prev.at
         )
         store.saveAttempt(id, next)
         exerciseAttempts = exerciseAttempts + (id to next)
@@ -466,3 +759,45 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         markDirty()
     }
 }
+
+/**
+ * The 32 web achievement definitions (activity.js ACHIEVEMENTS),
+ * used only until achievements.json lands in assets — loadAchievements
+ * is fail-soft empty before that, and achievements() prefers the asset.
+ * Scholar's desc is a placeholder here: achievements() always renders
+ * it dynamically from the live lesson count.
+ */
+private val FALLBACK_ACHIEVEMENT_DEFS: List<AchievementDef> = listOf(
+    AchievementDef("first_steps", "🌱", "First Steps", "Complete your first lesson"),
+    AchievementDef("scholar", "🎓", "Scholar", "Complete all lessons"),
+    AchievementDef("xp_100", "💯", "Century", "Earn 100 XP"),
+    AchievementDef("xp_500", "⚡", "Charged", "Earn 500 XP"),
+    AchievementDef("xp_1000", "🚀", "Rocket", "Earn 1,000 XP"),
+    AchievementDef("xp_5000", "🌟", "Superstar", "Earn 5,000 XP"),
+    AchievementDef("xp_10000", "🌟", "Legend", "Earn 10,000 XP"),
+    AchievementDef("streak_3", "🔥", "Warming Up", "3-day learning streak"),
+    AchievementDef("streak_7", "🔥", "On Fire", "7-day learning streak"),
+    AchievementDef("streak_30", "🔥", "Unstoppable", "30-day learning streak"),
+    AchievementDef("runner_10", "▶️", "Tinkerer", "Run code 10 times"),
+    AchievementDef("runner_50", "⚙️", "Engineer", "Run code 50 times"),
+    AchievementDef("snippet_saver", "📝", "Curator", "Save your first snippet"),
+    AchievementDef("night_owl", "🦉", "Night Owl", "Code between midnight and 5 AM"),
+    AchievementDef("early_bird", "🌅", "Early Bird", "Code between 5 and 8 AM"),
+    AchievementDef("ex_first", "🏋️", "Problem Solver", "Solve your first exercise"),
+    AchievementDef("ex_10", "💪", "Decathlete", "Solve 10 exercises"),
+    AchievementDef("ex_25", "🔥", "On a Roll", "Solve 25 exercises"),
+    AchievementDef("ex_all", "🏆", "Completionist", "Solve every exercise"),
+    AchievementDef("topic_master", "🎯", "Topic Master", "Solve every exercise in one topic"),
+    AchievementDef("lessons_25", "📚", "Bookworm", "Complete 25 lessons"),
+    AchievementDef("lessons_50", "📖", "Dedicated", "Complete 50 lessons"),
+    AchievementDef("lessons_100", "🏛️", "Centurion", "Complete 100 lessons"),
+    AchievementDef("review_7", "🔁", "Regular Reviewer", "Complete 7 reviews"),
+    AchievementDef("review_30", "🧠", "Memory Master", "Complete 30 reviews"),
+    AchievementDef("mastery_solid", "🎯", "Solid Start", "Reach 60% mastery in any topic"),
+    AchievementDef("mastery_mastered", "👑", "True Master", "Reach 85% mastery in any topic"),
+    AchievementDef("path_first", "🗺️", "Pathfinder", "Complete your first learning path"),
+    AchievementDef("best_answer", "💡", "Best Answer", "Have an answer marked as best"),
+    AchievementDef("showcase_star", "⭐", "Starred", "Get your first star on a showcase project"),
+    AchievementDef("flowchart_first", "📊", "First Flowchart", "Render your first flowchart"),
+    AchievementDef("plan_7", "📋", "Plan Keeper", "Finish 7 daily plans")
+)

@@ -51,7 +51,8 @@ import kotlinx.coroutines.launch
 fun LessonDetail(vm: AppViewModel, lessonId: String, nav: NavController) {
     val lesson = remember(lessonId) { vm.catalog.lessons.first { it.id == lessonId } }
     val gi = remember(lessonId) { vm.lessonIndex(lessonId) }
-    // Unlock gate: sequential chain OR enrolled-path unlock (web parity).
+    // Unlock gate: sequential chain OR enrolled-path unlock OR first
+    // lesson of an open (incl. placement-opened) section (web parity).
     if (gi < 0 || !vm.isUnlocked(gi)) {
         Column(
             Modifier.fillMaxSize().padding(24.dp),
@@ -102,6 +103,14 @@ fun LessonDetail(vm: AppViewModel, lessonId: String, nav: NavController) {
                 .padding(horizontal = 16.dp)
         ) {
             Text(lesson.title, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+            Spacer(Modifier.height(4.dp))
+            // Section / track chip (journey position, website learn parity)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val sec = vm.catalog.tracks.firstOrNull { it.id == lesson.section }
+                if (sec != null) WebChip("${sec.icon} ${sec.name}")
+                WebChip("Lesson ${gi + 1} of ${vm.catalog.lessons.size}")
+                if (vm.isDone(lessonId)) WebChip("Done ✓", Success)
+            }
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { vm.toggleStar(lessonId) }) {

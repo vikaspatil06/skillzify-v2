@@ -20,7 +20,9 @@ data class Challenge(
 data class Lesson(
     val id: String, val track: String, val title: String, val explain: String,
     val takeaways: List<String>, val code: String,
-    val quiz: List<QuizQ>, val challenge: Challenge
+    val quiz: List<QuizQ>, val challenge: Challenge,
+    /** Journey section id (base-camp, tool-shed, ...). "" on legacy assets. */
+    val section: String = ""
 )
 data class Snippet(val id: String, val name: String, val code: String)
 data class RunRecord(val codePreview: String, val ok: Boolean, val timestamp: Long)
@@ -64,10 +66,33 @@ private fun parseLesson(o: JSONObject) = Lesson(
     takeaways = o.optJSONArray("takeaways")?.strings() ?: emptyList(),
     code = o.getString("code"),
     quiz = o.getJSONArray("quiz").let { arr -> (0 until arr.length()).map { parseQuiz(arr.getJSONObject(it)) } },
-    challenge = parseChallenge(o.getJSONObject("challenge"))
+    challenge = parseChallenge(o.getJSONObject("challenge")),
+    section = o.optString("section", "")
 )
 
+/** tracks: post-regeneration assets carry the 7 journey SECTIONS here
+    (same shape as the old tracks: id/name/desc/icon/needs, needs = previous
+    section id). levels: 11 entries. */
 data class Catalog(val tracks: List<Track>, val levels: List<Level>, val lessons: List<Lesson>)
+
+data class AchievementDef(val id: String, val icon: String, val name: String, val desc: String)
+
+/** achievements.json: [{id, icon, name, desc}] (32 web definitions).
+    Fail-soft: returns emptyList when the asset is missing/unparseable so
+    catalog loading can never break before the asset lands. */
+fun loadAchievements(ctx: Context): List<AchievementDef> {
+    return try {
+        val json = ctx.assets.open("achievements.json").bufferedReader().use { it.readText() }
+        val arr = JSONArray(json)
+        (0 until arr.length()).map {
+            val o = arr.getJSONObject(it)
+            AchievementDef(
+                o.getString("id"), o.optString("icon", ""),
+                o.getString("name"), o.optString("desc", "")
+            )
+        }
+    } catch (e: Exception) { emptyList() }
+}
 
 /** One exercise attempt record — mirrors the web's skillzify_exercise_attempts entries. */
 data class ExerciseAttempt(
@@ -76,7 +101,10 @@ data class ExerciseAttempt(
     val hintsUsed: Int = 0,
     val revealed: Boolean = false,
     val bestMs: Long = 0,
-    val lastTry: Long = 0
+    val lastTry: Long = 0,
+    /** First-solve time (ms), 0 = unknown. Mirrors the web attempt `at`
+        field (passport §4c); sync merge: earliest non-zero wins. */
+    val at: Long = 0
 )
 
 data class ExTest(val run: String?, val expr: String?, val expect: String, val expectError: String? = null)
