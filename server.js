@@ -455,6 +455,81 @@ app.get("/api/usage", async (req, res) => {
   var used = await capGetCount(dailyKey(uid, req.ip));
   res.json({ ok: true, date: dayStr(), used: used, cap: admin ? ADMIN_DAILY_CAP : (uid ? DAILY_CAP_USER : DAILY_CAP_ANON), admin: admin });
 });
+/* ---------------- admin overview ---------------- */
+// Every cap-store entry as { type: "user"|"anon", who, date, count }.
+// Memory keys are raw ("u:<uid>|<date>" / "a:<ip>|<date>"); Firestore
+// doc ids are the sanitised form ("u_<uid>_<date>") — the date is the
+// trailing _YYYY-MM-DD and the type the first character either way.
+async function capSnapshot() {
+  initCapStore();
+  var out = [];
+  if (capStore === "firestore" && capDb) {
+    try {
+      var snap = await capDb.collection(CAP_COLLECTION).get();
+      snap.forEach(function (doc) {
+        var data = doc.data() || {};
+        var id = String(doc.id || "");
+        var m = id.match(/_(\d{4}-\d{2}-\d{2})$/);
+        if (!m) return;
+        var head = id.slice(0, id.length - m[0].length);
+        out.push({ type: head.charAt(0) === "u" ? "user" : "anon", who: head.slice(2), date: m[1], count: typeof data.count === "number" ? data.count : 0 });
+      });
+      return out;
+    } catch (e) {
+      console.log("[admin] Firestore cap snapshot failed, using in-memory entries: " + (e && e.message ? e.message : e));
+    }
+  }
+  daily.forEach(function (rec, key) {
+    var parts = String(key).split("|");
+    if (parts.length !== 2) return;
+    out.push({ type: parts[0].charAt(0) === "u" ? "user" : "anon", who: parts[0].slice(2), date: parts[1], count: rec && typeof rec.count === "number" ? rec.count : 0 });
+  });
+  return out;
+}
+// GET /api/admin/overview — the Admin page's one data call. ADMIN
+// ONLY: the requester must resolve (resolveIdentity) to ADMIN_EMAIL
+// with a uid — on a credential-configured server that means a real
+// verified token, so the page's data can't be claimed into. Returns
+// system status, the cap configuration, today's usage totals with
+// the top identities, the admin's own usage, and 7 days of totals.
+app.get("/api/admin/overview", async (req, res) => {
+  var ident = await resolveIdentity(req, null, req.query || {});
+  if (!ident.uid || ident.email !== ADMIN_EMAIL) {
+    return res.status(403).json({ ok: false, error: "Admins only.", code: "NOT_ADMIN" });
+  }
+  var entries = await capSnapshot();
+  var today = dayStr();
+  var byDate = {};
+  var todayIds = [];
+  var myUsed = 0;
+  entries.forEach(function (e) {
+    var d = byDate[e.date] || (byDate[e.date] = { date: e.date, total: 0, userAnswers: 0, anonAnswers: 0, users: {} });
+    d.total += e.count;
+    if (e.type === "user") { d.userAnswers += e.count; if (e.count > 0) d.users[e.who] = true; }
+    else d.anonAnswers += e.count;
+    if (e.date === today) {
+      todayIds.push(e);
+      if (e.type === "user" && e.who === ident.uid) myUsed = e.count;
+    }
+  });
+  var days = [];
+  for (var i = 6; i >= 0; i--) {
+    var ds = new Date(Date.now() + (5 * 60 + 30) * 60000 - i * 86400000).toISOString().slice(0, 10);
+    var dd = byDate[ds] || { total: 0, userAnswers: 0, anonAnswers: 0, users: {} };
+    days.push({ date: ds, total: dd.total, userAnswers: dd.userAnswers, anonAnswers: dd.anonAnswers, users: Object.keys(dd.users).length });
+  }
+  var t = byDate[today] || { total: 0, userAnswers: 0, anonAnswers: 0, users: {} };
+  todayIds.sort(function (a, b) { return b.count - a.count; });
+  res.json({
+    ok: true,
+    date: today,
+    server: { ai: GEMINI_KEYS.length > 0 || GROQ_API_KEY !== "", capStore: capStore, authVerify: !!fbAuth, uptimeSec: Math.floor(process.uptime()), geminiKeys: GEMINI_KEYS.length, models: MODELS, groq: GROQ_API_KEY !== "", groqModels: GROQ_MODELS },
+    caps: { anon: DAILY_CAP_ANON, user: DAILY_CAP_USER, admin: ADMIN_DAILY_CAP, adminEmail: ADMIN_EMAIL },
+    me: { uid: ident.uid, email: ident.email, used: myUsed, cap: ADMIN_DAILY_CAP },
+    today: { total: t.total, userAnswers: t.userAnswers, anonAnswers: t.anonAnswers, users: Object.keys(t.users).length, identities: todayIds.slice(0, 25) },
+    days: days
+  });
+});
 /* ---------------- mode definitions ---------------- */
 const tutorStyle =
   "You are a friendly Python tutor for a beginner student. " +

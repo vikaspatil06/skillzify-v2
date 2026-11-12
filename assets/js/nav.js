@@ -24,7 +24,8 @@
     { label: "Community", href: "community.html" },
     { label: "You", children: [
       { label: "Dashboard", href: "dashboard.html", icon: "📊" },
-      { label: "Profile", href: "profile.html", icon: "👤" }
+      { label: "Profile", href: "profile.html", icon: "👤" },
+      { label: "Admin", href: "admin.html", icon: "🛡️", adminOnly: true }
     ]},
     { label: "More", children: [
       { label: "About", href: "about.html", icon: "ℹ️" },
@@ -57,7 +58,8 @@
       if (item.children) {
         var kids = item.children.map(function (k) {
           var act = isActiveHref(k.href) ? ' class="active"' : "";
-          return '<a role="menuitem" href="' + esc(k.href) + '"' + act + ">" +
+          var adm = k.adminOnly ? ' id="nav-admin-link" style="display:none"' : "";
+          return '<a role="menuitem" href="' + esc(k.href) + '"' + act + adm + ">" +
             (k.icon ? '<span class="mi">' + k.icon + "</span>" : "") + esc(k.label) + "</a>";
         }).join("");
         var parentActive = item.children.some(function (k) { return isActiveHref(k.href); });
@@ -85,6 +87,7 @@
 
     wireDropdowns(mount);
     wireAiStatus(mount);
+    wireAdminLink(mount);
   }
 
   /* ---------------- AI status pill ----------------
@@ -103,6 +106,36 @@
     } else {
       pill.style.display = "none";
     }
+  }
+
+  /* ---------------- Admin link (You menu) ----------------
+     The Admin entry renders hidden on purpose: it is revealed
+     only when the server itself says this signed-in user is the
+     admin (SkillzifyAI.usage -> admin:true — on a token-verifying
+     server that requires a real verified token, not a claim).
+     Signed-out visitors never trigger the call, and any failure —
+     including the old production backend, which has no usage
+     endpoint — leaves the link hidden. Re-checked on every auth
+     change, so sign-in / sign-out updates it without a reload. */
+  function wireAdminLink(mount) {
+    function check() {
+      var link = mount.querySelector("#nav-admin-link");
+      if (!link) return;
+      var A = window.SkillzifyAuth, AI = window.SkillzifyAI;
+      if (!A || typeof A.currentUser !== "function" || !AI || typeof AI.usage !== "function") return;
+      var u = null;
+      try { u = A.currentUser(); } catch (e) {}
+      if (!u) { link.style.display = "none"; return; }
+      AI.usage(function (err, d) {
+        link.style.display = (!err && d && d.admin === true) ? "" : "none";
+      });
+    }
+    check();
+    try {
+      if (window.SkillzifyAuth && typeof window.SkillzifyAuth.onAuthChange === "function") {
+        window.SkillzifyAuth.onAuthChange(check);
+      }
+    } catch (e) {}
   }
 
   /* ---------------- Dropdown behaviour ----------------

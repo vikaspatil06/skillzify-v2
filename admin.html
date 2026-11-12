@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YYR4JD16G8"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-YYR4JD16G8');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Skillzify admin — system status, AI usage, configuration and community at a glance. Admins only.">
+  <title>Admin — Skillzify</title>
+  <link rel="icon" href="assets/logo-light.png">
+  <link rel="stylesheet" href="assets/css/style.css?v=37">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+  <style>
+    .admin-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:16px; }
+    .admin-stat { background:var(--card); border:1px solid var(--card-border); border-radius:var(--radius); padding:14px 16px; }
+    .admin-stat .k { font-size:.78rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    .admin-stat .v { font-size:1.35rem; font-weight:800; margin-top:4px; }
+    .admin-stat .s { font-size:.82rem; color:var(--muted); margin-top:2px; }
+    .admin-card { margin-bottom:16px; }
+    .admin-card h2 { margin:0 0 6px; font-size:1.15rem; }
+    .admin-card .sub { color:var(--muted); font-size:.9rem; margin:0 0 12px; }
+    .chip { display:inline-block; padding:2px 9px; border-radius:999px; font-size:.75rem; font-weight:700; background:var(--bg-soft); border:1px solid var(--card-border); }
+    .chip.ok { color:var(--success); } .chip.warn { color:var(--warning); } .chip.bad { color:var(--danger); }
+    .usage-bar { height:10px; border-radius:999px; background:var(--bg-soft); overflow:hidden; margin:8px 0 4px; }
+    .usage-bar > div { height:100%; background:var(--gradient); border-radius:999px; }
+    table.admin-table { width:100%; border-collapse:collapse; font-size:.92rem; }
+    table.admin-table th, table.admin-table td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--card-border); vertical-align:top; }
+    table.admin-table th { color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.04em; }
+    table.admin-table td.num, table.admin-table th.num { text-align:right; font-variant-numeric:tabular-nums; }
+    .who { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.82rem; word-break:break-all; }
+    .share { height:6px; border-radius:999px; background:var(--bg-soft); overflow:hidden; min-width:70px; }
+    .share > div { height:100%; background:var(--primary); }
+    .days-chart { display:flex; align-items:flex-end; gap:10px; height:130px; padding-top:8px; }
+    .day-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0; }
+    .day-bar-wrap { width:100%; display:flex; align-items:flex-end; justify-content:center; height:84px; }
+    .day-bar { width:min(38px,80%); border-radius:6px 6px 0 0; background:var(--gradient); min-height:3px; }
+    .day-col .d-total { font-weight:700; font-size:.88rem; }
+    .day-col .d-label { color:var(--muted); font-size:.75rem; white-space:nowrap; }
+    .kv { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:8px 22px; font-size:.94rem; }
+    .kv .row { display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px dashed var(--card-border); }
+    .kv .row b { text-align:right; }
+    ol.models { margin:6px 0 0; padding-left:22px; font-size:.92rem; }
+    ol.models li { padding:2px 0; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.85rem; }
+    .links-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
+    .links-grid a { display:block; padding:11px 13px; border:1px solid var(--card-border); border-radius:var(--radius); background:var(--bg-soft); text-decoration:none; color:var(--text); font-weight:600; font-size:.92rem; }
+    .links-grid a span { display:block; color:var(--muted); font-weight:400; font-size:.8rem; margin-top:2px; }
+    .comm-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; }
+  </style>
+</head>
+<body>
+
+<div id="site-nav"></div>
+<div class="toast" id="toast" role="status"></div>
+
+<main>
+  <section class="page-hero">
+    <div class="container">
+      <h1 class="section-title">🛡️ Admin</h1>
+      <p class="section-sub" id="admin-sub">The Skillzify control room — only you can see this page's data.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:24px">
+    <div class="container">
+
+      <div id="admin-loading" class="card admin-card">
+        <h2>Checking your admin access…</h2>
+        <p class="sub">Verifying your sign-in token with the server.</p>
+      </div>
+
+      <div id="admin-denied" class="card admin-card" style="display:none">
+        <h2>🔒 Admins only</h2>
+        <p class="sub" id="admin-denied-msg">This page's data is served only to the verified admin account.</p>
+        <div class="btn-row">
+          <a class="btn" href="auth.html">Sign in</a>
+          <a class="btn btn-ghost" href="dashboard.html">Go to dashboard</a>
+        </div>
+      </div>
+
+      <div id="admin-unavailable" class="card admin-card" style="display:none">
+        <h2>🛠️ Admin backend not live here yet</h2>
+        <p class="sub">This server doesn't have the admin endpoint yet — it arrives with the backend deploy that carries token verification. Try the staging site, or deploy the latest backend here.</p>
+        <div class="btn-row">
+          <a class="btn" href="https://skillzify-v2-staging.onrender.com/admin.html">Open staging admin</a>
+          <a class="btn btn-ghost" href="dashboard.html">Go to dashboard</a>
+        </div>
+      </div>
+
+      <div id="admin-root" style="display:none">
+        <div class="admin-stats" id="admin-stats"></div>
+
+        <div class="card admin-card">
+          <h2>🤖 AI usage — today</h2>
+          <p class="sub" id="admin-today-sub">Loading…</p>
+          <div id="admin-me"></div>
+          <div id="admin-today-table"></div>
+        </div>
+
+        <div class="card admin-card">
+          <h2>📅 Last 7 days</h2>
+          <p class="sub">AI answers per day (IST). Counts live in the cap store, so they survive backend restarts.</p>
+          <div id="admin-days"></div>
+        </div>
+
+        <div class="card admin-card">
+          <h2>⚙️ Configuration</h2>
+          <p class="sub">Live from the server. Caps, keys and models change via the server's environment variables + a redeploy — never from this page.</p>
+          <div id="admin-config"></div>
+        </div>
+
+        <div class="card admin-card">
+          <h2>👥 Community snapshot</h2>
+          <p class="sub">Live counts from Skillzify Circle (Firestore).</p>
+          <div class="comm-grid" id="admin-community"></div>
+          <div class="btn-row" style="margin-top:12px">
+            <a class="btn btn-ghost" href="community.html">Open community</a>
+          </div>
+        </div>
+
+        <div class="card admin-card">
+          <h2>🔗 Quick links</h2>
+          <p class="sub">Everything you operate, one tap away.</p>
+          <div class="links-grid">
+            <a href="https://vikaspatil06.github.io/skillzify-v2/" target="_blank" rel="noopener">🌐 Live site<span>GitHub Pages — what learners see</span></a>
+            <a href="https://skillzify-v2-staging.onrender.com/" target="_blank" rel="noopener">🧪 Staging site<span>Test new backend code here first</span></a>
+            <a href="https://github.com/vikaspatil06/skillzify-v2" target="_blank" rel="noopener">🐙 GitHub repo<span>Source, commits, Actions (APK builds)</span></a>
+            <a href="https://console.firebase.google.com/project/skillzify-1d0f2" target="_blank" rel="noopener">🔥 Firebase console<span>Auth, Firestore, rules — project skillzify-1d0f2</span></a>
+            <a href="https://skillzify-v2.onrender.com/api/health" target="_blank" rel="noopener">❤️ Production health<span>Live backend status JSON</span></a>
+            <a href="https://skillzify-v2-staging.onrender.com/api/health" target="_blank" rel="noopener">💛 Staging health<span>Staging backend status JSON</span></a>
+            <a href="https://aistudio.google.com/" target="_blank" rel="noopener">✨ Google AI Studio<span>Gemini keys + per-project quotas</span></a>
+            <a href="https://console.groq.com/" target="_blank" rel="noopener">⚡ Groq console<span>Spillover provider keys + limits</span></a>
+          </div>
+        </div>
+
+        <div class="card admin-card">
+          <h2>🧰 Tools</h2>
+          <p class="sub">Small jobs, no terminal needed.</p>
+          <div class="btn-row">
+            <button class="btn" id="admin-refresh" type="button">↻ Refresh data</button>
+            <button class="btn btn-ghost" id="admin-copy" type="button">📋 Copy today's summary</button>
+            <button class="btn btn-ghost" id="admin-warm" type="button">🔥 Wake the production backend</button>
+          </div>
+          <p class="hint" id="admin-tools-msg" style="margin-top:10px"></p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="assets/js/nav.js"></script>
+<script src="assets/js/footer.js"></script>
+<script src="assets/js/app.js?v=5"></script>
+<script src="assets/js/activity.js?v=10"></script>
+<script src="assets/js/palette.js?v=2"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
+<script src="assets/js/auth.js?v=8"></script>
+<script src="assets/js/sync.js?v=19"></script>
+<script src="assets/js/ai.js?v=20"></script>
+<script src="assets/js/admin.js?v=1"></script>
+</body>
+</html>
