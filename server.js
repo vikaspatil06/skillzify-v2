@@ -957,8 +957,8 @@ app.post("/api/explain", async (req, res) => {
    (dependency versions included) were all downloadable. The site
    files stay where they are (no public/ move); instead a guard denies
    the sensitive paths and hidden files, and cache headers are set
-   (HTML entry points are revalidated on every load; versioned assets
-   — ?v= on JS/CSS — are cacheable for a day). Denied paths answer
+   (HTML entry points and every UNVERSIONED request are revalidated
+   on every load; only ?v= versioned assets are cacheable for a day). Denied paths answer
    404, not 403, so the guard never confirms a file exists. */
 var STATIC_DENIED_FILES = { "server.js": true, "package.json": true, "firestore.rules": true, ".env": true };
 app.use(function (req, res, next) {
@@ -975,7 +975,17 @@ app.use(express.static(path.join(__dirname), {
   dotfiles: "ignore",
   setHeaders: function (res, filePath) {
     // Entry points change on every deploy; assets are ?v= versioned.
-    if (/\.html?$/.test(filePath)) res.setHeader("Cache-Control", "no-cache");
+    // BUT the cache decision must key on whether THIS request is
+    // versioned: nav.js / footer.js are deliberately UNVERSIONED
+    // shared chrome (6 Nov), so a blanket day-long max-age made
+    // browsers hold a stale navbar for 24h after a deploy (12 Nov:
+    // the new Admin link stayed invisible on the owner's phone while
+    // the server already served the new file). Rule: no ?v= in the
+    // request URL -> no-cache (stored, but revalidated via ETag on
+    // every load, so a 304 keeps it cheap); ?v= -> cache for a day.
+    var url = (res.req && (res.req.originalUrl || res.req.url)) || "";
+    var versioned = /[?&]v=/.test(url);
+    if (/\.html?$/.test(filePath) || !versioned) res.setHeader("Cache-Control", "no-cache");
     else res.setHeader("Cache-Control", "public, max-age=86400");
   }
 }));
