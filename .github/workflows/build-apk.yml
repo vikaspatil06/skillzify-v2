@@ -35,17 +35,17 @@ jobs:
           gradle-version: 8.10.2
 
       - name: Build arm64 debug APK
-        run: gradle assembleArm64Debug --no-daemon --console=plain
+        run: gradle assembleArm64Release --no-daemon --console=plain
 
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
           name: skillzify-apk
-          path: android/app/build/outputs/apk/arm64/debug/*.apk
+          path: android/app/build/outputs/apk/arm64/release/*.apk
 
       - name: Create GitHub release with APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-v2.0.${{ github.run_number }}
           name: Skillzify Android v1.0 (build ${{ github.run_number }})
-          files: android/app/build/outputs/apk/arm64/debug/*.apk
+          files: android/app/build/outputs/apk/arm64/release/*.apk
