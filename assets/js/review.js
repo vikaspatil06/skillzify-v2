@@ -240,6 +240,23 @@
   function startSession(mount) {
     var due = dueList().filter(function (id) { return !!lessonById(id); }).slice(0, SESSION_MAX);
     if (!due.length) { renderSection(mount); return; }
+    /* Optimization #5 (split catalog): quizzes live in per-section
+       chunks — attach the due lessons' sections before starting.
+       On a load failure the session still begins; a lesson whose
+       content is missing has no quiz and is skipped unrecorded by
+       the existing P2-11 rule, so nothing is scored wrongly. */
+    var LC = null;
+    try { LC = window.SkillzifyLearnCore; } catch (e) {}
+    if (LC && typeof LC.ensureLesson === "function" && due.some(function (id) { var l = lessonById(id); return l && !l._loaded; })) {
+      mount.innerHTML = '<h3 style="margin:0 0 4px">🔁 Review</h3><p class="hint" style="margin:0">Loading your review questions…</p>';
+      Promise.all(due.map(function (id) { return LC.ensureLesson(id); })).then(function () {
+        beginSession(mount, due);
+      }, function () { beginSession(mount, due); });
+      return;
+    }
+    beginSession(mount, due);
+  }
+  function beginSession(mount, due) {
     /* Shuffle lesson order so reviews don't always run oldest-due first (P2-13). */
     session = { ids: shuffled(due), li: 0, qi: 0, allCorrect: true, done: 0, qs: null, qsFor: null };
     renderCard(mount);

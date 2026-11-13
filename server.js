@@ -118,8 +118,41 @@ const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 // gives up at 60s, so the server must answer first. No same-model
 // retry: with failover the next model IS the retry, and re-hitting an
 // overloaded model only burns the client's 60s.
-const ATTEMPT_TIMEOUT_MS = 12000;
+const ATTEMPT_TIMEOUT_MS = Number(process.env.ATTEMPT_TIMEOUT_MS) || 12000;
 const FAILOVER_BUDGET_MS = 40000;
+// Circuit breaker (optimization audit #3, 13 Nov 2026): per-model
+// health memory for TIMEOUT-class failures only. A model that hits
+// BREAKER_THRESHOLD consecutive attempt timeouts is skipped for
+// BREAKER_COOLDOWN_MS, so unlucky requests stop re-walking dead
+// chain entries at 12 s apiece (the 12 Nov load test: 3.8-flash and
+// gemma-4-31b-it scored 0 successes, all timeout-class). A success
+// resets the model's counter at once; HTTP failures (429/503/404)
+// are cheap and never touch the breaker. Safety valves: a pinned
+// call (onlyModel — the MAX_TOKENS retry) is never skipped, and if
+// EVERY model in the list is open the breaker is ignored for that
+// call, so a request always gets its full chain when nothing else
+// is available. Env overrides exist for the test harness.
+const BREAKER_THRESHOLD = Number(process.env.BREAKER_THRESHOLD) || 2;
+const BREAKER_COOLDOWN_MS = Number(process.env.BREAKER_COOLDOWN_MS) || 5 * 60 * 1000;
+const modelHealth = {}; // "gemini:<model>" / "groq:<model>" -> { timeouts, openUntil }
+function breakerIsOpen(kind, model) {
+  var h = modelHealth[kind + ":" + model];
+  return !!(h && h.openUntil > Date.now());
+}
+function breakerNoteTimeout(kind, model) {
+  var k = kind + ":" + model;
+  var h = modelHealth[k] || (modelHealth[k] = { timeouts: 0, openUntil: 0 });
+  h.timeouts++;
+  if (h.timeouts >= BREAKER_THRESHOLD && h.openUntil <= Date.now()) {
+    h.openUntil = Date.now() + BREAKER_COOLDOWN_MS;
+    h.timeouts = 0;
+    console.log("[ai] circuit breaker open for " + k + " — skipping for " + Math.round(BREAKER_COOLDOWN_MS / 1000) + "s");
+  }
+}
+function breakerNoteSuccess(kind, model) {
+  var h = modelHealth[kind + ":" + model];
+  if (h) { h.timeouts = 0; h.openUntil = 0; }
+}
 // P1-23: the MAX_TOKENS retry gets its OWN deadline (started + 55 s) instead
 // of the 40 s failover budget — a slow first call (up to 4 x 12 s = 48 s)
 // must not make the retry fail instantly and discard a valid first reply.
@@ -763,12 +796,19 @@ app.post("/api/explain", async (req, res) => {
     var budget = (typeof budgetMs === "number" && budgetMs > 0) ? budgetMs : FAILOVER_BUDGET_MS;
     var lastErr = { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
     var lastModel = models[0], lastKeyIdx = 0;
+    // Circuit breaker: skip open models — unless every model is open
+    // (then the full chain still runs) or this call pins one model.
+    var breakerActive = !onlyModel && models.some(function (m) { return !breakerIsOpen("gemini", m); });
     for (var ki = 0; ki < GEMINI_KEYS.length; ki++) {
       for (var mi = 0; mi < models.length; mi++) {
         var model = models[mi];
         if (Date.now() - started > budget) {
           console.log("[ai] failover budget spent — answering with last error " + lastErr.code);
           return { r: null, model: lastModel, keyIdx: lastKeyIdx, error: lastErr };
+        }
+        if (breakerActive && breakerIsOpen("gemini", model)) {
+          console.log("[ai] model " + model + " skipped (circuit breaker open)");
+          continue;
         }
         lastModel = model; lastKeyIdx = ki;
         var ctrl = new AbortController();
@@ -793,12 +833,13 @@ app.post("/api/explain", async (req, res) => {
           );
         } catch (e) {
           clearTimeout(timer);
+          if (e && e.name === "AbortError") breakerNoteTimeout("gemini", model);
           console.log("[ai] model " + model + " key#" + (ki + 1) + " attempt failed (" + (e.name || "error") + ") — trying next");
           lastErr = { status: 502, code: "TIMEOUT", error: "Could not reach the AI provider." };
           continue;
         }
         clearTimeout(timer);
-        if (r.ok) return { r: r, model: model, keyIdx: ki };
+        if (r.ok) { breakerNoteSuccess("gemini", model); return { r: r, model: model, keyIdx: ki }; }
         var g = providerError(r.status);
         if (r.status === 429 || r.status === 503 || r.status === 404) {
           console.log("[ai] model " + model + " key#" + (ki + 1) + " fail " + g.code + " — trying next");
@@ -827,11 +868,17 @@ app.post("/api/explain", async (req, res) => {
     var budget = (typeof budgetMs === "number" && budgetMs > 0) ? budgetMs : FAILOVER_BUDGET_MS;
     var lastErr = { status: 502, code: "MODEL_ERROR", error: "AI provider error." };
     var lastModel = models[0];
+    // Circuit breaker: same rules as callGemini (see breaker note).
+    var breakerActive = !onlyModel && models.some(function (m) { return !breakerIsOpen("groq", m); });
     for (var mi = 0; mi < models.length; mi++) {
       var model = models[mi];
       if (Date.now() - started > budget) {
         console.log("[ai] groq failover budget spent — answering with last error " + lastErr.code);
         return { r: null, model: lastModel, keyIdx: 0, error: lastErr, provider: "groq" };
+      }
+      if (breakerActive && breakerIsOpen("groq", model)) {
+        console.log("[ai] groq model " + model + " skipped (circuit breaker open)");
+        continue;
       }
       lastModel = model;
       var ctrl = new AbortController();
@@ -858,12 +905,14 @@ app.post("/api/explain", async (req, res) => {
         });
       } catch (e) {
         clearTimeout(timer);
+        if (e && e.name === "AbortError") breakerNoteTimeout("groq", model);
         console.log("[ai] groq model " + model + " attempt failed (" + (e.name || "error") + ") — trying next");
         lastErr = { status: 502, code: "TIMEOUT", error: "Could not reach the AI provider." };
         continue;
       }
       clearTimeout(timer);
       if (r.ok) {
+        breakerNoteSuccess("groq", model);
         var groqData;
         try { groqData = await r.json(); } catch (e) {
           console.log("[ai] groq model " + model + " returned unparsable JSON — trying next");

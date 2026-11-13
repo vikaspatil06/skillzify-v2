@@ -75,7 +75,7 @@
 
     mount.innerHTML =
       '<nav class="nav"><div class="nav-inner">' +
-      '<a class="brand" href="index.html"><img data-logo src="assets/logo-light.png" alt="Skillzify logo"><span>Skillzify</span></a>' +
+      '<a class="brand" href="index.html"><img data-logo data-logo-sm src="assets/logo-light-small.png" alt="Skillzify logo"><span>Skillzify</span></a>' +
       '<div class="nav-links" id="nav-links">' + linksHtml + "</div>" +
       '<div class="nav-actions">' +
       '<span id="ai-status-pill" class="ai-status-pill" role="status" aria-live="polite"></span>' +

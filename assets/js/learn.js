@@ -460,6 +460,8 @@
     nextLesson: LC.nextLesson, highlight: LC.highlight,
     getXP: LC.getXP, levelFor: LC.levelFor, nextLevel: LC.nextLevel,
     isLessonUnlocked: LC.isLessonUnlocked,
-    isLessonPathUnlocked: LC.isLessonPathUnlocked
+    isLessonPathUnlocked: LC.isLessonPathUnlocked,
+    ensureSection: LC.ensureSection, ensureLesson: LC.ensureLesson,
+    ensureAllSections: LC.ensureAllSections, sectionContentLoaded: LC.sectionContentLoaded
   };
 })();

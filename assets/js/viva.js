@@ -376,7 +376,25 @@
   }
 
   /* ---------------- public open / close ---------------- */
+  /* Optimization #5 (split catalog): the examiner's question prompt
+     ships the FULL lesson object, so attach the lesson's section
+     content before opening when it isn't loaded yet (paths page —
+     on the lesson page it is always loaded already). Falls through
+     to openNow on any failure: a viva over title-only context is
+     degraded, never broken. */
   function open(lessonArg) {
+    if (!lessonArg || !lessonArg.id) return false;
+    try {
+      var LC = window.SkillzifyLearnCore;
+      if (LC && typeof LC.ensureLesson === "function" && !lessonArg._loaded) {
+        LC.ensureLesson(lessonArg.id).then(function () { openNow(lessonArg); },
+          function () { openNow(lessonArg); });
+        return true;
+      }
+    } catch (e) {}
+    return openNow(lessonArg);
+  }
+  function openNow(lessonArg) {
     if (!lessonArg || !lessonArg.id) return false;
     sessionToken += 1;
     buildPanel();

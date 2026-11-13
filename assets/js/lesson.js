@@ -550,7 +550,18 @@
         auth.onReady(function () { authResolved = true; refreshCapHint(); });
       }
     } catch (e) {}
-    renderLesson(gi);
+    // Optimization #5 (split catalog): the lesson body lives in a
+    // per-section chunk — attach it on demand, then render exactly
+    // as before. Locked lessons never reach here (metadata only).
+    if (LC.ensureLesson && !LESSONS[gi]._loaded) {
+      mount.innerHTML = '<div class="lesson-locked"><div class="big">⏳</div><h2>Loading lesson…</h2><p class="hint">One moment — fetching this section\'s content.</p></div>';
+      LC.ensureLesson(id).then(function (ok) {
+        if (!ok) { fatal("This lesson's content failed to load. Check your connection and reload the page."); return; }
+        renderLesson(gi);
+      });
+    } else {
+      renderLesson(gi);
+    }
     // M3: keep the tutor cap hint in step with sign-in/out (e.g. in
     // another tab). refreshCapHint re-renders the hint line only.
     try {

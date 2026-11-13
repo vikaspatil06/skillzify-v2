@@ -117,7 +117,7 @@
       if (!A || typeof A.onReady !== "function") return;
       authWatchStarted = true;
       if (typeof A.onAuthChange === "function") {
-        A.onAuthChange(function () { cache = {}; cacheOrder = []; });
+        A.onAuthChange(function () { cacheClearAll(); });
       }
       A.onReady(function () { authReady = true; });
     } catch (e) {}
@@ -305,13 +305,74 @@
   var cache = {};
   var cacheOrder = [];
   var CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+  /* Answer-cache persistence (optimization #7, 13 Nov 2026): the
+     in-memory cache above is mirrored into sessionStorage so repeat
+     questions stay free across page navigations for the whole tab
+     session (the site is a 20-page MPA — every navigation used to
+     wipe the cache and re-bill the provider against the 5/10 caps).
+     Safety properties, all preserved from the in-memory design:
+       - cache keys already carry the signed-in uid (P2-49), so one
+         user's entries can never match another user's lookups;
+       - the whole store is wiped on every auth change (watchAuth),
+         in memory AND in sessionStorage;
+       - sessionStorage dies with the tab — nothing persists on a
+         shared device beyond the session;
+       - any storage failure (private mode, quota) silently degrades
+         to the old in-memory-only behaviour. */
+  var CACHE_STORE_KEY = "skillzify_ai_cache_v1";
+  var CACHE_STORE_MAX = 1500000; // ~1.5 MB serialized ceiling
+  var cacheHydrated = false, cacheStoreDead = false;
+  function cacheStoreRead() {
+    if (cacheStoreDead) return;
+    try {
+      var raw = sessionStorage.getItem(CACHE_STORE_KEY);
+      if (!raw) return;
+      var blob = JSON.parse(raw);
+      if (!blob || typeof blob !== "object" || !blob.entries) return;
+      var now = Date.now();
+      (Array.isArray(blob.order) ? blob.order : []).forEach(function (k) {
+        var e = blob.entries[k];
+        if (!e || typeof e.at !== "number" || (now - e.at) > CACHE_TTL) return;
+        if (!Object.prototype.hasOwnProperty.call(cache, k)) { cache[k] = e; cacheOrder.push(k); }
+      });
+    } catch (e) { cacheStoreDead = true; }
+  }
+  function cacheStoreWrite() {
+    if (cacheStoreDead) return;
+    try {
+      var entries = {}, order = cacheOrder.slice(), total = 0, i;
+      // Keep the newest entries that fit the ceiling, oldest dropped.
+      var kept = [];
+      for (i = order.length - 1; i >= 0; i--) {
+        var e = cache[order[i]];
+        if (!e) continue;
+        var s = 0;
+        try { s = JSON.stringify(e).length; } catch (err) { continue; }
+        if (kept.length && total + s > CACHE_STORE_MAX) continue;
+        total += s; kept.unshift(order[i]);
+      }
+      kept.forEach(function (k) { entries[k] = cache[k]; });
+      sessionStorage.setItem(CACHE_STORE_KEY, JSON.stringify({ order: kept, entries: entries }));
+    } catch (e) { cacheStoreDead = true; }
+  }
+  function cacheHydrate() {
+    if (cacheHydrated) return;
+    cacheHydrated = true;
+    cacheStoreRead();
+  }
+  function cacheClearAll() {
+    cache = {}; cacheOrder = [];
+    try { sessionStorage.removeItem(CACHE_STORE_KEY); } catch (e) {}
+  }
   function cacheGet(key) {
+    cacheHydrate();
     if (!Object.prototype.hasOwnProperty.call(cache, key)) return null;
     var e = cache[key];
-    if (!e || (Date.now() - e.at) > CACHE_TTL) { delete cache[key]; var i = cacheOrder.indexOf(key); if (i >= 0) cacheOrder.splice(i, 1); return null; }
+    if (!e || (Date.now() - e.at) > CACHE_TTL) { delete cache[key]; var i = cacheOrder.indexOf(key); if (i >= 0) cacheOrder.splice(i, 1); cacheStoreWrite(); return null; }
     return e.val;
   }
   function cacheSet(key, val) {
+    cacheHydrate();
     if (cacheOrder.indexOf(key) < 0) { cacheOrder.push(key); if (cacheOrder.length > 40) delete cache[cacheOrder.shift()]; }
     // P2-49: store a COPY, not the caller's object — the delivered
     // result and the cached entry must never be the same reference,
@@ -319,6 +380,7 @@
     var copy = val;
     try { copy = JSON.parse(JSON.stringify(val)); } catch (e) { copy = val; }
     cache[key] = { at: Date.now(), val: copy };
+    cacheStoreWrite();
   }
   function fetchJSON(url, body, timeoutMs) {
     var ctrl = null, timer = null;

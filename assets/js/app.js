@@ -18,15 +18,20 @@
   ];
 
   /* ---------- Theme ---------- */
-  function logoFor(theme) {
-    return theme === "light" ? "assets/logo-dark.png" : "assets/logo-light.png";
+  /* Logos ship in two sizes: the 500px originals (hero / large
+     placements) and 96px "-small" variants (~10-12 KB vs ~107-140 KB)
+     for nav, footer and other small placements — marked data-logo-sm.
+     The favicon also points at the small file. */
+  function logoFor(theme, small) {
+    var base = theme === "light" ? "assets/logo-dark" : "assets/logo-light";
+    return base + (small ? "-small.png" : ".png");
   }
 
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
     try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
     document.querySelectorAll('img[data-logo]').forEach(function (img) {
-      img.src = logoFor(theme);
+      img.src = logoFor(theme, img.hasAttribute("data-logo-sm"));
     });
     var btns = document.querySelectorAll("[data-theme-toggle]");
     btns.forEach(function (b) { b.textContent = theme === "light" ? "🌙" : "☀️"; });
