@@ -532,7 +532,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }.sortedBy { getAttempt(it.id).lastTry }.take(4)
     }
 
-    /* ---------- achievements (website activity.js parity, derived state) ---------- */
+    /* ---------- achievements (website activity.js parity: derived
+       checks feeding a permanent unlock record — see the union at the
+       end of achievements()) ---------- */
 
     data class Achievement(val id: String, val icon: String, val name: String, val desc: String, val unlocked: Boolean)
 
@@ -616,12 +618,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             FALLBACK_ACHIEVEMENT_DEFS
         }
+        // Permanent unlock record (web ACH_KEY parity, v1.4.3): the
+        // web DISPLAYS badges from its permanent unlocked map, not
+        // from a live derivation — so a badge survives its evidence
+        // being device-local or later dropping. Mirror that: unlocked
+        // = recorded ∪ derived, and every newly derived id is written
+        // back to the record (which syncs — SyncRepository
+        // `achievements` field — so app-earned unlocks persist across
+        // devices and reinstalls). Recording is idempotent and
+        // grow-only; it fires markDirty only when the record actually
+        // grew, so this stays safe to call from composition.
+        val recorded = store.getUnlockedAchievements()
+        val derived = defs.map { it.id }.filter { unlocked(it) }.toSet()
+        val allUnlocked = recorded + derived
+        if (!recorded.containsAll(derived)) {
+            store.recordUnlocked(derived)
+            markDirty()
+        }
         return defs.map { d ->
             Achievement(
                 id = d.id, icon = d.icon, name = d.name,
                 // Scholar's target is the live catalog size, as before.
                 desc = if (d.id == "scholar") "Complete all $totalLessons lessons" else d.desc,
-                unlocked = unlocked(d.id)
+                unlocked = d.id in allUnlocked
             )
         }
     }

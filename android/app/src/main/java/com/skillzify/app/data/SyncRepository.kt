@@ -32,13 +32,20 @@ import kotlinx.coroutines.tasks.await
  * - counters: per-field MAX for reviewsDone/plansDone/bestAnswers/
  *   flowchartsDone, OR for showcaseStarred (web mergeCounters); the
  *   merged value is always pushed (a fresh device's zeros can't lower it)
+ * - achievements: the permanent unlock record ({id: true}), UNION.
+ *   App-owned field (v1.4.3): the web keeps its unlock map in
+ *   localStorage only (skillzify_achievements — never synced), so this
+ *   field is how unlocks earned in-app persist across devices; the
+ *   web's writes use {merge:true} with its own named fields only, so
+ *   this field survives every web push untouched and the web simply
+ *   ignores it.
  *
  * NEVER CLOBBER: every write is read-merge-write and uses
  * SetOptions.merge() with ONLY the top-level fields this app owns
- * (profile, progress, exercises, paths, placement, counters). Web-only
- * fields on the same doc (workspace, reviews, customPaths, projects)
- * are never named in a payload and therefore survive every app push
- * byte-for-byte. customPaths in particular: the app holds no local
+ * (profile, progress, exercises, paths, placement, counters,
+ * achievements). Web-only fields on the same doc (workspace, reviews,
+ * customPaths, projects) are never named in a payload and therefore
+ * survive every app push byte-for-byte. customPaths in particular: the app holds no local
  * custom-path definitions, so — exactly like web mergeCustomPaths
  * treats a side with "no information" — the cloud copy always wins by
  * preservation.
@@ -309,6 +316,18 @@ class SyncRepository(private val store: Store) {
         "flowchartsDone" to c.flowchartsDone
     )
 
+    /* ---------------- merge: achievement unlock record ---------------- */
+
+    /** Cloud unlock record: users/{uid}.achievements as {id: true}.
+        Only truthy entries count (web unlocked() semantics); a legacy
+        list shape is tolerated. Absent/malformed = no information. */
+    fun cloudUnlocked(data: Map<String, Any?>?): Set<String> {
+        val raw = data?.get("achievements") ?: return emptySet()
+        if (raw is List<*>) return raw.mapNotNull { it as? String }.toSet()
+        val m = raw as? Map<*, *> ?: return emptySet()
+        return m.entries.filter { it.value == true }.map { it.key.toString() }.toSet()
+    }
+
     /* ---------------- shared merge machinery ---------------- */
 
     private data class MergedState(
@@ -320,7 +339,8 @@ class SyncRepository(private val store: Store) {
         val profileCloudWins: Boolean,
         val paths: Map<String, Pair<Boolean, Long>>,
         val placement: PlacementRecord?,
-        val counters: Counters
+        val counters: Counters,
+        val unlocked: Set<String>
     )
 
     /** Merges one cloud snapshot against the local Store (no writes). */
@@ -350,6 +370,9 @@ class SyncRepository(private val store: Store) {
         val paths = mergePaths(store.getEnrolledPaths(), cloudPaths(data))
         val placement = mergePlacement(store.getPlacement(), data)
         val counters = mergeCounters(store.getCounters(), data)
+        // Unlock record: UNION — an unlock known on either side is
+        // unlocked, forever (badges never re-lock).
+        val unlocked = store.getUnlockedAchievements() + cloudUnlocked(data)
         return MergedState(
             progress = progress,
             attempts = attempts,
@@ -359,7 +382,8 @@ class SyncRepository(private val store: Store) {
             profileCloudWins = cloudWins,
             paths = paths,
             placement = placement,
-            counters = counters
+            counters = counters,
+            unlocked = unlocked
         )
     }
 
@@ -377,6 +401,7 @@ class SyncRepository(private val store: Store) {
         store.applySyncedEnrollments(m.paths)
         if (m.placement != null) store.setPlacement(m.placement)
         store.applySyncedCounters(m.counters)
+        store.applySyncedUnlocked(m.unlocked)
     }
 
     /** Push payload: ONLY the top-level fields the app owns. Placement
@@ -405,6 +430,11 @@ class SyncRepository(private val store: Store) {
             )
         }
         m.placement?.let { payload["placement"] = placementMap(it) }
+        // Unlock record: written only when non-empty (placement
+        // precedent — an empty record carries no information).
+        if (m.unlocked.isNotEmpty()) {
+            payload["achievements"] = m.unlocked.associateWith { true }
+        }
         return payload
     }
 

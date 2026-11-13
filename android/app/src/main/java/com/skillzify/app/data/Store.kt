@@ -593,6 +593,38 @@ class Store(ctx: Context) {
             prefs.edit().putBoolean("counters_showcase_starred", true).apply()
     }
 
+    /* ---------- permanent achievement unlock record (web ACH_KEY) ----------
+       activity.js displays badges from a PERMANENT unlock map
+       (localStorage skillzify_achievements): checkAchievements() writes
+       newly earned ids into it and achievements() reads ONLY that map,
+       so a badge stays unlocked forever — even after the earning stat
+       drops, and even when its evidence is device-local (the web's
+       streak `longest` comes from a local-only days log; saved snippets
+       are local-only too; neither ever syncs — sync.js touches both
+       keys only in its logout wipe list). The app previously held no
+       record at all and re-derived every badge from current state on
+       every read, so a badge earned anywhere its evidence couldn't
+       travel from was invisible here, permanently. This record is the
+       app's ACH_KEY: AppViewModel.achievements() unions it with the
+       derived set and writes newly derived ids back. It also syncs as
+       users/{uid}.achievements (union — see SyncRepository), so an
+       unlock earned in-app survives reinstalls and other app devices.
+       Wiped by clearUserData() like every per-user key (the web wipes
+       ACHIEVEMENTS on logout too). */
+    fun getUnlockedAchievements(): Set<String> =
+        prefs.getStringSet("ach_unlocked", emptySet())?.toSet() ?: emptySet()
+
+    /** Union-write: the record only ever grows — badges never re-lock. */
+    fun recordUnlocked(ids: Set<String>) {
+        if (ids.isEmpty()) return
+        val cur = getUnlockedAchievements()
+        if (cur.containsAll(ids)) return
+        prefs.edit().putStringSet("ach_unlocked", cur + ids).apply()
+    }
+
+    /** Union-apply of the synced record (same grow-only write). */
+    fun applySyncedUnlocked(ids: Set<String>) = recordUnlocked(ids)
+
     /* ---------- last signed-in uid + sign-out wipe (web sync.js parity) ---------- */
 
     fun getLastUid(): String? = prefs.getString("last_uid", null)?.ifEmpty { null }
