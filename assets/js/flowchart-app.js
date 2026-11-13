@@ -20,14 +20,29 @@
     });
   }
 
-  /* ---------------- toast ---------------- */
+  /* ---------------- toast ----------------
+     Single-toast invariant: a new message replaces the visible one
+     immediately — text swapped, hide timer reset, show transition
+     restarted — so a stale message can never linger into the next
+     action. hideToast() clears without showing anything. */
   var toastTimer = null;
+  function hideToast() {
+    var t = $("#fcToast");
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+    if (t) t.classList.remove("show");
+  }
   function toast(msg, ms) {
     var t = $("#fcToast");
+    if (!t) return;
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
     t.textContent = msg;
+    t.classList.remove("show");
+    void t.offsetWidth; /* restart the transition for the new message */
     t.classList.add("show");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.classList.remove("show"); }, ms || 3200);
+    toastTimer = setTimeout(function () {
+      toastTimer = null;
+      t.classList.remove("show");
+    }, ms || 3200);
   }
 
   /* ---------------- inline SVG icon set (24px, 1.8 stroke) ---------------- */
@@ -183,8 +198,14 @@
   };
 
   function mmdLabel(s) {
+    /* Mermaid runs with htmlLabels:false, so label text lands in SVG
+       <text> verbatim — HTML-escaping here would print literally
+       ("while n &gt; 0?"). Escape ONLY what a quoted Mermaid label
+       cannot contain raw: the double quote itself (as Mermaid's own
+       #quot; entity) — plus the structural characters that would
+       break the graph syntax (pipes, brackets). */
     return String(s == null ? "" : s)
-      .replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "#quot;")
       .replace(/\|/g, "¦").replace(/[\[\]{}()]/g, " ").replace(/\s+/g, " ").trim();
   }
 
@@ -241,6 +262,7 @@
       applyTransform();
       attachNodeClicks();
       if (state.trace) markTraceFrame();
+      fitViewSoon(); /* refit once the new SVG has actually laid out */
       return svg;
     });
   }
@@ -350,6 +372,7 @@
   function generate() {
     var btn = $("#btnGenerate");
     btn.disabled = true;
+    hideToast();
     $("#genErr").hidden = true;
     return ensurePyodide().then(function (py) {
       var code = getCode();
@@ -377,6 +400,7 @@
       }
       state.ir = ir;
       buildIndexes();
+      renderInputRows();
       bumpFlowchartCounter();
       state.output = ""; state.trace = null; state.generated = true;
       $("#tracePanel").hidden = true;
@@ -396,7 +420,30 @@
     }).then(function (r) { btn.disabled = false; return r; });
   }
 
-  /* ---------------- zoom / pan / node<->editor sync ---------------- */
+  /* ---------------- zoom / pan / node<->editor sync ----------------
+     The wrap (#fcWrap, transform-origin: 0 0 in flowchart.css) carries
+     18px of padding, so the SVG's top-left sits at (18, 18) inside it.
+     Fit must consider BOTH viewport dimensions — the old width-only
+     fit left tall charts zoomed to a slice with Fit/Zoom apparently
+     dead — and must CENTER the chart, not pin it to the corner. */
+  var WRAP_PAD = 18;
+  function computeFit(cw, ch, w, h) {
+    if (!cw || !ch || !w || !h) return { scale: 1, tx: 0, ty: 0 };
+    var s = Math.min((cw - 8) / (w + WRAP_PAD * 2),
+                     (ch - 8) / (h + WRAP_PAD * 2));
+    s = Math.min(1.5, Math.max(0.1, s));
+    return {
+      scale: s,
+      tx: cw / 2 - (WRAP_PAD + w / 2) * s,
+      ty: ch / 2 - (WRAP_PAD + h / 2) * s
+    };
+  }
+  function computeZoom(st, f, cx, cy) {
+    /* zoom toward (cx, cy): the content point under it stays put */
+    var s2 = Math.min(3, Math.max(0.1, st.scale * f));
+    var k = s2 / st.scale;
+    return { scale: s2, tx: cx - (cx - st.tx) * k, ty: cy - (cy - st.ty) * k };
+  }
   function applyTransform() {
     var w = $("#fcWrap");
     if (w) w.style.transform = "translate(" + state.tx + "px," + state.ty +
@@ -405,16 +452,28 @@
   function fitView() {
     var svg = state.svgEl, host = $("#fcScroll");
     if (!svg || !host) return;
-    var vb = svg.viewBox.baseVal;
-    var w = vb.width || svg.clientWidth || 600;
-    var cw = host.clientWidth - 24;
-    state.scale = Math.min(1.15, Math.max(0.2, cw / w));
-    state.tx = 0; state.ty = 0;
+    var w = 0, h = 0, vb = svg.viewBox && svg.viewBox.baseVal;
+    if (vb && vb.width) { w = vb.width; h = vb.height; }
+    if ((!w || !h) && typeof svg.getBBox === "function") {
+      try { var bb = svg.getBBox(); w = w || bb.width; h = h || bb.height; }
+      catch (e) { /* SVG not laid out yet — client size fallback below */ }
+    }
+    if (!w || !h) { w = svg.clientWidth || 600; h = svg.clientHeight || 400; }
+    var f = computeFit(host.clientWidth, host.clientHeight, w, h);
+    state.scale = f.scale; state.tx = f.tx; state.ty = f.ty;
     applyTransform();
   }
-  function fitViewSoon() { setTimeout(fitView, 30); }
+  function fitViewSoon() {
+    if (typeof window !== "undefined" && window.requestAnimationFrame)
+      window.requestAnimationFrame(function () { fitView(); });
+    else setTimeout(fitView, 30);
+  }
   function zoomBy(f) {
-    state.scale = Math.min(3, Math.max(0.15, state.scale * f));
+    var host = $("#fcScroll");
+    var cx = host ? host.clientWidth / 2 : 0;
+    var cy = host ? host.clientHeight / 2 : 0;
+    var z = computeZoom(state, f, cx, cy);
+    state.scale = z.scale; state.tx = z.tx; state.ty = z.ty;
     applyTransform();
   }
 
@@ -575,10 +634,13 @@
       toast("Generate the flowchart first — the trace walks the chart you see.");
       return;
     }
-    var feed = usesInput() ? collectInputs() : [];
-    if (usesInput() && !feed.length) {
-      addInputRow(); addInputRow();
-      toast("This program asks for input — add the values it should receive, then run.");
+    hideToast();
+    var needs = (state.ir && state.ir.inputs)
+      ? state.ir.inputs.length > 0 : usesInput();
+    var feed = needs ? collectInputs() : [];
+    if (needs && !document.querySelectorAll(".fc-input-line").length) {
+      renderInputRows();
+      toast("This program asks for input — fill in the values it should receive, then run.");
       $("#inputsBox").scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
@@ -593,8 +655,31 @@
       $("#outputEmpty").hidden = !!buf.s;
       startTracePlayback(data);
     }).catch(function (err) {
-      toast("Run failed: " + (err && err.message ? err.message : err));
+      /* a failed run must be visible where the user is looking —
+         the output box AND the trace panel — not only as a toast */
+      var msg = "Run failed: " + (err && err.message ? err.message : err);
+      toast(msg);
+      state.output = msg;
+      $("#outputBox").textContent = msg;
+      $("#outputEmpty").hidden = true;
+      showTraceNote(msg);
     }).then(function () { $("#btnTrace").disabled = false; });
+  }
+
+  /* Unhide the trace panel carrying only a message (a completed run
+     with nothing to step through, or a failed run): the panel is the
+     trace's home, so its states are always visible there. */
+  function showTraceNote(msg) {
+    stopTrace(false);
+    state.trace = null;
+    $("#tracePanel").hidden = false;
+    $("#traceRange").max = "0";
+    $("#traceRange").value = "0";
+    $("#traceCount").textContent = "Step 0 / 0";
+    $("#traceWhere").textContent = "";
+    var tv = $("#traceVars");
+    tv.innerHTML = "";
+    tv.appendChild(el("p", "fc-muted", msg));
   }
 
   function inferLineChart(ir, funcName) {
@@ -607,8 +692,18 @@
 
   function startTracePlayback(data) {
     stopTrace(false);
-    var steps = data.steps || [];
-    if (!steps.length) { toast("Nothing to trace — the program did not run."); return; }
+    state.trace = null;
+    var steps = (data && data.steps) || [];
+    if (!steps.length) {
+      /* a completed trace ALWAYS lands in the panel — even with no
+         steps — so a silent run can never look like a dead button */
+      showTraceNote(data && data.error
+        ? "The program stopped with an error before any line could be traced: " + data.error
+        : "No steps captured — the run finished without executing any traceable lines.");
+      if (data && data.error) toast("Program error during run: " + data.error);
+      $("#tracePanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      return;
+    }
     state.trace = { steps: steps, truncated: data.truncated, error: data.error };
     state.tracePos = 0;
     $("#tracePanel").hidden = false;
@@ -618,6 +713,11 @@
       toast("Trace stopped at 2,000 steps (safety cap) — the walkthrough is partial.");
     if (data.error) toast("Program error during run: " + data.error);
     showTraceStep(0);
+    if (data.error) {
+      var tv = $("#traceVars");
+      tv.insertBefore(el("p", "fc-muted",
+        "⚠ This run ended with an error: " + data.error), tv.firstChild);
+    }
     $("#tracePanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
@@ -1093,9 +1193,30 @@
     });
   }
 
-  function addInputRow() {
+  /* One row per input() call site, derived from the converter's IR
+     spec (assets/js/flowchart_ast.py _input_spec): labelled with the
+     call's own prompt when it is a static string. Extra rows can
+     still be added by hand for loops that call input() repeatedly. */
+  function inputLabels(spec) {
+    return (spec || []).map(function (s, i) {
+      if (s.prompt) return s.prompt.replace(/\s+$/, "");
+      if (s.prompt === "") return "input() #" + (i + 1) + " (no prompt)";
+      return "input() #" + (i + 1) + " (prompt written by the program)";
+    });
+  }
+
+  function renderInputRows() {
+    var box = $("#inputsList");
+    box.innerHTML = "";
+    inputLabels(state.ir ? state.ir.inputs : []).forEach(function (lab) {
+      addInputRow(lab);
+    });
+  }
+
+  function addInputRow(label) {
     var box = $("#inputsList");
     var row = el("div", "fc-input-row");
+    if (label) row.appendChild(el("span", "fc-input-label", label));
     var inp = el("input", "fc-input-line");
     inp.type = "text";
     inp.placeholder = "value for input() call #" + (box.children.length + 1);
@@ -1167,12 +1288,19 @@
       var n = b.getAttribute("data-icon");
       if (n) b.innerHTML = icon(n, 16);
     });
+    var resizeT = null;
+    window.addEventListener("resize", function () {
+      if (!state.chart) return;
+      clearTimeout(resizeT);
+      resizeT = setTimeout(fitView, 120);
+    });
   }
 
   if (typeof window !== "undefined") {
     window.__fcTest = { chartToMermaid: chartToMermaid, TRACE_PY: TRACE_PY,
       SAMPLES: SAMPLES, mmdLabel: mmdLabel, loadFromHash: loadFromHash,
-      shareLink: shareLink };
+      shareLink: shareLink, computeFit: computeFit, computeZoom: computeZoom,
+      inputLabels: inputLabels, toast: toast, hideToast: hideToast };
   }
 
   document.addEventListener("DOMContentLoaded", function () {

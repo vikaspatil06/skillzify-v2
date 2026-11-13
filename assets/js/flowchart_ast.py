@@ -9,7 +9,8 @@
 # { success, error|null, pyVersion, sharedSyntax,
 #   charts: [ { id, title, kind(main|function), name, params, recursive,
 #               async, graphviz, trace, stats, nodes[], edges[], warnings[] } ],
-#   warnings: [ ...all charts... ] }
+#   warnings: [ ...all charts... ],
+#   inputs: [ { line, prompt|None } ...every input() call site... ] }
 # Node: { id, kind, label, line, endLine, note? }
 #   kinds: start end process io decision loop merge call return raise
 #          unsupported unreachable
@@ -257,8 +258,6 @@ class ChartBuilder(object):
         if chart is not None:
             self.edges.append({"from": nid, "to": chart["startId"],
                                "kind": "call", "label": "calls"})
-            if chart["name"] == self.name:
-                self.recursive = True
         return self.fragment(nid, [nid])
 
     def link_known_calls(self, owner_id, expr):
@@ -274,8 +273,6 @@ class ChartBuilder(object):
                     self.edges.append({"from": owner_id,
                                        "to": chart["startId"],
                                        "kind": "call", "label": "calls"})
-                    if chart["name"] == self.name:
-                        self.recursive = True
 
     def call_args(self, call):
         parts = [_unparse(a, self.conv.src_lines) for a in call.args]
@@ -312,8 +309,6 @@ class ChartBuilder(object):
                                 self.call_args(st.value) + ")", st.lineno)
                 self.edges.append({"from": nid, "to": chart["startId"],
                                    "kind": "call", "label": "calls"})
-                if chart["name"] == self.name:
-                    self.recursive = True
                 return self.fragment(nid, [nid])
         nid = self.node("process", target + " = " +
                         _unparse(st.value, self.conv.src_lines), st.lineno)
@@ -415,20 +410,24 @@ class ChartBuilder(object):
         body = self.seq_block(st.body, depth + 1)
         if body.entry:
             self.edge(d, body.entry, "true")
-        exits = list(body.exits)
         if not st.orelse:
-            exits.append(d)  # false falls through
-        else:
-            els = self.seq_block(st.orelse, depth + 1)
-            if els.entry:
-                self.edge(d, els.entry, "false")
-            exits += els.exits
-            body = self.merge_from([body, els])
-        out = self.fragment(d, exits, body.breaks, body.continues)
-        if body.entry and st.orelse:
+            # false falls through the decision itself: always live
+            exits = list(body.exits) + [d]
+            return self.fragment(d, exits, body.breaks, body.continues)
+        els = self.seq_block(st.orelse, depth + 1)
+        if els.entry:
+            self.edge(d, els.entry, "false")
+        exits = list(body.exits) + list(els.exits)
+        merged = self.merge_from([body, els])
+        out = self.fragment(d, exits, merged.breaks, merged.continues)
+        if len(exits) >= 2:
             m = self.node("merge", "", st.lineno)
             self.link(exits, m)
             out.exits = [m]
+        elif not exits:
+            # BOTH branches leave (return / break / continue / raise):
+            # the If terminates the enclosing block — no fall-through.
+            out.exits = []
         return out
 
     # -- loops --------------------------------------------------------------
@@ -674,6 +673,65 @@ class ChartBuilder(object):
         return self.fragment(nid, exits, body.breaks, body.continues)
 
 
+def _calls_own_name(fnode):
+    """Recursion, exactly: a Call to the function's own name somewhere
+    within its own body — including inside nested scopes — and nothing
+    else. A nested def/class that rebinds the same name shadows it
+    (calls in there resolve to the inner binding), as does a lambda
+    parameter with the same name, so those scopes are not scanned."""
+    name = fnode.name
+    found = []
+
+    def visit(node):
+        if found:
+            return
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                  ast.ClassDef)):
+                if child.name == name:
+                    continue  # shadowed binding — not a self-call site
+                visit(child)
+            elif isinstance(child, ast.Lambda):
+                params = [a.arg for a in
+                          list(getattr(child.args, "posonlyargs", [])) +
+                          list(child.args.args) +
+                          list(child.args.kwonlyargs)]
+                if name not in params:
+                    visit(child)
+            elif isinstance(child, ast.Call):
+                if isinstance(child.func, ast.Name) and \
+                        child.func.id == name:
+                    found.append(child)
+                    return
+                visit(child)
+            else:
+                visit(child)
+
+    visit(fnode)
+    return bool(found)
+
+
+def _input_spec(tree):
+    """Every input() call site in source order, with its prompt when
+    the prompt is a static string ('' when called with no argument,
+    None when the prompt is computed at run time). Drives the Lab's
+    input rows: one labelled field per call site."""
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and \
+                isinstance(node.func, ast.Name) and node.func.id == "input":
+            prompt = None
+            if not node.args:
+                prompt = ""
+            elif isinstance(node.args[0], ast.Constant) and \
+                    isinstance(node.args[0].value, str):
+                prompt = node.args[0].value
+            found.append({"line": node.lineno, "col": node.col_offset,
+                          "prompt": prompt})
+    found.sort(key=lambda d: (d["line"], d["col"]))
+    return [{"line": d["line"], "prompt": d["prompt"]} for d in found]
+
+
 class Converter(object):
     def __init__(self, code):
         self.code = code or ""
@@ -712,6 +770,7 @@ class Converter(object):
         self.function_charts[name] = meta
         self.charts.append(meta)
         body = b.seq_block(fnode.body, 0)
+        b.recursive = _calls_own_name(fnode)
         if body.entry:
             b.edge(start, body.entry)
         rets = [n["id"] for n in b.nodes if n["kind"] == "return"]
@@ -751,7 +810,7 @@ class Converter(object):
                     "error": {"message": str(e.msg or e), "line": e.lineno,
                               "col": e.offset, "text": e.text},
                     "pyVersion": _pyver(), "sharedSyntax": _shared(),
-                    "charts": [], "warnings": []}
+                    "charts": [], "warnings": [], "inputs": []}
         # pass 1: build function charts so call sites can link
         for node in tree.body:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -771,7 +830,8 @@ class Converter(object):
         charts = [main_meta] + self.charts
         return {"success": True, "error": None, "pyVersion": _pyver(),
                 "sharedSyntax": _shared(), "charts": charts,
-                "warnings": self.warnings_all}
+                "warnings": self.warnings_all,
+                "inputs": _input_spec(tree)}
 
 
 def _pyver():
