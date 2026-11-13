@@ -669,6 +669,10 @@ const MODES = {
   challenge: { style: "You are a Python exercise author for a beginner course. " + jsonOnly + " Every exercise must be solvable with beginner Python (no imports beyond math/random) and its solution must pass its own tests.", json: true, validate: isDrill, maxTokens: 1500 },
   "flowchart-explain": { style: tutorStyle, maxTokens: 1000 },
   "flowchart-code": { style: "", maxTokens: 800 },
+  // Flowchart Lab v2 (AST page): its two AI buttons compose the full
+  // instruction + chart structure in `context` (see buildPrompt).
+  explain: { style: tutorStyle, maxTokens: 1200 },
+  logic_check: { style: "", maxTokens: 1200 },
 };
 
 function buildPrompt(mode, code, errText, context, stage) {
@@ -679,6 +683,15 @@ function buildPrompt(mode, code, errText, context, stage) {
       return "Write ONLY clean, simple Python code that implements these flowchart steps. Use input() for INPUT steps and print() for PRINT/OUTPUT steps. Use only beginner Python (no classes, decorators, or match statements). Output raw code only — no markdown fences, no explanation, no comments beyond one line:\n\n" + code;
     case "flowchart-explain":
       return "Explain this flowchart / algorithm in plain words, step by step, as if teaching a beginner what the program does and why each step exists. No code, just the explanation.\n\nFLOWCHART / ALGORITHM:\n" + code;
+    case "explain":
+      // Flowchart Lab v2 "Explain this flowchart": the client composes
+      // the full instruction + chart structure in `context`; the code
+      // under discussion rides in `code`. (The default case below would
+      // ignore `context` entirely, so this mode needs its own case.)
+      return (context || "Explain this Python code step by step for a beginner.") + "\n\nCODE:\n" + code;
+    case "logic_check":
+      // Flowchart Lab v2 "Check my logic": same composition contract.
+      return (context || "Review this Python code's logic: look for loops that may not terminate, branches that can never run, inverted conditions, off-by-one risks, and inputs that break it. Be specific with line numbers; if it looks correct, say so plainly.") + "\n\nCODE:\n" + code;
     case "generate":
       return "Write clean, beginner-friendly Python code for this request. Output the code inside a single ```python fenced block, then 2-3 short bullet points explaining the key parts. Keep it simple — no advanced tricks.\n\nREQUEST:\n" + code;
     case "fix":
