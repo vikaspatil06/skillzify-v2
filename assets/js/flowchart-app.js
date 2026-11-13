@@ -260,14 +260,19 @@
       var stage = $("#fcStage");
       stage.innerHTML = out.svg;
       var svg = stage.querySelector("svg");
+      /* round 4: no width-attribute sizing and no wrapper transform.
+         The svg fills its stage via CSS (.fc-stage svg) and the
+         viewport is the svg's own viewBox, derived from the drawn
+         content itself — element layout and fonts cannot defeat it. */
+      svg.removeAttribute("width");
       svg.removeAttribute("height");
       svg.style.maxWidth = "none";
-      svg.setAttribute("width", svg.viewBox.baseVal.width || 600);
       state.svgEl = svg;
-      applyTransform();
+      state.full = contentBox(svg);
+      state.vb = null;
       attachNodeClicks();
       if (state.trace) markTraceFrame();
-      fitViewSoon(); /* refit once the new SVG has actually laid out */
+      fitView();
       return svg;
     });
   }
@@ -275,7 +280,7 @@
   /* ---------------- app state ---------------- */
   var state = {
     ir: null, chart: null, chartByStart: {}, lineToNodes: {},
-    scale: 1, tx: 0, ty: 0, svgEl: null,
+    vb: null, full: null, svgEl: null,
     trace: null, tracePos: 0, traceTimer: null, tracePlaying: false,
     output: "", inputs: [], generated: false
   };
@@ -327,7 +332,6 @@
     document.querySelectorAll(".fc-fn-btn").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-chart") === name);
     });
-    fitViewSoon();
     var p = renderChart(ch);
     renderStats();
     return p;
@@ -433,115 +437,89 @@
   }
 
   /* ---------------- zoom / pan / node<->editor sync ----------------
-     MEASURED fit (round 3): the round-2 fit computed from viewBox
-     numbers and the host's client size, yet live the chart still
-     landed pushed-right and clipped with Fit apparently dead — the
-     inputs to that math could not be trusted. Fit now MEASURES what
-     the browser actually laid out: reset the transform, read the
-     rendered SVG's rect, the wrap's rect and the host's rect via
-     getBoundingClientRect, and solve the transform (origin 0 0 on
-     #fcWrap) that moves the SVG's centre onto the host's centre at a
-     scale fitting BOTH dimensions. One correction pass runs if the
-     centred rect still overflows the host by more than 2px. */
-  function fitFromRects(host, wrap, content, scaleOverride) {
-    if (!host || !wrap || !content || !content.width || !content.height ||
-        !host.width || !host.height)
-      return { scale: 1, tx: 0, ty: 0 };
-    var s = (typeof scaleOverride === "number" && scaleOverride > 0)
-      ? scaleOverride
-      : Math.min(host.width / content.width, host.height / content.height);
-    s = Math.min(1.5, Math.max(0.05, s));
-    var ccx = content.left + content.width / 2;
-    var ccy = content.top + content.height / 2;
-    var hcx = host.left + host.width / 2;
-    var hcy = host.top + host.height / 2;
-    /* a wrap-local point q lands at viewport x = wrap.left + tx +
-       s*(q - wrap.left); solve tx/ty so the content centre lands
-       exactly on the host centre */
-    return {
-      scale: s,
-      tx: hcx - wrap.left - s * (ccx - wrap.left),
-      ty: hcy - wrap.top - s * (ccy - wrap.top)
-    };
+     NATIVE viewBox viewport (round 4): three rounds of CSS-transform
+     viewports failed live the same way — chart oversized, pushed
+     right, panel scrollbars, Fit apparently dead, zoom sliding
+     sideways — because a transform on the wrap is at the mercy of
+     element layout, the max-content wrap and font loading. The
+     viewport now lives entirely in the SVG's own coordinate space:
+     state.full is the whole-chart box (the drawn content's bbox +
+     padding, measured off Mermaid's root group in renderChart) and
+     state.vb IS the svg's viewBox. preserveAspectRatio keeps its
+     default (xMidYMid meet), so the fitted chart centres itself and
+     can never be clipped by its own frame. */
+  var VIEW_PAD = 28;
+  function fitBox(bb, pad) {
+    return { x: bb.x - pad, y: bb.y - pad,
+             w: bb.width + 2 * pad, h: bb.height + 2 * pad };
   }
-  function zoomFromMeasure(st, f, wrapRect, hostRect) {
-    /* zoom toward the HOST CENTRE, measured the same way: the content
-       point currently under the host centre stays under it. wrapRect
-       is the wrap's rect WITH the current transform applied, so the
-       wrap's untransformed origin is (wrapRect.left - tx,
-       wrapRect.top - ty). */
-    if (!st || !st.scale || !wrapRect || !hostRect)
-      return { scale: st ? st.scale : 1, tx: st ? st.tx : 0, ty: st ? st.ty : 0 };
-    var s2 = Math.min(3, Math.max(0.05, st.scale * f));
-    var wx = wrapRect.left - st.tx, wy = wrapRect.top - st.ty;
-    var hcx = hostRect.left + hostRect.width / 2;
-    var hcy = hostRect.top + hostRect.height / 2;
-    var qx = (hcx - (wx + st.tx)) / st.scale;
-    var qy = (hcy - (wy + st.ty)) / st.scale;
-    return { scale: s2, tx: hcx - s2 * qx - wx, ty: hcy - s2 * qy - wy };
+  function contentBox(svg) {
+    try {
+      var g = svg.querySelector("g.root") || svg.querySelector("g");
+      if (g && typeof g.getBBox === "function") {
+        var bb = g.getBBox();
+        if (bb && bb.width > 0 && bb.height > 0)
+          return fitBox(bb, VIEW_PAD);
+      }
+    } catch (e) { /* no geometry available — fall back below */ }
+    var vb = svg.viewBox && svg.viewBox.baseVal;
+    if (vb && vb.width > 0 && vb.height > 0)
+      return { x: vb.x, y: vb.y, w: vb.width, h: vb.height };
+    return { x: 0, y: 0, w: 600, h: 400 };
   }
-  function applyTransform() {
-    var w = $("#fcWrap");
-    if (w) w.style.transform = "translate(" + state.tx + "px," + state.ty +
-      "px) scale(" + state.scale + ")";
+  function applyView() {
+    var svg = state.svgEl;
+    if (!svg || !state.vb) return;
+    svg.setAttribute("viewBox", state.vb.x + " " + state.vb.y + " " +
+      state.vb.w + " " + state.vb.h);
   }
   function fitView() {
-    var svg = state.svgEl, host = $("#fcScroll"), wrap = $("#fcWrap");
-    if (!svg || !host || !wrap) return;
-    var prev = wrap.style.transform;
-    wrap.style.transform = "none";
-    var hr = host.getBoundingClientRect();
-    var wr = wrap.getBoundingClientRect();
-    var cr = svg.getBoundingClientRect();
-    if (!cr.width || !cr.height || !hr.width || !hr.height) {
-      wrap.style.transform = prev;
-      return;
-    }
-    var f = fitFromRects(hr, wr, cr);
-    state.scale = f.scale; state.tx = f.tx; state.ty = f.ty;
-    applyTransform();
-    /* one correction pass: shrink once (and re-centre from the same
-       untransformed measurements) if the centred rect still
-       overflows the host by more than 2px */
-    var r1 = svg.getBoundingClientRect();
-    if (r1.width > hr.width + 2 || r1.height > hr.height + 2) {
-      var k = Math.min(hr.width / r1.width, hr.height / r1.height);
-      if (k < 1) {
-        var f2 = fitFromRects(hr, wr, cr, state.scale * k);
-        state.scale = f2.scale; state.tx = f2.tx; state.ty = f2.ty;
-        applyTransform();
-      }
-    }
+    if (!state.svgEl || !state.full) return;
+    state.vb = { x: state.full.x, y: state.full.y,
+                 w: state.full.w, h: state.full.h };
+    applyView();
   }
-  function fitViewSoon() {
-    if (typeof window !== "undefined" && window.requestAnimationFrame)
-      window.requestAnimationFrame(function () { fitView(); });
-    else setTimeout(fitView, 30);
+  /* zoom by f around the viewBox CENTRE (it stays fixed); the width
+     is clamped to [full.w/12, full.w*2.5] so a learner can neither
+     lose the chart in space nor dive inside a single letter */
+  function zoomViewBox(vb, f, full) {
+    if (!vb || !full || !f || f <= 0 || !vb.w) return vb;
+    var cx = vb.x + vb.w / 2, cy = vb.y + vb.h / 2;
+    var w2 = Math.min(full.w * 2.5, Math.max(full.w / 12, vb.w / f));
+    var h2 = vb.h * (w2 / vb.w);
+    return { x: cx - w2 / 2, y: cy - h2 / 2, w: w2, h: h2 };
   }
   function zoomBy(f) {
-    var host = $("#fcScroll"), wrap = $("#fcWrap");
-    if (!host || !wrap) return;
-    var z = zoomFromMeasure(state, f,
-      wrap.getBoundingClientRect(), host.getBoundingClientRect());
-    state.scale = z.scale; state.tx = z.tx; state.ty = z.ty;
-    applyTransform();
+    if (!state.vb || !state.full) return;
+    state.vb = zoomViewBox(state.vb, f, state.full);
+    applyView();
+  }
+  /* drag pan: pixels become viewBox units at the CURRENT zoom —
+     dx_units = dx_px * (vb.w / host width), likewise for y */
+  function panViewBox(vb, dxPx, dyPx, hostW, hostH) {
+    if (!vb || !hostW || !hostH) return vb;
+    return { x: vb.x - dxPx * (vb.w / hostW),
+             y: vb.y - dyPx * (vb.h / hostH),
+             w: vb.w, h: vb.h };
   }
 
   function initPan() {
-    var host = $("#fcScroll"), drag = null;
+    var host = $("#fcScroll"), last = null;
     host.addEventListener("pointerdown", function (e) {
       if (e.target.closest(".fc-node-click")) return;
-      drag = { x: e.clientX, y: e.clientY, tx: state.tx, ty: state.ty };
+      last = { x: e.clientX, y: e.clientY };
       host.setPointerCapture(e.pointerId);
     });
     host.addEventListener("pointermove", function (e) {
-      if (!drag) return;
-      state.tx = drag.tx + (e.clientX - drag.x);
-      state.ty = drag.ty + (e.clientY - drag.y);
-      applyTransform();
+      if (!last || !state.vb) return;
+      var dx = e.clientX - last.x, dy = e.clientY - last.y;
+      last = { x: e.clientX, y: e.clientY };
+      state.vb = panViewBox(state.vb, dx, dy,
+        host.clientWidth, host.clientHeight);
+      applyView();
     });
     ["pointerup", "pointercancel"].forEach(function (ev) {
-      host.addEventListener(ev, function () { drag = null; });
+      host.addEventListener(ev, function () { last = null; });
     });
     host.addEventListener("wheel", function (e) {
       if (!e.ctrlKey && !e.metaKey) return;
@@ -551,11 +529,16 @@
   }
 
   function editorLineFor(node) { return node && node.line ? node.line : 0; }
-  function highlightEditorLine(line) {
+  function highlightEditorLine(line, keepView) {
     if (!editor || !line) return;
     editor.setSelection({ line: line - 1, ch: 0 },
       { line: line - 1, ch: (editor.getLine(line - 1) || "").length });
-    editor.scrollIntoView({ line: line - 1, ch: 0 }, 120);
+    /* keepView: a trace step must never move the page. CodeMirror's
+       scrollIntoView also pulls the WINDOW toward the editor, so
+       stepping through a run bounced the page on every Next click
+       (round-4 trace fix) — the panel scroll now happens exactly
+       once, when a trace starts, in startTracePlayback. */
+    if (!keepView) editor.scrollIntoView({ line: line - 1, ch: 0 }, 120);
   }
   function nodeElById(id) {
     if (!state.svgEl) return null;
@@ -912,12 +895,12 @@
     if (ch && ch.name !== currentChartName()) {
       selectChart(ch.name, { keepTrace: true });
       var fn = stepNode(st);
-      if (fn && editor) highlightEditorLine(fn.line);
+      if (fn && editor) highlightEditorLine(fn.line, true);
       return;
     }
     markTraceFrame();
     var node = stepNode(st);
-    if (node && editor) highlightEditorLine(node.line);
+    if (node && editor) highlightEditorLine(node.line, true);
   }
 
   function stopTrace(clearMarks) {
@@ -961,13 +944,22 @@
     var styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
     styleEl.textContent = css + "\ntext{font-family:Inter,system-ui,sans-serif}";
     clone.insertBefore(styleEl, clone.firstChild);
-    var vb = clone.viewBox.baseVal;
-    var w = vb.width || 800, h = vb.height || 600;
+    /* Exports always show the WHOLE chart: since round 4 the live
+       svg's viewBox is the pan/zoom viewport, so the clone's viewBox
+       is reset to state.full (the full chart box) before serialising
+       and the raster size is derived from it — a zoomed-in learner
+       still exports the complete diagram. */
+    var fb = state.full, cvb = clone.viewBox.baseVal;
+    var fx = fb ? fb.x : (cvb.x || 0), fy = fb ? fb.y : (cvb.y || 0);
+    var w = fb ? fb.w : (cvb.width || 800), h = fb ? fb.h : (cvb.height || 600);
+    clone.setAttribute("viewBox", fx + " " + fy + " " + w + " " + h);
     clone.setAttribute("width", w); clone.setAttribute("height", h);
+    clone.style.width = w + "px"; clone.style.height = h + "px";
+    clone.style.maxWidth = "none";
     clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     if (bgMode !== "transparent") {
       var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      rect.setAttribute("x", vb.x || 0); rect.setAttribute("y", vb.y || 0);
+      rect.setAttribute("x", fx); rect.setAttribute("y", fy);
       rect.setAttribute("width", w); rect.setAttribute("height", h);
       rect.setAttribute("fill", bgMode === "white" ? "#ffffff" : "#0b1026");
       clone.insertBefore(rect, styleEl.nextSibling);
@@ -1386,8 +1378,8 @@
   if (typeof window !== "undefined") {
     window.__fcTest = { chartToMermaid: chartToMermaid, TRACE_PY: TRACE_PY,
       SAMPLES: SAMPLES, mmdLabel: mmdLabel, loadFromHash: loadFromHash,
-      shareLink: shareLink, fitFromRects: fitFromRects,
-      zoomFromMeasure: zoomFromMeasure,
+      shareLink: shareLink, fitBox: fitBox,
+      zoomViewBox: zoomViewBox, panViewBox: panViewBox,
       inputLabels: inputLabels, toast: toast, hideToast: hideToast,
       state: state, selectChart: selectChart, showTraceStep: showTraceStep,
       stepNode: stepNode, startTracePlayback: startTracePlayback,
