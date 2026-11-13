@@ -863,4 +863,9 @@ def flowchart_ir(code):
 
 if __name__ == "__main__":
     import sys as _s
-    print(to_ir(_s.stdin.read()))
+    # Desktop CLI only. Under Pyodide (Emscripten) __name__ is also
+    # "__main__", but there is no readable stdin in the browser —
+    # _s.stdin.read() raises OSError [Errno 29] and kills the load.
+    # The browser path calls flowchart_ir() directly instead.
+    if _s.platform != "emscripten":
+        print(to_ir(_s.stdin.read()))

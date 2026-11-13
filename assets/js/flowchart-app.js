@@ -956,8 +956,19 @@
     return "The AI tutor returned an error (" + c + "). Try again in a moment.";
   }
 
+  /* No-chart feedback for the AI buttons: a transient toast alone is
+     easy to miss, so the message also lands in the AI panel itself,
+     where the user is looking, and stays until replaced. */
+  function aiNeedsChart() {
+    toast("Generate a flowchart first.");
+    var box = $("#aiOut");
+    box.hidden = false;
+    box.innerHTML = '<p class="fc-muted">Generate a flowchart first — ' +
+      'then the AI can explain it and check its logic.</p>';
+  }
+
   function aiExplain() {
-    if (!state.generated) { toast("Generate a flowchart first."); return; }
+    if (!state.generated) { aiNeedsChart(); return; }
     aiAsk("explain",
       "Explain this flowchart in plain English for a beginner. Walk through " +
       "the flow step by step using the structure below, mention loops and " +
@@ -966,7 +977,7 @@
   }
 
   function aiCheckLogic() {
-    if (!state.generated) { toast("Generate a flowchart first."); return; }
+    if (!state.generated) { aiNeedsChart(); return; }
     var stat = state.ir.warnings.filter(function (w) {
       return w.type !== "comment";
     }).map(function (w) { return "- " + w.text; }).join("\n");
