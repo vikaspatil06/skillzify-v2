@@ -260,7 +260,14 @@
     svg.querySelectorAll("g.node").forEach(function (g) {
       var t = g.getAttribute("transform");
       if (!t) return;
-      g.style.transform = t;
+      /* the attribute's unitless numbers are NOT valid CSS — assigned
+         raw, the browser silently drops the declaration and the pin
+         does nothing (round-6 bug, proven in a real Chromium probe:
+         computed transform became the hover rule's scale(1.09) matrix).
+         Convert translate(x, y) to translate(x px, y px). */
+      var m = /^translate\(\s*(-?[\d.]+)(?:[ ,]+(-?[\d.]+))?\s*\)$/.exec(t.trim());
+      if (!m) return;
+      g.style.transform = "translate(" + m[1] + "px, " + (m[2] || "0") + "px)";
       g.style.transition = "none";
     });
   }
