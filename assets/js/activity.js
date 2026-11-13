@@ -173,6 +173,11 @@
     var u = unlocked();
     if (u[id]) return false;
     u[id] = Date.now(); set(ACH_KEY, u);
+    // The unlock record syncs (sync.js `achievements` field) — push it
+    // even when this unlock came from a path that marks nothing else
+    // dirty (bumpStreakCounter skips its markDirty on an already-
+    // counted day, so a late-night run's Night Owl could strand).
+    try { if (window.SkillzifySync && typeof window.SkillzifySync.markDirty === "function") window.SkillzifySync.markDirty("achievements"); } catch (e) {}
     var a = ACHIEVEMENTS.filter(function (x) { return x.id === id; })[0];
     // P1-06: feed-only — unlocking a badge is not activity, so it must
     // not bump the streak (log() would) merely because a page was opened.
@@ -395,7 +400,13 @@
     // catch-up (was: a read+write pair per badge, plus a feed
     // entry each). No day-count is touched here — unlocking is
     // feed-only (P1-06 logFeed path, preserved).
-    if (newly.length) { set(ACH_KEY, u); logFeedMany(newly); }
+    if (newly.length) {
+      set(ACH_KEY, u); logFeedMany(newly);
+      // A page-open catch-up can unlock badges without any other
+      // local mutation, so nothing else would schedule the push that
+      // carries the unlock record to the cloud/app.
+      try { if (window.SkillzifySync && typeof window.SkillzifySync.markDirty === "function") window.SkillzifySync.markDirty("achievements"); } catch (e) {}
+    }
   }
   function achievements() {
     var u = unlocked();

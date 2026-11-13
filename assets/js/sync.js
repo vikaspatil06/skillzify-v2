@@ -30,6 +30,10 @@
    - counters: per-field MAX for reviewsDone/plansDone/bestAnswers/
      flowchartsDone, OR for showcaseStarred (see mergeCounters).
      Counters only grow, so MAX/OR is safe — same reasoning as xp.
+   - achievements: UNION of unlocked ids (see mergeAchievements).
+     The unlock record is permanent — a badge, once earned, is
+     never revoked — so the union of both sides is always the
+     truth, and the merged record can only grow.
    - customPaths: last-write-wins by updatedAt (whole document —
      same shape as profile). Definitions live in localStorage
      `skillzify_custom_paths` (array of {id, title, steps, ...});
@@ -508,6 +512,42 @@
       flowchartsDone: Math.max(l.flowchartsDone, c.flowchartsDone)
     };
   }
+
+  /* ---------- achievement unlock record (app parity fix, 13 Nov 2026) ----------
+     Web badges are rendered from the PERMANENT unlock record in
+     localStorage `skillzify_achievements` ({id: unlockMs}) — the map
+     activity.js persists in unlock()/checkAchievements() and reads
+     in achievements(). The Android app keeps the same kind of record
+     (synced as a top-level `achievements` field, {id: true}, UNION),
+     but the badges it cannot re-derive from synced stats depend on
+     evidence that exists ONLY in this browser and never entered
+     users/{uid}: streak_7 ("On Fire") needs the longest streak,
+     computed from the local-only activity-days log, and
+     snippet_saver ("Curator") needs the localStorage snippets list.
+     Without the record itself syncing, the app showed 7/32 where the
+     web showed 9/32. So the record syncs in the SAME top-level
+     `achievements` field — firestore.rules allows any field on the
+     owner's own doc, so no rules change is needed. UNION of ids,
+     grow-only like lessons: a badge once earned is never revoked, so
+     neither side can ever re-lock the other. The cloud/app shape is
+     {id: true} — only an exact `true` counts, so a malformed cloud
+     value (string, number, nested object) can never fabricate an
+     unlock; the local side keeps its unlock timestamps, and an id
+     that exists only in the cloud enters the merged map as 0
+     ("unlocked, time unknown") until writeLocalAchievements stamps
+     its arrival on this device. */
+  function mergeAchievements(localDoc, cloudDoc) {
+    var out = {};
+    if (localDoc && typeof localDoc === "object" && !Array.isArray(localDoc)) {
+      Object.keys(localDoc).forEach(function (k) { if (localDoc[k]) out[k] = num(localDoc[k]) || 1; });
+    }
+    if (cloudDoc && typeof cloudDoc === "object" && !Array.isArray(cloudDoc)) {
+      Object.keys(cloudDoc).forEach(function (k) {
+        if (cloudDoc[k] === true && !out[k]) out[k] = 0;
+      });
+    }
+    return out;
+  }
   function reviewsTooBig(doc) {
     try { return unescape(encodeURIComponent(JSON.stringify((doc && doc.items) || {}))).length > 100 * 1024; }
     catch (e) { return false; }
@@ -554,6 +594,7 @@
     mergeReviews: mergeReviews,
     mergePlacement: mergePlacement,
     mergeCounters: mergeCounters,
+    mergeAchievements: mergeAchievements,
     reviewsTooBig: reviewsTooBig,
     workspaceTooBig: workspaceTooBig,
     contentChanged: contentChanged
@@ -830,6 +871,29 @@
     lsSet(LS.SHOWCASE_STARRED, doc.showcaseStarred ? "1" : "0");
     lsSet(LS.FLOWCHARTS_DONE, String(Math.max(0, num(doc.flowchartsDone))));
   }
+  function readLocalAchievements() {
+    // The permanent unlock record activity.js maintains
+    // ({id: unlockMs}). Corrupt JSON or a non-object value degrades
+    // to "no local unlocks", so the merge keeps whatever the cloud
+    // holds instead of throwing or wiping the record.
+    var raw = storeGet(LS.ACHIEVEMENTS, null);
+    var out = {};
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      Object.keys(raw).forEach(function (k) { if (raw[k]) out[k] = num(raw[k]) || 1; });
+    }
+    return out;
+  }
+  function writeLocalAchievements(doc) {
+    var out = {};
+    doc = doc || {};
+    Object.keys(doc).forEach(function (k) {
+      // A 0 marks an unlock that arrived from the cloud/app: its real
+      // unlock time never synced, so stamp its arrival on this device
+      // (the `at` is display-only — the badge itself is the record).
+      out[k] = doc[k] ? doc[k] : Date.now();
+    });
+    storeSet(LS.ACHIEVEMENTS, out);
+  }
 
   /* ---------- Firebase guards ---------- */
   function db() {
@@ -849,7 +913,7 @@
     // Layout: ONE document per user at users/{uid} with map fields:
     // { profile: {...}, progress: {...}, exercises: {...}, paths: {...},
     //   customPaths: {...}, workspace: {...}, projects: {...},
-    //   placement: {...}, counters: {...} }. The Android app reads its fields by name
+    //   placement: {...}, counters: {...}, achievements: {...} }. The Android app reads its fields by name
     // and ignores the rest, so the extra customPaths/workspace fields are safe.
     // NOTE: `workspace` is website-only for now — the Android app has its
     // own local compiler workspace and does not read this field.
@@ -899,6 +963,11 @@
     // Counters: per-field MAX / OR — a fresh device's zeros can never
     // lower the cloud, so the merged value is always pushed.
     var mergedCounters = mergeCounters(readLocalCounters(), data.counters || null);
+    // Achievements: UNION of the permanent unlock record — grow-only,
+    // so the merged value is pushed in the app's {id: true} shape
+    // whenever the union is non-empty (an empty union is omitted,
+    // never pushed as an empty map, mirroring placement).
+    var mergedAchievements = mergeAchievements(readLocalAchievements(), data.achievements || null);
     // Profile and customPaths are whole-document last-write-wins by
     // updatedAt, so ONLY stamp them when this device actually contributed
     // a change — re-stamping an unchanged doc let an idle device's old
@@ -958,6 +1027,11 @@
     // needs no re-stamping — the merged record is pushed as-is, and only
     // when at least one side actually holds a placement.
     if (mergedPlacement) payload.placement = mergedPlacement;
+    // Achievements carry no timestamp of their own in the payload —
+    // just the set of unlocked ids in the app's {id: true} shape.
+    var achPayload = {};
+    Object.keys(mergedAchievements).forEach(function (k) { achPayload[k] = true; });
+    if (Object.keys(achPayload).length) payload.achievements = achPayload;
     var wsSkipped = false;
     if (wsHasFiles && !workspaceTooBig(mergedWorkspace)) {
       payload.workspace = mergedWorkspace;
@@ -968,7 +1042,7 @@
     return {
       profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises,
       paths: mergedPaths, customPaths: mergedCustomPaths, workspace: mergedWorkspace,
-      reviews: mergedReviews, projects: mergedProjects, placement: mergedPlacement, counters: mergedCounters, payload: payload, wsSkipped: wsSkipped
+      reviews: mergedReviews, projects: mergedProjects, placement: mergedPlacement, counters: mergedCounters, achievements: mergedAchievements, payload: payload, wsSkipped: wsSkipped
     };
   }
   // Write a merged result locally + report success. Runs only after the
@@ -984,6 +1058,7 @@
     writeLocalProjects(m.projects);
     writeLocalPlacement(m.placement);
     writeLocalCounters(m.counters);
+    writeLocalAchievements(m.achievements);
     if (m.wsSkipped) setStatus("Workspace too large to sync (700 KB limit)");
     else setStatus("Synced \u2713 " + fmtTime(Date.now()));
     try {
@@ -1075,6 +1150,7 @@
     writeLocalProjects(mergeProjects(readLocalProjects(), data.projects || null));
     writeLocalPlacement(mergePlacement(readLocalPlacement(), data.placement || null));
     writeLocalCounters(mergeCounters(readLocalCounters(), data.counters || null));
+    writeLocalAchievements(mergeAchievements(readLocalAchievements(), data.achievements || null));
     setStatus("Synced ✓ " + fmtTime(Date.now()));
     try {
       if (typeof CustomEvent === "function")
