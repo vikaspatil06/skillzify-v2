@@ -120,7 +120,12 @@ class SyncRepository(private val store: Store) {
             revealed = a.revealed || b.revealed,
             bestMs = bests.minOrNull() ?: 0,
             lastTry = maxOf(a.lastTry, b.lastTry),
-            at = firsts.minOrNull() ?: 0
+            at = firsts.minOrNull() ?: 0,
+            // solveQuality is a LOCAL-only snapshot on both platforms
+            // (web mergeExercises drops it from the cloud doc too), so
+            // the merged record simply keeps whichever side holds one —
+            // in practice the local side (a); the cloud parse never sets it.
+            solveQuality = a.solveQuality ?: b.solveQuality
         )
     }
 

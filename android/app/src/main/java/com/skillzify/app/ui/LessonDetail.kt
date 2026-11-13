@@ -63,11 +63,12 @@ fun LessonDetail(vm: AppViewModel, lessonId: String, nav: NavController) {
             Spacer(Modifier.height(8.dp))
             Text("This lesson is locked", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
             Text(
-                "Finish the previous lessons in order — or enroll in a learning path that includes it to unlock it instantly.",
+                // lesson.js locked card, verbatim.
+                "Finish the previous lessons in order to unlock ${lesson.title}.",
                 color = TextMuted, fontSize = 14.sp
             )
             Spacer(Modifier.height(12.dp))
-            Button(onClick = { nav.popBackStack() }) { Text("← Back") }
+            Button(onClick = { nav.popBackStack() }) { Text("← Back to Learn") }
         }
         return
     }
@@ -253,7 +254,16 @@ fun LessonDetail(vm: AppViewModel, lessonId: String, nav: NavController) {
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(14.dp)
             ) {
-                Text(if (vm.isDone(lessonId)) "✅ Completed" else "🎉 Complete lesson · +XP", fontSize = 15.sp)
+                Text(
+                    // lesson.js refreshComplete(): disabled label is the
+                    // web's locked text; enabled is the party label.
+                    when {
+                        vm.isDone(lessonId) -> "✅ Completed"
+                        canComplete -> "🎉 Complete lesson · +XP"
+                        else -> "🔒 Finish the quiz & challenge to complete"
+                    },
+                    fontSize = 15.sp
+                )
             }
             Spacer(Modifier.height(24.dp))
         }

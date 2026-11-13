@@ -50,6 +50,14 @@ class Store(ctx: Context) {
     fun bumpStreak(): Int {
         val today = dayString(0)
         val last = prefs.getString("streak_last", null)
+        // Web P2-24: a future-dated `last` (clock skew / timezone travel)
+        // is ignored, not a broken streak — the count stands and the
+        // counter is left untouched (the day still counts as active,
+        // like the web's unconditional days-map write in log()).
+        if (last != null && last > today) {
+            markActiveDay(today)
+            return getStreak()
+        }
         if (last == today) return getStreak()
         val yesterday = dayString(-1)
         val count = if (last == yesterday) getStreak() + 1 else 1
@@ -60,13 +68,41 @@ class Store(ctx: Context) {
         return count
     }
 
+    /** Web streak().current: the stored count while the streak is
+        alive (last activity today or yesterday), 0 once it has lapsed.
+        The raw count itself is preserved for `longest`/sync. */
+    fun getCurrentStreak(): Int {
+        val last = getStreakLast() ?: return 0
+        return if (last == dayString(0) || last == dayString(-1)) getStreak() else 0
+    }
+
+    /* Streak-milestone XP bonus flags (web activity.js: +50 XP the
+       first time the streak reaches 7 days, +150 at 30 — each fires
+       exactly once per device, STREAK_BONUS_KEY {d7, d30}). */
+    fun isStreakBonusClaimed(days: Int): Boolean =
+        prefs.getBoolean("streak_bonus_d$days", false)
+
+    fun claimStreakBonus(days: Int) =
+        prefs.edit().putBoolean("streak_bonus_d$days", true).apply()
+
     fun getRuns(): List<RunRecord> {
         val raw = prefs.getString("runs", "[]") ?: "[]"
-        val arr = JSONArray(raw)
-        return (0 until arr.length()).map {
-            val o = arr.getJSONObject(it)
-            RunRecord(o.getString("preview"), o.getBoolean("ok"), o.getLong("ts"))
-        }
+        // Fail-soft like every other JSON reader in this store: this is
+        // called from AppViewModel property initialisers, so a corrupt
+        // or shape-drifted "runs" pref must not crash the VM (and the
+        // app) on every launch. Bad entries are skipped, not fatal.
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).mapNotNull {
+                try {
+                    val o = arr.getJSONObject(it)
+                    RunRecord(
+                        o.optString("preview", ""), o.optBoolean("ok", false),
+                        o.optLong("ts", 0)
+                    )
+                } catch (e: Exception) { null }
+            }
+        } catch (e: Exception) { emptyList() }
     }
 
     fun addRun(record: RunRecord) {
@@ -102,7 +138,9 @@ class Store(ctx: Context) {
                 revealed = o.optBoolean("revealed", false),
                 bestMs = o.optLong("bestMs", 0),
                 lastTry = o.optLong("lastTry", 0),
-                at = o.optLong("at", 0)
+                at = o.optLong("at", 0),
+                solveQuality = if (o.has("solveQuality"))
+                    o.optDouble("solveQuality", Double.NaN).takeIf { !it.isNaN() } else null
             )
         } catch (e: Exception) { ExerciseAttempt() }
     }
@@ -113,6 +151,7 @@ class Store(ctx: Context) {
             put("hintsUsed", a.hintsUsed); put("revealed", a.revealed)
             put("bestMs", a.bestMs); put("lastTry", a.lastTry)
             put("at", a.at)
+            a.solveQuality?.let { put("solveQuality", it) }
         }
         prefs.edit().putString("ex_att_$id", o.toString()).apply()
     }
@@ -136,7 +175,12 @@ class Store(ctx: Context) {
     fun getStreakLast(): String? = prefs.getString("streak_last", null)
 
     fun setStreak(count: Int, last: String?) {
-        prefs.edit().putInt("streak_count", count).putString("streak_last", last).apply()
+        val e = prefs.edit().putInt("streak_count", count).putString("streak_last", last)
+        // Web streak(): longest is at least the (possibly just-synced)
+        // counter count — a streak earned on another device counts
+        // toward best-ever here too.
+        if (count > getLongestStreak()) e.putInt("streak_longest", count)
+        e.apply()
     }
 
     /** Applies a merged progress doc from sync. */
@@ -146,6 +190,7 @@ class Store(ctx: Context) {
         for (id in lessons) e.putBoolean("done_$id", true)
         if (xp > getXp()) e.putInt("xp", xp)
         e.putInt("streak_count", streakCount)
+        if (streakCount > getLongestStreak()) e.putInt("streak_longest", streakCount)
         if (streakLast != null) e.putString("streak_last", streakLast) else e.remove("streak_last")
         e.apply()
     }
@@ -450,6 +495,48 @@ class Store(ctx: Context) {
 
     fun getSectionCompletedAt(sectionId: String): Long? =
         sectionCompletions()[sectionId]?.takeIf { it > 0 }
+
+    /* ---------- one-time completion bonuses (web learn-core.js) ----------
+       Section complete +100 XP, path complete +150 XP, each exactly
+       once per id (web SECTION_BONUS_KEY / PATH_BONUS_KEY flag maps).
+       The path flags double as the passport's completed-paths record,
+       exactly like the web's skillzify_path_bonus. */
+
+    fun isSectionBonusAwarded(id: String): Boolean = stringSet("section_bonus").contains(id)
+    fun markSectionBonusAwarded(id: String) {
+        val s = stringSet("section_bonus").toMutableSet(); s.add(id)
+        prefs.edit().putStringSet("section_bonus", s).apply()
+    }
+
+    fun isPathBonusAwarded(id: String): Boolean = stringSet("path_bonus").contains(id)
+    fun markPathBonusAwarded(id: String) {
+        val s = stringSet("path_bonus").toMutableSet(); s.add(id)
+        prefs.edit().putStringSet("path_bonus", s).apply()
+    }
+
+    /* ---------- persisted certificate records (web passport.js certFor) ----------
+       {sectionId: {"id": "SKZ-…", "issuedAt": ms}}. Get-or-create: once
+       minted, a section's cert ID never changes — even if the doneAt
+       data later moves via sync (the web persists the same record in
+       skillzify_certificates). */
+
+    fun getCertRecord(sectionId: String): Pair<String, Long>? {
+        val raw = prefs.getString("certificates", null) ?: return null
+        return try {
+            val rec = JSONObject(raw).optJSONObject(sectionId) ?: return null
+            val id = rec.optString("id", "")
+            val at = rec.optLong("issuedAt", 0)
+            if (id.isEmpty() || at <= 0) null else id to at
+        } catch (e: Exception) { null }
+    }
+
+    fun putCertRecord(sectionId: String, certId: String, issuedAt: Long) {
+        val o = try {
+            prefs.getString("certificates", null)?.let { JSONObject(it) } ?: JSONObject()
+        } catch (e: Exception) { JSONObject() }
+        o.put(sectionId, JSONObject().put("id", certId).put("issuedAt", issuedAt))
+        prefs.edit().putString("certificates", o.toString()).apply()
+    }
 
     /* ---------- achievement counters (syncs as users/{uid}.counters) ----------
        Web shape (sync.js mergeCounters): reviewsDone / plansDone /

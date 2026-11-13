@@ -34,17 +34,19 @@ private fun isRusty(lastMs: Long, nowMs: Long): Boolean =
 /* ================= Mastery (mastery.js) ================= */
 
 /**
- * Per-exercise quality q, mirroring mastery.js quality()'s legacy
- * derivation: unsolved 0; revealed 0.4; hinted or >1 attempt 0.7;
- * clean first-try 1.0.
- * SIMPLIFICATION: the web also honours a `solveQuality` snapshot frozen
- * at solve time; the app's ExerciseAttempt has no such field, so the
- * live derivation is always used. The web's "unknown record -> 0.7"
- * branch (missing hintsUsed/revealed fields) cannot occur here —
- * app records always carry both fields.
+ * Per-exercise quality q, mirroring mastery.js quality() exactly:
+ * unsolved 0; a `solveQuality` snapshot frozen at solve time wins
+ * (practice.js P1-04 — later re-solves and post-solve reveals must not
+ * degrade the score); legacy records without a snapshot use the live
+ * derivation: revealed 0.4; hinted or >1 attempt 0.7; clean first-try
+ * 1.0. The web's "unknown record -> 0.7" branch (missing
+ * hintsUsed/revealed fields, P2-25) cannot occur here — app records
+ * always carry both fields (Store/cloud parse defaults), and the
+ * web's own sync merge writes both fields into every cloud record.
  */
 fun quality(att: ExerciseAttempt?): Double {
     if (att == null || !att.solved) return 0.0
+    att.solveQuality?.let { return it }
     if (att.revealed) return 0.4
     if (att.hintsUsed > 0 || att.attempts > 1) return 0.7
     return 1.0
@@ -349,15 +351,24 @@ fun certIdFor(sectionId: String, atMs: Long): String {
 
 /**
  * One entry per section (catalog.tracks): earned when the section has
- * lessons and ALL of them are done. certId is issued only when a
- * completion date exists (completedAt callback) — a section finished
- * before dates were recorded honestly shows no cert id, matching the
- * web's "null until complete, null again when no date was recorded".
+ * lessons and ALL of them are done (web buildPassport's `complete`).
+ * completedAt is the web's section completedAt: the max lesson doneAt
+ * of the section, null when complete-but-undated (pre-passport
+ * completions honestly show "date not recorded").
+ * The cert ID itself follows web certFor() get-or-create semantics
+ * via the certIssue callback: an existing persisted record wins;
+ * otherwise a cert is minted with issuedAt = the completion date, or
+ * TODAY when no date was recorded (the web mints the same way — the
+ * cert exists, only the lessons show "date not recorded"). The
+ * default certIssue keeps the old derive-from-date behaviour for
+ * callers without a cert store.
  */
 fun buildPassport(
     catalog: Catalog,
     doneIds: Set<String>,
-    completedAt: (String) -> Long?
+    completedAt: (String) -> Long?,
+    certIssue: (sectionId: String, completionMs: Long?) -> String? =
+        { sec, at -> if (at != null) certIdFor(sec, at) else null }
 ): List<PassportEntry> {
     return catalog.tracks.map { sec ->
         val lessons = catalog.lessons.filter { it.section == sec.id }
@@ -366,7 +377,7 @@ fun buildPassport(
         PassportEntry(
             sectionId = sec.id, name = sec.name, icon = sec.icon,
             earned = earned,
-            certId = if (earned && at != null) certIdFor(sec.id, at) else null,
+            certId = if (earned) certIssue(sec.id, at) else null,
             completedAt = at
         )
     }

@@ -38,9 +38,8 @@ import com.skillzify.app.ui.theme.Success
 import com.skillzify.app.ui.theme.TextMuted
 import com.skillzify.app.ui.theme.Warning
 
-private fun diffLabel(d: Int) = when (d) {
-    1 -> "Easy"; 2 -> "Medium"; else -> "Hard"
-}
+// practice.js diffStars(): cards show stars only, no difficulty word.
+private fun diffLabel(d: Int) = "★".repeat(d.coerceIn(1, 3)) + "☆".repeat(3 - d.coerceIn(1, 3))
 
 @Composable
 fun PracticeTab(vm: AppViewModel, nav: NavController) {
@@ -52,14 +51,19 @@ fun PracticeTab(vm: AppViewModel, nav: NavController) {
             vm.exercises.filter { topic == "All" || it.topic == topic }
         }
     }
-    val solved = vm.solvedExerciseCount()
-
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("🏋️ Practice", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
         Text(
-            "$solved / ${vm.exercises.size} solved · ${vm.xp} XP",
+            // practice.html sub, verbatim.
+            "Write real code, pass real tests. Hints when you're stuck, an AI tutor when you're lost.",
             color = TextMuted, fontSize = 13.sp,
             modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
+        )
+        Text("🗺️ Progress by topic", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        Text(
+            "Tap a topic to filter the exercises below.",
+            color = TextMuted, fontSize = 12.sp,
+            modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),

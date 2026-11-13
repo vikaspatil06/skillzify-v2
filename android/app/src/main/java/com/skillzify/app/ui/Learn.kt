@@ -72,7 +72,7 @@ fun LearnTab(vm: AppViewModel, nav: NavController, initialSection: String? = nul
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text("📚 Learn Python", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+            Text("🗺️ Your Python Journey", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
             Text(
                 "Follow the path, node by node. Each lesson unlocks the next — finish the quiz and the mini challenge to earn XP and move forward.",
                 color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp,
@@ -95,25 +95,28 @@ fun LearnTab(vm: AppViewModel, nav: NavController, initialSection: String? = nul
         // Placement banner (web learn.html #plc-banner).
         item {
             if (vm.placement == null) {
-                WebCard(onClick = { nav.navigate("placement") }) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text("🎯 New here? Take the placement test", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        Text(
-                            "Answer 10 quick questions — about 3 minutes — and start at the section that matches what you already know.",
-                            color = TextMuted, fontSize = 13.sp
-                        )
-                        Text("Start the test →", color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
-                            fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                // Web learn.js: the "New here?" nudge is for 0-lesson learners only.
+                if (vm.doneIds.isEmpty()) {
+                    WebCard(onClick = { nav.navigate("placement") }) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text("🎯 New here?", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(
+                                "Take the 3-minute placement test and skip what you already know.",
+                                color = TextMuted, fontSize = 13.sp
+                            )
+                            Text("Take the placement test →", color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                                fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                        }
                     }
                 }
             } else {
                 val sec = sections.firstOrNull { it.id == placedSection }
                 WebCard(onClick = { nav.navigate("placement") }) {
                     Column(Modifier.padding(16.dp)) {
-                        Text("🎯 Your placement: ${sec?.let { "${it.icon} ${it.name}" } ?: placedSection}",
+                        Text("🎯 Placed at ${sec?.let { "${it.icon} ${it.name}" } ?: placedSection}",
                             fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         Text(
-                            "Sections before your placement are open. A starting point, not a verdict — move freely.",
+                            "Your test put you here — start at this section, or move freely.",
                             color = TextMuted, fontSize = 13.sp
                         )
                     }

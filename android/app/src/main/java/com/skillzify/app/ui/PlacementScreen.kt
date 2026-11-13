@@ -53,7 +53,6 @@ import com.skillzify.app.ui.theme.Warning
    gates itself, exactly like placement-page.js concatenating sel.b/c
    only after a gate passes. */
 private val STAGE_LABEL = mapOf("a" to "Basics", "b" to "Core", "c" to "Advanced")
-private val STAGE_SIZE = mapOf("a" to 3, "b" to 4, "c" to 3)
 
 @Composable
 fun PlacementScreen(vm: AppViewModel, nav: NavController) {
@@ -66,9 +65,10 @@ fun PlacementScreen(vm: AppViewModel, nav: NavController) {
     val existing = vm.placement
     if (existing != null && !inTest && !justFinished) {
         PlacementExisting(vm, nav, existing) {
-            // Retake clears the stored pointer first (vm.clearPlacement),
-            // then restarts the test; the new result saves over it.
-            vm.clearPlacement()
+            // Retake does NOT clear the stored pointer first (web
+            // startTest() parity): the old placement survives an
+            // abandoned retake and is only replaced when the new test
+            // finishes and saves over it.
             inTest = true
         }
         return
@@ -353,8 +353,12 @@ private fun PlacementTest(vm: AppViewModel, nav: NavController, onFinished: () -
                     if (picked == null) return@Button
                     if (!lastOfStage) { idx++; return@Button }
                     // Last question of the stage: apply the web's gate.
+                    // placement-page.js reads the gate off scoreSoFar's
+                    // stage totals — correct / ASKED in this stage (not
+                    // the full stage size; identical for full stages,
+                    // different when a stage came up short).
                     val stageCorrect = stageQs.count { answers[it.exercise.id] == it.exercise.answer }
-                    val full = STAGE_SIZE[q.stage] ?: stageQs.size
+                    val full = stageQs.size
                     fun finish() {
                         val res = PlacementEngine.score(asked, answers.toMap())
                         vm.savePlacement(res); result = res; onFinished()

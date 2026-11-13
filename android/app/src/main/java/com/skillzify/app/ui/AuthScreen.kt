@@ -133,7 +133,7 @@ fun AuthScreen(vm: AppViewModel) {
         scope.launch {
             val err = vm.resetPassword(email)
             busy = false
-            if (err == null) notice = "Reset link sent to $email — check your inbox."
+            if (err == null) notice = "✓ Reset link sent to $email — check your inbox."
             else error = err
         }
     }

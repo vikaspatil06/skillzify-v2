@@ -104,7 +104,13 @@ data class ExerciseAttempt(
     val lastTry: Long = 0,
     /** First-solve time (ms), 0 = unknown. Mirrors the web attempt `at`
         field (passport §4c); sync merge: earliest non-zero wins. */
-    val at: Long = 0
+    val at: Long = 0,
+    /** Mastery quality frozen at solve time (web practice.js P1-04
+        `solveQuality` snapshot: revealed 0.4, hinted or >1 attempt 0.7,
+        clean first-try 1.0). Null = legacy record, quality is derived
+        live. LOCAL-ONLY, exactly like the web: sync.js mergeExercises
+        drops this field, so it never enters the cloud doc. */
+    val solveQuality: Double? = null
 )
 
 data class ExTest(val run: String?, val expr: String?, val expect: String, val expectError: String? = null)

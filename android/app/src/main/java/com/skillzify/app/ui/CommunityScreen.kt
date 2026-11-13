@@ -32,16 +32,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.skillzify.app.AppViewModel
 import com.skillzify.app.data.CommunityRepository
+import com.skillzify.app.ui.theme.Success
+import com.skillzify.app.ui.theme.TextMuted
+import com.skillzify.app.ui.theme.Warning
+import kotlinx.coroutines.launch
 
 /* CommunityRepository is a class (not an object) and its item types are
    nested inside it — aliased here so the screen code stays readable. */
 private typealias QItem = CommunityRepository.QItem
 private typealias AItem = CommunityRepository.AItem
 private typealias SItem = CommunityRepository.SItem
-import com.skillzify.app.ui.theme.Success
-import com.skillzify.app.ui.theme.TextMuted
-import com.skillzify.app.ui.theme.Warning
-import kotlinx.coroutines.launch
 
 /* Community — Skillzify Circle (web community.html), Questions | Showcase
    tabs over CommunityRepository. All loads run in LaunchedEffect with
@@ -328,7 +328,7 @@ private fun QuestionDetail(
                                 val ok = try { repo.markBest(q.id, a.id, a.uid) }
                                     catch (e: Exception) { false }
                                 if (ok) reloadTick++
-                                else error = "Could not mark the best answer.
+                                else error = "Could not mark the best answer."
                             }
                         }) { Text("⭐ Mark as best answer", fontSize = 12.sp, maxLines = 1) }
                     }

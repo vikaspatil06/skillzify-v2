@@ -78,7 +78,7 @@ fun PassportScreen(vm: AppViewModel, nav: NavController) {
                     Text(vm.profileName().ifBlank { "Learner" }, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                     Text("${level.name} · ${vm.xp} XP", color = TextMuted, fontSize = 13.sp)
                     Text(
-                        "${vm.doneIds.size}/${vm.catalog.lessons.size} lessons · ${vm.solvedExerciseCount()}/${vm.exercises.size} exercises · 🔥 ${vm.streak} day streak",
+                        "${vm.doneIds.size}/${vm.catalog.lessons.size} lessons · ${vm.solvedExerciseCount()}/${vm.exercises.size} exercises · 🔥 ${vm.currentStreak()} day streak",
                         color = TextMuted, fontSize = 12.sp
                     )
                 }

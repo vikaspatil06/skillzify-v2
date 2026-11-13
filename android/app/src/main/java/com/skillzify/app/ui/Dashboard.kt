@@ -1,5 +1,7 @@
 package com.skillzify.app.ui
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -74,7 +76,9 @@ fun DashboardTab(vm: AppViewModel, nav: NavController) {
             Column(Modifier.weight(1f)) {
                 Text("📊 My Dashboard", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
                 Text(
-                    "👋 ${vm.profileName().ifBlank { user?.displayName ?: "Learner" }} · ${user?.email ?: ""}",
+                    // dashboard.js #dash-hello, signed-in form, verbatim:
+                    // "Welcome back, " + name.split(" ")[0] + "! Keep the streak alive 🔥"
+                    "Welcome back, ${vm.profileName().ifBlank { user?.displayName ?: "Learner" }.split(" ").first()}! Keep the streak alive 🔥",
                     color = TextMuted, fontSize = 12.sp
                 )
             }
@@ -174,7 +178,7 @@ fun DashboardTab(vm: AppViewModel, nav: NavController) {
         // ---- Stat cards ----
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             StatCard("⚡", "${vm.xp}", "Total XP", Modifier.weight(1f))
-            StatCard("🔥", "${vm.streak}", "Day streak", Modifier.weight(1f))
+            StatCard("🔥", "${vm.currentStreak()}", "Day streak", Modifier.weight(1f))
             StatCard("🏅", "${vm.doneIds.size}/${vm.catalog.lessons.size}", "Lessons", Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -401,7 +405,7 @@ fun DashboardTab(vm: AppViewModel, nav: NavController) {
         }
 
         if (vm.runs.isNotEmpty()) {
-            Text("🕘 Recent runs", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("🖥️ Recent compiler runs", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             WebCard {
                 Column(Modifier.padding(14.dp)) {
                     vm.runs.take(10).forEach { run ->
@@ -524,12 +528,10 @@ private fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier =
     this.then(Modifier.clickableText(onClick))
 
 private fun Modifier.clickableText(onClick: () -> Unit): Modifier =
-    this.then(
-        androidx.compose.foundation.clickable(
-            interactionSource = androidx.compose.runtime.MutableInteractionSource(),
-            indication = null,
-            onClick = onClick
-        )
+    this.clickable(
+        interactionSource = MutableInteractionSource(),
+        indication = null,
+        onClick = onClick
     )
 
 /** Renders a track-completion certificate PNG into Downloads (website parity). */

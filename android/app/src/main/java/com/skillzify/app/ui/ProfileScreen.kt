@@ -160,7 +160,7 @@ fun ProfileScreen(vm: AppViewModel, nav: NavController) {
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    MiniStat("🔥 ${vm.streak}", "Day streak", Modifier.weight(1f))
+                    MiniStat("🔥 ${vm.currentStreak()}", "Day streak", Modifier.weight(1f))
                     MiniStat("🏆 ${vm.store.getLongestStreak()}", "Longest streak", Modifier.weight(1f))
                     MiniStat("📚 ${vm.doneIds.size}", "Lessons done", Modifier.weight(1f))
                 }

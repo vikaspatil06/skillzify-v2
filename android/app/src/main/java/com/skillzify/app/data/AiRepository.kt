@@ -136,8 +136,11 @@ object AiRepository {
             return Result.failure(AiError.Network())
         }
         val json = res.json
-        if (res.status in 200..299 && json != null && json.has("explanation")) {
-            return Result.success(json.getString("explanation"))
+        // Web backendAsk checks `d.explanation` truthy; optString keeps
+        // a non-string value from throwing outside the try above.
+        val explanation = json?.optString("explanation", "") ?: ""
+        if (res.status in 200..299 && explanation.isNotEmpty()) {
+            return Result.success(explanation)
         }
         val errCode = json?.optString("code", "")?.ifEmpty { "HTTP_${res.status}" } ?: "HTTP_${res.status}"
         // Retry once: 503 overload (not NOT_CONFIGURED) or 429 QUOTA,

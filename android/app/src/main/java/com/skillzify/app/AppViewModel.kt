@@ -44,6 +44,7 @@ import com.skillzify.app.data.nextLevel
 import com.skillzify.app.data.xpGain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -110,7 +111,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     if (lastUid != null) {
                         viewModelScope.launch {
                             val ok = try { syncRepo.syncNow(lastUid) } catch (e: Exception) { false }
-                            if (ok) {
+                            // Wipe ONLY if still signed out: if a new
+                            // sign-in landed while this push was in
+                            // flight, that account's merged state now
+                            // owns the store — wiping here would blank
+                            // it under the new session.
+                            if (ok && authRepo.currentUser() == null) {
                                 store.clearUserData()
                                 refreshFromStore()
                             }
@@ -159,6 +165,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         doneIds = store.doneIds()
         xp = store.getXp()
         streak = store.getStreak()
+        // Backfill (web learn.js/paths.js page-load checks): a section
+        // or path completed on another device pays its one-time bonus
+        // here, once, when the merged state lands.
+        checkCompletionBonuses()
         runs = store.getRuns()
         placement = store.getPlacement()
         starredLessons = store.starredLessons()
@@ -187,6 +197,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 exerciseAttempts = ex.associate { it.id to store.getAttempt(it.id) }
                 refreshEnrollments()
                 catalogLoaded = true
+                checkCompletionBonuses() // startup backfill, web page-load parity
             }
         }
     }
@@ -304,7 +315,31 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun passportEntries(): List<PassportEntry> {
         if (!::catalog.isInitialized) return emptyList()
-        return buildPassport(catalog, doneIds, { sec -> store.getSectionCompletedAt(sec) })
+        return buildPassport(
+            catalog, doneIds,
+            completedAt = { sec ->
+                // Web sectionDoneAt: max lesson doneAt of the section
+                // (the app's first-completion stamp is that same
+                // moment for locally finished sections; the doneAt
+                // fallback covers sections completed on the WEB whose
+                // dates arrived by sync, which never got a local stamp).
+                store.getSectionCompletedAt(sec) ?: catalog.lessons
+                    .filter { it.section == sec }
+                    .mapNotNull { store.getLessonDoneAt(it.id) }
+                    .maxOrNull()
+            },
+            certIssue = { sec, at ->
+                // Web certFor(): get-or-create, persisted. An existing
+                // record's ID never changes; a fresh cert is issued at
+                // the completion date, or today when none was recorded.
+                store.getCertRecord(sec)?.first ?: run {
+                    val issuedAt = at ?: System.currentTimeMillis()
+                    val id = com.skillzify.app.data.certIdFor(sec, issuedAt)
+                    store.putCertRecord(sec, id, issuedAt)
+                    id
+                }
+            }
+        )
     }
 
     fun sectionNodes(): List<SectionNode> {
@@ -321,7 +356,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun lessonNodes(sectionId: String): List<LessonNode> {
         if (!::catalog.isInitialized) return emptyList()
-        return lessonNodes(catalog, sectionId, doneIds) { idx -> isUnlocked(idx) }
+        return com.skillzify.app.data.lessonNodes(catalog, sectionId, doneIds) { idx -> isUnlocked(idx) }
     }
 
     /* ---------- community-driven badge flags (UI layer calls these) ---------- */
@@ -364,9 +399,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun refreshAiAndAdmin() {
         viewModelScope.launch {
+            // Staleness guard: if the signed-in identity changes while
+            // these fetches are in flight (sign-out, account switch),
+            // a slow admin-overview response for the OLD account must
+            // not land afterwards — it would resurrect the Admin entry
+            // for a signed-out/different user. The new identity's own
+            // refresh (auth collector) fetches its own values.
+            val uidAtStart = authRepo.currentUser()?.uid
             aiUsage = AiRepository.fetchUsage()
             val user = authRepo.currentUser()
-            adminOverview = if (user != null) {
+            adminOverview = if (user != null && user.uid == uidAtStart) {
                 val token = AiRepository.freshIdToken()
                 if (token.isNotEmpty()) AdminRepository.fetchOverview(token) else null
             } else null
@@ -382,6 +424,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val on = id !in starredLessons
         store.setStarred(id, on)
         starredLessons = store.starredLessons()
+        // Web quirk, preserved: starring a lesson logs activity
+        // (lesson.js log("star", …)), and any log() bumps the streak.
+        streak = store.bumpStreak()
+        applyStreakMilestoneBonus()
+        markDirty()
     }
 
     fun togglePin(id: String) {
@@ -431,7 +478,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     data class Achievement(val id: String, val icon: String, val name: String, val desc: String, val unlocked: Boolean)
 
     fun achievements(): List<Achievement> {
-        val done = doneIds.size
+        // Web gatherState (P2-15): count only lessons that exist in the
+        // catalog — a stale/removed id lingering in progress must not
+        // inflate "lessons done" or unlock Scholar early.
+        val done = if (::catalog.isInitialized) {
+            val catalogIds = catalog.lessons.map { it.id }.toSet()
+            doneIds.count { it in catalogIds }
+        } else doneIds.size
         val totalLessons = if (::catalog.isInitialized) catalog.lessons.size else 95
         val exSolved = solvedExerciseCount()
         val exTotal = if (::exercises.isInitialized) exercises.size else 0
@@ -537,6 +590,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun saveUserSnippet(name: String, code: String) {
         store.saveUserSnippet(name, code)
         userSnippets = store.userSnippets()
+        // Web: saving a snippet logs activity (activity.js saveSnippet
+        // -> log()), which bumps the streak counter.
+        streak = store.bumpStreak()
+        applyStreakMilestoneBonus()
+        markDirty()
     }
 
     fun deleteUserSnippet(id: String) {
@@ -627,6 +685,65 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun currentLevel() = levelFor(catalog.levels, xp)
     fun nextLevelInfo() = nextLevel(catalog.levels, xp)
 
+    /** Web streak().current: 0 once the streak has lapsed (the stored
+        count survives for longest/sync). Display surfaces use this;
+        achievements keep using best-ever via longest. */
+    fun currentStreak(): Int = store.getCurrentStreak()
+
+    /** Web activity.js checkAchievements streak milestones: +50 XP
+        the first time the streak reaches 7 days, +150 at 30 — each
+        once per device (Store flags). Evaluated after every streak
+        bump, like the web evaluating inside log(). XP state refreshes
+        in place; the caller's markDirty (or the one here, when XP
+        actually changed) carries it to sync. */
+    private fun applyStreakMilestoneBonus() {
+        val count = store.getStreak()
+        var changed = false
+        if (count >= 7 && !store.isStreakBonusClaimed(7)) {
+            store.claimStreakBonus(7); xp = store.addXp(50); changed = true
+        }
+        if (count >= 30 && !store.isStreakBonusClaimed(30)) {
+            store.claimStreakBonus(30); xp = store.addXp(150); changed = true
+        }
+        if (changed) markDirty()
+    }
+
+    /** Web learn-core.js one-time completion bonuses: +100 XP when a
+        section's lessons are all done, +150 XP when a path's steps
+        are all done — each exactly once per id (Store flags), with a
+        backfill sweep so a section/path finished via sync (or before
+        this shipped) still pays out once, like the web's Learn/Paths
+        page-load backfill. Built-in paths pay on completion whether
+        or not they were enrolled (web checkPathBonuses; only custom
+        paths are enrollment-gated, and the app has none). */
+    private fun checkCompletionBonuses() {
+        if (!::catalog.isInitialized) return
+        var changed = false
+        for (sec in catalog.tracks) {
+            val ls = catalog.lessons.filter { it.section == sec.id }
+            if (ls.isEmpty() || !ls.all { isDone(it.id) }) continue
+            if (store.isSectionBonusAwarded(sec.id)) continue
+            store.markSectionBonusAwarded(sec.id)
+            xp = store.addXp(100); changed = true
+        }
+        if (::paths.isInitialized) {
+            for (p in paths) {
+                if (p.steps.isEmpty()) continue
+                val allDone = p.steps.all { s ->
+                    when (s.type) {
+                        "lesson" -> isDone(s.ref)
+                        "ex" -> getAttempt(s.ref).solved
+                        else -> false // unidentifiable step: never pay (web pathStepsDone)
+                    }
+                }
+                if (!allDone || store.isPathBonusAwarded(p.id)) continue
+                store.markPathBonusAwarded(p.id)
+                xp = store.addXp(150); changed = true
+            }
+        }
+        if (changed) markDirty()
+    }
+
     /** Awards XP exactly like the web app; returns (gained, leveledUp). */
     fun completeLesson(id: String, quizFirstTries: Int): Pair<Int, Boolean> {
         if (isDone(id)) return 0 to false
@@ -636,6 +753,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         store.markDone(id)
         doneIds = store.doneIds()
         streak = store.bumpStreak()
+        applyStreakMilestoneBonus()
         // Passport: when this completion finishes the LAST lesson of a
         // section, stamp the section's completion date (first time only —
         // Store.recordSectionCompleted never overwrites).
@@ -649,6 +767,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+        checkCompletionBonuses()
         markDirty()
         return gain to (currentLevel().name != before)
     }
@@ -658,6 +777,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         store.addRun(RunRecord(preview, ok, System.currentTimeMillis()))
         store.recordRun()
         runs = store.getRuns()
+        // Web: a compiler run is activity (compiler.js log("run", …))
+        // and log() bumps the streak counter — a run-only day counts.
+        streak = store.bumpStreak()
+        applyStreakMilestoneBonus()
+        // Every other mutator schedules the debounced push; without
+        // this, a run-only session's streak/runCount reached the cloud
+        // only via some later unrelated action (or the next sign-in).
+        markDirty()
     }
 
     fun saveLastCode(code: String) = store.saveLastCode(code)
@@ -689,40 +816,69 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun solvedExerciseCount(): Int = exerciseAttempts.values.count { it.solved }
 
     /** Records an exercise attempt; awards XP on first solve. Returns XP gained.
-        Website parity: revealed solution halves XP, solving with zero hints
-        pays a 1.25x no-hint bonus. */
+        Website parity (practice.js xpForSolve + setAtt):
+        - The award reads the MERGED record, not this screen session:
+          hints/reveals from ANY earlier visit count (the web's stored
+          attempt is cumulative), so a hint used yesterday still costs
+          today's no-hint bonus and a solution revealed once halves
+          the XP forever.
+        - Rounding is the web's Math.round: no-hint 1.25x pays 13 XP
+          on a 10-XP exercise (not 12), revealed pays half.
+        - Once solved, the record is FROZEN for attempts/revealed
+          (web P1-04): re-solves never raise the attempt count and a
+          post-solve reveal never sets revealed; lastTry/bestMs and
+          hintsUsed still update, as on the web.
+        - solveQuality is snapshotted at first solve (P1-04) and
+          mastery reads the snapshot, never the live record. */
     fun recordAttempt(id: String, solved: Boolean, ms: Long, hintsUsed: Int, revealed: Boolean): Int {
         val ex = exercises.firstOrNull { it.id == id } ?: return 0
         val prev = getAttempt(id)
         val firstSolve = solved && !prev.solved
+        val effHints = maxOf(prev.hintsUsed, hintsUsed)
+        val effRevealed = prev.revealed || revealed
         val gain = if (firstSolve) {
             val g = when {
-                revealed -> ex.xp / 2
-                hintsUsed == 0 -> ex.xp * 5 / 4
+                effRevealed -> (ex.xp * 0.5).roundToInt()
+                effHints == 0 -> (ex.xp * 1.25).roundToInt()
                 else -> ex.xp
             }
             xp = store.addXp(g)
             streak = store.bumpStreak()
+            applyStreakMilestoneBonus()
             g
         } else 0
-        // Reviews proxy: the web counts a "review" when spaced repetition
-        // is completed; the app has no review scheduler, so a re-attempted
-        // exercise that finally gets solved counts as one review
-        // (feeds the review_7 / review_30 badges + synced counters).
-        if (solved && !prev.solved && prev.attempts > 0) store.incReviewsCompleted()
+        // NOTE: no "reviews" are counted here. The web's reviewsDone
+        // counter counts real spaced-repetition completions; an
+        // earlier app build proxied re-solves into it, which inflated
+        // the SHARED synced counter (MAX merge) and could unlock the
+        // review badges on the web without a single review. The app
+        // has no review surface yet (same honest gap as plan_7), so
+        // the counter stays untouched here.
         val nowMs = System.currentTimeMillis()
+        val nextAttempts = if (prev.solved) prev.attempts else prev.attempts + 1
         val next = prev.copy(
-            attempts = prev.attempts + 1,
+            attempts = nextAttempts,
             solved = prev.solved || solved,
-            hintsUsed = maxOf(prev.hintsUsed, hintsUsed),
-            revealed = prev.revealed || revealed,
+            hintsUsed = effHints,
+            revealed = if (prev.solved) prev.revealed else effRevealed,
             bestMs = if (solved && ms > 0 && (prev.bestMs == 0L || ms < prev.bestMs)) ms else prev.bestMs,
             lastTry = nowMs,
             // First-solve time (web attempt `at`): set once, on first solve.
-            at = if (firstSolve && prev.at == 0L) nowMs else prev.at
+            at = if (firstSolve && prev.at == 0L) nowMs else prev.at,
+            // Quality frozen at solve time (web solveQualityFor, read
+            // from the record being written: revealed 0.4, hinted or
+            // >1 attempt 0.7, clean first-try 1.0).
+            solveQuality = if (firstSolve) {
+                when {
+                    effRevealed -> 0.4
+                    effHints > 0 || nextAttempts > 1 -> 0.7
+                    else -> 1.0
+                }
+            } else prev.solveQuality
         )
         store.saveAttempt(id, next)
         exerciseAttempts = exerciseAttempts + (id to next)
+        if (firstSolve) checkCompletionBonuses() // an exercise solve can finish a path
         markDirty()
         return gain
     }
