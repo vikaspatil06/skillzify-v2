@@ -247,11 +247,16 @@
 
   var renderSeq = 0;
   function renderChart(chart) {
+    var seq = ++renderSeq;
     return ensureMermaid().then(function () {
       var code = chartToMermaid(chart);
-      var id = "fcSvg" + (++renderSeq);
+      var id = "fcSvg" + seq;
       return window.mermaid.render(id, code);
     }).then(function (out) {
+      /* a newer render started while this one was in flight — it owns
+         the stage now; applying this stale SVG (and re-marking the
+         trace from it) would resurrect the previous chart */
+      if (seq !== renderSeq) return null;
       var stage = $("#fcStage");
       stage.innerHTML = out.svg;
       var svg = stage.querySelector("svg");
@@ -305,20 +310,27 @@
 
   function currentChartName() { return state.chart ? state.chart.name : ""; }
 
-  function selectChart(name) {
+  function selectChart(name, opts) {
     var ch = null;
     state.ir.charts.forEach(function (c) { if (c.name === name) ch = c; });
-    if (!ch) return;
+    if (!ch) return null;
     state.chart = ch;
-    stopTrace(false);
-    state.trace = null;
-    $("#tracePanel").hidden = true;
+    /* opts.keepTrace: the living trace is following execution into
+       this chart — switching must not stop the playback, null the
+       trace or hide its panel. Manual chart-tab clicks pass no opts
+       and keep the full reset behaviour. */
+    if (!(opts && opts.keepTrace)) {
+      stopTrace(false);
+      state.trace = null;
+      $("#tracePanel").hidden = true;
+    }
     document.querySelectorAll(".fc-fn-btn").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-chart") === name);
     });
     fitViewSoon();
-    renderChart(ch);
+    var p = renderChart(ch);
     renderStats();
+    return p;
   }
 
   function renderStats() {
@@ -421,28 +433,52 @@
   }
 
   /* ---------------- zoom / pan / node<->editor sync ----------------
-     The wrap (#fcWrap, transform-origin: 0 0 in flowchart.css) carries
-     18px of padding, so the SVG's top-left sits at (18, 18) inside it.
-     Fit must consider BOTH viewport dimensions — the old width-only
-     fit left tall charts zoomed to a slice with Fit/Zoom apparently
-     dead — and must CENTER the chart, not pin it to the corner. */
-  var WRAP_PAD = 18;
-  function computeFit(cw, ch, w, h) {
-    if (!cw || !ch || !w || !h) return { scale: 1, tx: 0, ty: 0 };
-    var s = Math.min((cw - 8) / (w + WRAP_PAD * 2),
-                     (ch - 8) / (h + WRAP_PAD * 2));
-    s = Math.min(1.5, Math.max(0.1, s));
+     MEASURED fit (round 3): the round-2 fit computed from viewBox
+     numbers and the host's client size, yet live the chart still
+     landed pushed-right and clipped with Fit apparently dead — the
+     inputs to that math could not be trusted. Fit now MEASURES what
+     the browser actually laid out: reset the transform, read the
+     rendered SVG's rect, the wrap's rect and the host's rect via
+     getBoundingClientRect, and solve the transform (origin 0 0 on
+     #fcWrap) that moves the SVG's centre onto the host's centre at a
+     scale fitting BOTH dimensions. One correction pass runs if the
+     centred rect still overflows the host by more than 2px. */
+  function fitFromRects(host, wrap, content, scaleOverride) {
+    if (!host || !wrap || !content || !content.width || !content.height ||
+        !host.width || !host.height)
+      return { scale: 1, tx: 0, ty: 0 };
+    var s = (typeof scaleOverride === "number" && scaleOverride > 0)
+      ? scaleOverride
+      : Math.min(host.width / content.width, host.height / content.height);
+    s = Math.min(1.5, Math.max(0.05, s));
+    var ccx = content.left + content.width / 2;
+    var ccy = content.top + content.height / 2;
+    var hcx = host.left + host.width / 2;
+    var hcy = host.top + host.height / 2;
+    /* a wrap-local point q lands at viewport x = wrap.left + tx +
+       s*(q - wrap.left); solve tx/ty so the content centre lands
+       exactly on the host centre */
     return {
       scale: s,
-      tx: cw / 2 - (WRAP_PAD + w / 2) * s,
-      ty: ch / 2 - (WRAP_PAD + h / 2) * s
+      tx: hcx - wrap.left - s * (ccx - wrap.left),
+      ty: hcy - wrap.top - s * (ccy - wrap.top)
     };
   }
-  function computeZoom(st, f, cx, cy) {
-    /* zoom toward (cx, cy): the content point under it stays put */
-    var s2 = Math.min(3, Math.max(0.1, st.scale * f));
-    var k = s2 / st.scale;
-    return { scale: s2, tx: cx - (cx - st.tx) * k, ty: cy - (cy - st.ty) * k };
+  function zoomFromMeasure(st, f, wrapRect, hostRect) {
+    /* zoom toward the HOST CENTRE, measured the same way: the content
+       point currently under the host centre stays under it. wrapRect
+       is the wrap's rect WITH the current transform applied, so the
+       wrap's untransformed origin is (wrapRect.left - tx,
+       wrapRect.top - ty). */
+    if (!st || !st.scale || !wrapRect || !hostRect)
+      return { scale: st ? st.scale : 1, tx: st ? st.tx : 0, ty: st ? st.ty : 0 };
+    var s2 = Math.min(3, Math.max(0.05, st.scale * f));
+    var wx = wrapRect.left - st.tx, wy = wrapRect.top - st.ty;
+    var hcx = hostRect.left + hostRect.width / 2;
+    var hcy = hostRect.top + hostRect.height / 2;
+    var qx = (hcx - (wx + st.tx)) / st.scale;
+    var qy = (hcy - (wy + st.ty)) / st.scale;
+    return { scale: s2, tx: hcx - s2 * qx - wx, ty: hcy - s2 * qy - wy };
   }
   function applyTransform() {
     var w = $("#fcWrap");
@@ -450,18 +486,32 @@
       "px) scale(" + state.scale + ")";
   }
   function fitView() {
-    var svg = state.svgEl, host = $("#fcScroll");
-    if (!svg || !host) return;
-    var w = 0, h = 0, vb = svg.viewBox && svg.viewBox.baseVal;
-    if (vb && vb.width) { w = vb.width; h = vb.height; }
-    if ((!w || !h) && typeof svg.getBBox === "function") {
-      try { var bb = svg.getBBox(); w = w || bb.width; h = h || bb.height; }
-      catch (e) { /* SVG not laid out yet — client size fallback below */ }
+    var svg = state.svgEl, host = $("#fcScroll"), wrap = $("#fcWrap");
+    if (!svg || !host || !wrap) return;
+    var prev = wrap.style.transform;
+    wrap.style.transform = "none";
+    var hr = host.getBoundingClientRect();
+    var wr = wrap.getBoundingClientRect();
+    var cr = svg.getBoundingClientRect();
+    if (!cr.width || !cr.height || !hr.width || !hr.height) {
+      wrap.style.transform = prev;
+      return;
     }
-    if (!w || !h) { w = svg.clientWidth || 600; h = svg.clientHeight || 400; }
-    var f = computeFit(host.clientWidth, host.clientHeight, w, h);
+    var f = fitFromRects(hr, wr, cr);
     state.scale = f.scale; state.tx = f.tx; state.ty = f.ty;
     applyTransform();
+    /* one correction pass: shrink once (and re-centre from the same
+       untransformed measurements) if the centred rect still
+       overflows the host by more than 2px */
+    var r1 = svg.getBoundingClientRect();
+    if (r1.width > hr.width + 2 || r1.height > hr.height + 2) {
+      var k = Math.min(hr.width / r1.width, hr.height / r1.height);
+      if (k < 1) {
+        var f2 = fitFromRects(hr, wr, cr, state.scale * k);
+        state.scale = f2.scale; state.tx = f2.tx; state.ty = f2.ty;
+        applyTransform();
+      }
+    }
   }
   function fitViewSoon() {
     if (typeof window !== "undefined" && window.requestAnimationFrame)
@@ -469,10 +519,10 @@
     else setTimeout(fitView, 30);
   }
   function zoomBy(f) {
-    var host = $("#fcScroll");
-    var cx = host ? host.clientWidth / 2 : 0;
-    var cy = host ? host.clientHeight / 2 : 0;
-    var z = computeZoom(state, f, cx, cy);
+    var host = $("#fcScroll"), wrap = $("#fcWrap");
+    if (!host || !wrap) return;
+    var z = zoomFromMeasure(state, f,
+      wrap.getBoundingClientRect(), host.getBoundingClientRect());
     state.scale = z.scale; state.tx = z.tx; state.ty = z.ty;
     applyTransform();
   }
@@ -554,7 +604,9 @@
     "REPR_CAP = 60",
     "_steps = []",
     "_truncated = [False]",
-    "_exclude = set()",
+    "# _exclude holds the injected input() shim; _snap also drops any",
+    "# _-prefixed name — tracer machinery must never pose as a user var",
+    "_exclude = {'input'}",
     "def _snap(frame):",
     "    out = {}",
     "    try:",
@@ -562,7 +614,7 @@
     "    except Exception:",
     "        return out",
     "    for k, v in items[:24]:",
-    "        if k.startswith('__'):",
+    "        if k in _exclude or k.startswith('_'):",
     "            continue",
     "        try:",
     "            r = repr(v)",
@@ -721,15 +773,24 @@
     $("#tracePanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
+  function stepChart(step) {
+    return inferLineChart(state.ir, step.func);
+  }
+
   function stepNode(step) {
-    var ch = inferLineChart(state.ir, step.func);
+    /* PURE: resolve a step to its node within the step's OWN chart —
+       no DOM writes, no state changes, and above all no selectChart
+       call. (Round-2 bug: this switched charts as a side effect, and
+       selectChart reset the trace, so stepping into a function —
+       Factorial step 4 — destroyed the trace it was walking.)
+       Chart-following is decided once per step change, in
+       showTraceStep alone. */
+    var ch = stepChart(step);
     if (!ch) return null;
     var nodes = (state.lineToNodes[step.line] || []).filter(function (n) {
       return isNodeInChart(n, ch);
     });
-    if (!nodes.length) return null;
-    if (ch.name !== currentChartName()) selectChart(ch.name);
-    return nodes[0];
+    return nodes.length ? nodes[0] : null;
   }
 
   function clearTraceMarks() {
@@ -756,6 +817,11 @@
     var steps = state.trace.steps, upto = state.tracePos;
     var seen = {}, prevNode = null;
     for (var i = 0; i <= upto && i < steps.length; i++) {
+      /* only steps belonging to the DISPLAYED chart can mark it;
+         steps in other charts contribute nothing visible (and must
+         never trigger a chart switch from inside this loop) */
+      var sch = stepChart(steps[i]);
+      if (!sch || sch.name !== state.chart.name) { prevNode = null; continue; }
       var n = stepNode(steps[i]);
       if (!n) continue;
       seen[n.id] = true;
@@ -779,6 +845,8 @@
   function loopCounts(steps, upto) {
     var counts = {};
     for (var i = 0; i <= upto && i < steps.length; i++) {
+      var sch = stepChart(steps[i]);
+      if (!sch || !state.chart || sch.name !== state.chart.name) continue;
       var n = stepNode(steps[i]);
       if (n && (n.kind === "loop" || n.kind === "decision"))
         counts[n.id] = (counts[n.id] || 0) + 1;
@@ -834,6 +902,19 @@
       });
       tbl.appendChild(table);
     }
+    /* chart-follow, decided ONCE per step change: if this step lives
+       in another chart, switch to it keeping the trace alive.
+       renderChart re-runs markTraceFrame when the new chart lands
+       (state.trace is set), so that render path is the single
+       marking route for switched charts — marking here too would
+       paint the OLD chart's svg, which is about to be replaced. */
+    var ch = stepChart(st);
+    if (ch && ch.name !== currentChartName()) {
+      selectChart(ch.name, { keepTrace: true });
+      var fn = stepNode(st);
+      if (fn && editor) highlightEditorLine(fn.line);
+      return;
+    }
     markTraceFrame();
     var node = stepNode(st);
     if (node && editor) highlightEditorLine(node.line);
@@ -854,6 +935,7 @@
     $("#btnPlay").innerHTML = icon("pause", 16);
     var speed = parseFloat($("#traceSpeed").value || "1");
     state.traceTimer = setInterval(function () {
+      if (!state.trace) { stopTrace(false); return; }
       if (state.tracePos >= state.trace.steps.length - 1) {
         stopTrace(false); return;
       }
@@ -1206,10 +1288,15 @@
   }
 
   function renderInputRows() {
+    /* preserve the values already typed, by row index, across the
+       rebuild — Generate re-renders the rows from the IR spec and
+       must not wipe what the user entered for the trace */
+    var prev = collectInputs();
     var box = $("#inputsList");
     box.innerHTML = "";
-    inputLabels(state.ir ? state.ir.inputs : []).forEach(function (lab) {
-      addInputRow(lab);
+    inputLabels(state.ir ? state.ir.inputs : []).forEach(function (lab, i) {
+      var inp = addInputRow(lab);
+      if (inp && i < prev.length) inp.value = prev[i];
     });
   }
 
@@ -1299,8 +1386,13 @@
   if (typeof window !== "undefined") {
     window.__fcTest = { chartToMermaid: chartToMermaid, TRACE_PY: TRACE_PY,
       SAMPLES: SAMPLES, mmdLabel: mmdLabel, loadFromHash: loadFromHash,
-      shareLink: shareLink, computeFit: computeFit, computeZoom: computeZoom,
-      inputLabels: inputLabels, toast: toast, hideToast: hideToast };
+      shareLink: shareLink, fitFromRects: fitFromRects,
+      zoomFromMeasure: zoomFromMeasure,
+      inputLabels: inputLabels, toast: toast, hideToast: hideToast,
+      state: state, selectChart: selectChart, showTraceStep: showTraceStep,
+      stepNode: stepNode, startTracePlayback: startTracePlayback,
+      buildIndexes: buildIndexes, renderInputRows: renderInputRows,
+      collectInputs: collectInputs };
   }
 
   document.addEventListener("DOMContentLoaded", function () {
