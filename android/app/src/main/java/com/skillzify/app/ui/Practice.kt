@@ -69,7 +69,7 @@ fun PracticeTab(vm: AppViewModel, nav: NavController) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(bottom = 8.dp)
         ) {
-            items(topics) { t ->
+            items(topics, key = { it }) { t ->
                 val count = if (t == "All") vm.exercises.size
                     else vm.exercises.count { it.topic == t }
                 FilterChip(

@@ -20,6 +20,7 @@ import com.skillzify.app.data.PassportEntry
 import com.skillzify.app.data.PlacementRecord
 import com.skillzify.app.data.PlacementResult
 import com.skillzify.app.data.Project
+import com.skillzify.app.data.PythonRunner
 import com.skillzify.app.data.RefEntry
 import com.skillzify.app.data.RunRecord
 import com.skillzify.app.data.SectionMastery
@@ -68,6 +69,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     lateinit var paths: List<LearnPath>; private set
     lateinit var projects: List<Project>; private set
     var catalogLoaded by mutableStateOf(false); private set
+
+    /** Section id → its lessons, grouped once when the catalog lands
+        (performance pass — see init). Empty until then, exactly like a
+        filter over an empty catalog. */
+    var lessonsBySection: Map<String, List<com.skillzify.app.data.Lesson>> = emptyMap(); private set
 
     /** Firebase user; null = logged out. Collected by the UI to gate navigation. */
     val firebaseUser = authRepo.userFlow
@@ -178,12 +184,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     init {
+        // Chaquopy starts LAZILY on first Python use (performance pass):
+        // just hand the runner its context here. App launch no longer
+        // pays interpreter startup (the manifest no longer names
+        // PyApplication either).
+        PythonRunner.init(app)
         // Parse catalog JSON off the main thread (startup hitch fix).
         viewModelScope.launch(Dispatchers.IO) {
-            // Pre-warm the Chaquopy interpreter in the background, so the
-            // FIRST compiler Run feels instant instead of paying the
-            // interpreter-startup hitch mid-interaction.
-            try { com.chaquo.python.Python.getInstance() } catch (e: Exception) { /* starts on first use */ }
             val c = loadCatalog(app)
             val ach = loadAchievements(app) // fail-soft: empty until the asset lands
             val sn = loadSnippets(app)
@@ -193,6 +200,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val pr = loadProjects(app)
             withContext(Dispatchers.Main) {
                 catalog = c; achievementDefs = ach; snippets = sn; exercises = ex
+                // Section → lessons index, built once at load so Learn /
+                // Concept Map / Passport don't re-filter all 250 lessons
+                // on every recomposition (performance pass).
+                lessonsBySection = c.lessons.groupBy { it.section }
                 reference = rf; paths = pa; projects = pr
                 exerciseAttempts = ex.associate { it.id to store.getAttempt(it.id) }
                 refreshEnrollments()
@@ -301,21 +312,49 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         markDirty()
     }
 
-    /* ---------- smart systems: mastery / passport / concept map ---------- */
+    /* ---------- smart systems: mastery / passport / concept map ----------
+       PERFORMANCE PASS (v1.3.1): these getters used to recompute from
+       scratch on EVERY call, and composables call them during
+       composition — so every recomposition re-ran the full mastery math
+       and, for sectionMastery, re-parsed the stored doneAt JSON once per
+       lesson (250 parses). Results are now memoised on the state they
+       derive from: doneIds / exerciseAttempts / placement are always
+       REASSIGNED (never mutated in place) when progress changes, so an
+       unchanged key means an unchanged result. Rust is 21-day
+       granularity, so caching within a session changes nothing visible. */
+
+    private var topicMasteryCache: List<TopicMastery>? = null
+    private var topicMasteryKey: Map<String, ExerciseAttempt>? = null
 
     fun topicMastery(): List<TopicMastery> {
         if (!::exercises.isInitialized) return emptyList()
-        return computeTopicMastery(exercises, { id -> getAttempt(id) }, System.currentTimeMillis())
+        val hit = topicMasteryCache
+        if (hit != null && topicMasteryKey == exerciseAttempts) return hit
+        val fresh = computeTopicMastery(exercises, { id -> getAttempt(id) }, System.currentTimeMillis())
+        topicMasteryCache = fresh; topicMasteryKey = exerciseAttempts
+        return fresh
     }
+
+    private var sectionMasteryCache: List<SectionMastery>? = null
+    private var sectionMasteryKey: Set<String>? = null
 
     fun sectionMastery(): List<SectionMastery> {
         if (!::catalog.isInitialized) return emptyList()
-        return computeSectionMastery(catalog, doneIds, { id -> store.getLessonDoneAt(id) })
+        val hit = sectionMasteryCache
+        if (hit != null && sectionMasteryKey == doneIds) return hit
+        val fresh = computeSectionMastery(catalog, doneIds, { id -> store.getLessonDoneAt(id) })
+        sectionMasteryCache = fresh; sectionMasteryKey = doneIds
+        return fresh
     }
+
+    private var passportCache: List<PassportEntry>? = null
+    private var passportKey: Set<String>? = null
 
     fun passportEntries(): List<PassportEntry> {
         if (!::catalog.isInitialized) return emptyList()
-        return buildPassport(
+        val hitP = passportCache
+        if (hitP != null && passportKey == doneIds) return hitP
+        val freshP = buildPassport(
             catalog, doneIds,
             completedAt = { sec ->
                 // Web sectionDoneAt: max lesson doneAt of the section
@@ -340,23 +379,43 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         )
+        passportCache = freshP; passportKey = doneIds
+        return freshP
     }
+
+    private var sectionNodesCache: List<SectionNode>? = null
+    private var sectionNodesKey: Pair<Set<String>, PlacementRecord?>? = null
 
     fun sectionNodes(): List<SectionNode> {
         if (!::catalog.isInitialized) return emptyList()
+        val key = doneIds to placement
+        val hit = sectionNodesCache
+        if (hit != null && sectionNodesKey == key) return hit
         val mastery = sectionMastery()
-        return com.skillzify.app.data.sectionNodes(
+        val fresh = com.skillzify.app.data.sectionNodes(
             catalog = catalog,
             doneIds = doneIds,
             unlockedSections = catalog.tracks.filter { sectionUnlocked(it.id) }.map { it.id }.toSet(),
             masteryBySection = mastery.associate { it.sectionId to it.score },
             rustySections = mastery.filter { it.rusty }.map { it.sectionId }.toSet()
         )
+        sectionNodesCache = fresh; sectionNodesKey = key
+        return fresh
     }
+
+    private val lessonNodesCache =
+        mutableMapOf<String, Pair<Triple<Set<String>, PlacementRecord?, Map<String, String>>, List<LessonNode>>>()
 
     fun lessonNodes(sectionId: String): List<LessonNode> {
         if (!::catalog.isInitialized) return emptyList()
-        return com.skillzify.app.data.lessonNodes(catalog, sectionId, doneIds) { idx -> isUnlocked(idx) }
+        // Key covers everything isUnlocked() reads: doneIds (sequential),
+        // placement (placement openings) and unlockMap (path enrollments).
+        val key = Triple(doneIds, placement, unlockMap)
+        val hit = lessonNodesCache[sectionId]
+        if (hit != null && hit.first == key) return hit.second
+        val fresh = com.skillzify.app.data.lessonNodes(catalog, sectionId, doneIds) { idx -> isUnlocked(idx) }
+        lessonNodesCache[sectionId] = key to fresh
+        return fresh
     }
 
     /* ---------- community-driven badge flags (UI layer calls these) ---------- */

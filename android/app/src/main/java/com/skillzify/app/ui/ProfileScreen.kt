@@ -45,13 +45,12 @@ import com.skillzify.app.ui.theme.ACCENTS
 import com.skillzify.app.ui.theme.BgSoft
 import com.skillzify.app.ui.theme.Danger
 import com.skillzify.app.ui.theme.GradientBrush
-import com.skillzify.app.ui.theme.Success
 import com.skillzify.app.ui.theme.TextMuted
 
 /* "You" — website profile.html (Profile + Dashboard + certificates live
    here in the web's You menu). Avatar initial, name/bio edit (the VM's
    existing profile functions), level + XP progress, streak stats,
-   activity heatmap, achievements count, theme picker, and links to
+   achievements count, theme picker, and links to
    Passport / Concept Map / Placement / Community / Library.
    The 🛡️ Admin row renders ONLY when vm.isAdminConfirmed is true —
    i.e. the server itself returned 200 for /api/admin/overview with
@@ -173,9 +172,6 @@ fun ProfileScreen(vm: AppViewModel, nav: NavController) {
             }
         }
 
-        // ---- Activity heatmap (same widget as Dashboard) ----
-        ActivityHeatmap(vm)
-
         // ---- Explore links ----
         Text("Explore", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         LinkRow("🎓", "Skill Passport", "Certificates, achievements and your public record") {
@@ -274,45 +270,6 @@ private fun LinkRow(icon: String, title: String, sub: String, onClick: () -> Uni
                 Text(sub, color = TextMuted, fontSize = 12.sp)
             }
             Text("→", color = TextMuted, fontSize = 16.sp)
-        }
-    }
-}
-
-/** Activity heatmap — last 12 weeks (shared by Profile + Dashboard). */
-@Composable
-fun ActivityHeatmap(vm: AppViewModel) {
-    val activeDays = vm.store.activeDays()
-    WebCard {
-        Column(Modifier.padding(16.dp)) {
-            Text("📅 Activity · last 12 weeks", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            Spacer(Modifier.height(10.dp))
-            val cal = java.util.Calendar.getInstance()
-            cal.add(java.util.Calendar.DAY_OF_YEAR, -83)
-            while (cal.get(java.util.Calendar.DAY_OF_WEEK) != java.util.Calendar.SUNDAY) {
-                cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
-            }
-            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                for (w in 0 until 12) {
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        for (d in 0 until 7) {
-                            val dayStr = fmt.format(cal.time)
-                            val active = dayStr in activeDays
-                            Box(
-                                Modifier.size(14.dp)
-                                    .clip(RoundedCornerShape(3.dp))
-                                    .background(if (active) Success else BgSoft)
-                            )
-                            cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "${activeDays.size} active days · keep the streak alive 🔥",
-                color = TextMuted, fontSize = 12.sp
-            )
         }
     }
 }

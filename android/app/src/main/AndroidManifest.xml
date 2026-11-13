@@ -4,8 +4,11 @@
     <!-- Needed for the AI tutor (Render proxy) and cloud sync. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- No android:name: Chaquopy is started LAZILY by PythonRunner on
+         first use (compiler / flowchart / exercise tests) instead of
+         PyApplication starting the interpreter on the main thread at
+         every app launch. -->
     <application
-        android:name="com.chaquo.python.android.PyApplication"
         android:allowBackup="true"
         android:icon="@drawable/ic_logo"
         android:label="Skillzify"

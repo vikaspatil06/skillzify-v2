@@ -84,6 +84,7 @@ private fun PlacementExisting(
     onRetake: () -> Unit
 ) {
     val sec = vm.catalog.tracks.firstOrNull { it.id == result.section }
+    val dateFmt = remember { java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.getDefault()) }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -123,7 +124,7 @@ private fun PlacementExisting(
                 }
                 if (result.date > 0) {
                     Text(
-                        "Taken ${java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(result.date))}",
+                        "Taken ${dateFmt.format(java.util.Date(result.date))}",
                         color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp)
                     )
                 }

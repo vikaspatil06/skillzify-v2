@@ -1,6 +1,8 @@
 package com.skillzify.app.data
 
+import android.content.Context
 import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
 import org.json.JSONObject
 
 data class RunResult(val ok: Boolean, val output: String, val error: String, val ms: Long)
@@ -37,6 +39,31 @@ data class FlowGraph(val nodes: List<FlowNode>, val edges: List<FlowEdge>, val t
 
 /** Runs Python via Chaquopy's skillzify_runner module on a background thread. */
 object PythonRunner {
+    /* ---- Lazy interpreter start (performance pass, v1.3.1) ----
+       The manifest used to name Chaquopy's PyApplication, which starts
+       the interpreter on the MAIN thread at every app launch — a cold
+       cost paid even by users who never open the compiler. Now the
+       interpreter starts on first actual use. Every call site already
+       runs on a background thread (Compiler's executor, Dispatchers.IO /
+       Default), so the one-time start blocks only that thread. */
+    @Volatile private var appContext: Context? = null
+    @Volatile private var started = false
+
+    /** Stashes the Application context; called once from AppViewModel init. */
+    fun init(context: Context) {
+        appContext = context.applicationContext
+    }
+
+    private fun ensureStarted() {
+        if (started) return
+        synchronized(this) {
+            if (started) return
+            val ctx = appContext
+                ?: throw IllegalStateException("PythonRunner.init() was not called")
+            if (!Python.isStarted()) Python.start(AndroidPlatform(ctx))
+            started = true
+        }
+    }
     /**
      * Flowchart Lab (website parity): AST graph for Python code, or the
      * pseudocode parser for algorithm text. Returns FlowGraph; error is set
@@ -44,6 +71,7 @@ object PythonRunner {
      */
     fun flowchart(input: String, algo: Boolean): FlowGraph {
         return try {
+            ensureStarted()
             val mod = Python.getInstance().getModule(
                 if (algo) "flowchart_algo" else "flowchart_gen"
             )
@@ -72,6 +100,7 @@ object PythonRunner {
     }
     fun run(code: String, stdinText: String): RunResult {
         return try {
+            ensureStarted()
             val mod = Python.getInstance().getModule("skillzify_runner")
             val json = mod.callAttr("run_code", code, stdinText).toString()
             val o = JSONObject(json)
@@ -94,6 +123,7 @@ object PythonRunner {
     /** Multi-file workspace run (website Code Studio parity). */
     fun runMulti(files: Map<String, String>, mainFile: String, stdinText: String): RunResult {
         return try {
+            ensureStarted()
             val mod = Python.getInstance().getModule("skillzify_runner")
             val filesJson = org.json.JSONObject(files as Map<*, *>).toString()
             val json = mod.callAttr("run_multi", filesJson, mainFile, stdinText).toString()
@@ -119,6 +149,7 @@ object PythonRunner {
         until the user answers in the terminal. Call from a background thread. */
     fun runMultiInteractive(files: Map<String, String>, mainFile: String, bridge: TerminalBridge): RunResult {
         return try {
+            ensureStarted()
             val mod = Python.getInstance().getModule("skillzify_runner")
             val filesJson = org.json.JSONObject(files as Map<*, *>).toString()
             val json = mod.callAttr("run_multi_interactive", filesJson, mainFile, bridge).toString()
@@ -153,6 +184,7 @@ object PythonRunner {
      */
     fun runTests(code: String, tests: List<ExTest>): TestsOutcome {
         return try {
+            ensureStarted()
             val mod = Python.getInstance().getModule("skillzify_runner")
             val testsJson = org.json.JSONArray().apply {
                 for (t in tests) {

@@ -15,8 +15,8 @@ android {
         applicationId 'com.skillzify.app'
         minSdk 24
         targetSdk 34
-        versionCode 6
-        versionName '1.3.0'
+        versionCode 7
+        versionName '1.3.1'
     }
 
     // Per-ABI APKs (Chaquopy's interpreter is native). arm64 covers virtually
@@ -35,7 +35,16 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            // R8 code shrinking + obfuscation and resource shrinking: the
+            // debug build carried full unoptimised code, which was a major
+            // source of the app's laggy feel (bigger dex, no inlining).
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Signed with the debug key so CI can produce a sideloadable
+            // APK without any keystore secret in the repo. (Play upload
+            // would need a real upload key — a later, separate step.)
+            signingConfig signingConfigs.debug
         }
     }
     compileOptions {

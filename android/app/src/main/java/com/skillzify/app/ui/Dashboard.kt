@@ -58,7 +58,7 @@ fun DashboardTab(vm: AppViewModel, nav: NavController) {
     val user by vm.firebaseUser.collectAsStateWithLifecycle()
     val level = vm.currentLevel()
     val next = vm.nextLevelInfo()
-    val fmt = SimpleDateFormat("d MMM, HH:mm", Locale.getDefault())
+    val fmt = remember { SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()) }
 
     // Refresh AI usage (+ admin overview) whenever the dashboard appears.
     LaunchedEffect(Unit) { vm.refreshAiAndAdmin() }
@@ -305,9 +305,6 @@ fun DashboardTab(vm: AppViewModel, nav: NavController) {
             }
         }
 
-        // ---- Activity heatmap ----
-        ActivityHeatmap(vm)
-
         // ---- Progress by section ----
         Text("Progress by section", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         vm.catalog.tracks.forEach { t ->
@@ -369,15 +366,20 @@ fun DashboardTab(vm: AppViewModel, nav: NavController) {
         }
 
         // ---- Weak spots (topic accuracy, existing widget) ----
-        val accuracy = vm.topicAccuracy()
-        if (accuracy.isNotEmpty()) {
+        // Performance pass: accuracy + sort used to rerun on every
+        // recomposition of the whole dashboard; memoised on the attempts
+        // map, which is the only input.
+        val sortedAccuracy = remember(vm.exerciseAttempts) {
+            vm.topicAccuracy().toList().sortedByDescending { (_, st) ->
+                val (s, total) = st
+                if (total == 0) 0f else s / total.toFloat()
+            }
+        }
+        if (sortedAccuracy.isNotEmpty()) {
             Text("🎯 Weak spots", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Text("Exercise accuracy by topic — low scores need a revisit.",
                 color = TextMuted, fontSize = 12.sp)
-            accuracy.toList().sortedByDescending { (_, st) ->
-                val (s, total) = st
-                if (total == 0) 0f else s / total.toFloat()
-            }.forEach { (topic, st) ->
+            sortedAccuracy.forEach { (topic, st) ->
                 val (s, total) = st
                 val pct = if (total == 0) 0 else s * 100 / total
                 WebCard {

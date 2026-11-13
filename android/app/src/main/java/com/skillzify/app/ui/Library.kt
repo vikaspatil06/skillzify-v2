@@ -307,7 +307,7 @@ fun ReferenceScreen(vm: AppViewModel, nav: NavController) {
         )
         Spacer(Modifier.height(8.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(cats) { c ->
+            items(cats, key = { it }) { c ->
                 FilterChip(
                     selected = cat == c, onClick = { cat = c }, label = { Text(c, maxLines = 1) }
                 )

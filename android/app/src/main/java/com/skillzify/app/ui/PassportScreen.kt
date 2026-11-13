@@ -110,7 +110,7 @@ fun PassportScreen(vm: AppViewModel, nav: NavController) {
         // locked progress is computed from the catalog + doneIds here.
         Text("🎓 Certificates by section", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         entries.forEach { e ->
-            val secLessons = vm.catalog.lessons.filter { it.section == e.sectionId }
+            val secLessons = vm.lessonsBySection[e.sectionId].orEmpty()
             val secDone = secLessons.count { vm.isDone(it.id) }
             val secTotal = secLessons.size
             WebCard {

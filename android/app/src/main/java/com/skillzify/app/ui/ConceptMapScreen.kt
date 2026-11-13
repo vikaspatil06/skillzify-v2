@@ -117,7 +117,7 @@ fun ConceptMapScreen(vm: AppViewModel, nav: NavController) {
             items(sections, key = { it.section.id }) { n ->
                 val sec = n.section
                 val locked = n.state == NodeState.LOCKED
-                val secLessons = vm.catalog.lessons.filter { it.section == sec.id }
+                val secLessons = vm.lessonsBySection[sec.id].orEmpty()
                 val secDone = secLessons.count { vm.isDone(it.id) }
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {

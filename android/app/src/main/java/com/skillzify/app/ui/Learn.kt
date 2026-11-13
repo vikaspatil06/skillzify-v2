@@ -142,7 +142,7 @@ fun LearnTab(vm: AppViewModel, nav: NavController, initialSection: String? = nul
             }
         } else {
             sections.forEach { sec ->
-                val secLessons = vm.catalog.lessons.filter { it.section == sec.id }
+                val secLessons = vm.lessonsBySection[sec.id].orEmpty()
                 val doneCount = secLessons.count { vm.isDone(it.id) }
                 val pct = if (secLessons.isEmpty()) 0 else doneCount * 100 / secLessons.size
                 val unlocked = vm.sectionUnlocked(sec.id)

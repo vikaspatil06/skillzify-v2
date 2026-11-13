@@ -75,16 +75,30 @@ val Success: Color get() = Color(0xFF34D399)
 val Warning: Color get() = Color(0xFFFBBF24)
 val Danger: Color get() = Color(0xFFF87171)
 
-/** Website --gradient: linear-gradient(135deg, primary, primary-2 55%, accent 130%). */
+/** Website --gradient: linear-gradient(135deg, primary, primary-2 55%, accent 130%).
+    PERFORMANCE PASS: this used to build a brand-new Brush on EVERY access
+    (it is read by buttons/chips/headers all over the UI, i.e. on every
+    recomposition). Now cached per accent — the getter still reads
+    themeAccentState, so accent changes keep recomposing readers exactly
+    as before, and the returned Brush is identical in colours/geometry. */
+private var gradientBrushCache: Pair<Int, Brush>? = null
+
 val GradientBrush: Brush
-    get() = Brush.linearGradient(
-        colors = listOf(currentAccent.primary, currentAccent.primary2, currentAccent.accent),
-        // Approximate the web's 135deg diagonal + 55%/130% stops with a
-        // longer end point; Brush stops beyond 1f are not expressible, so
-        // the accent lands at the far corner instead.
-        start = androidx.compose.ui.geometry.Offset(0f, 0f),
-        end = androidx.compose.ui.geometry.Offset(420f, 420f)
-    )
+    get() {
+        val idx = themeAccentState.value
+        val hit = gradientBrushCache
+        if (hit != null && hit.first == idx) return hit.second
+        val fresh = Brush.linearGradient(
+            colors = listOf(currentAccent.primary, currentAccent.primary2, currentAccent.accent),
+            // Approximate the web's 135deg diagonal + 55%/130% stops with a
+            // longer end point; Brush stops beyond 1f are not expressible, so
+            // the accent lands at the far corner instead.
+            start = androidx.compose.ui.geometry.Offset(0f, 0f),
+            end = androidx.compose.ui.geometry.Offset(420f, 420f)
+        )
+        gradientBrushCache = idx to fresh
+        return fresh
+    }
 
 /** Website --radius: 16px on cards, 20px on the auth form-card, 12px buttons. */
 val WebShapes = Shapes(
