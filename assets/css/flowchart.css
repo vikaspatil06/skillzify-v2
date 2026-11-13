@@ -154,6 +154,10 @@
   stroke: var(--accent); stroke-width: 3px; }
 .fc-loop-badge { fill: #ffd23e; font-size: 11px; font-weight: 800;
   paint-order: stroke; stroke: rgba(0,0,0,.45); stroke-width: 3px; }
+/* the trace's current line in the editor: a CodeMirror line class,
+   NOT a selection — selecting would scroll the page on every step */
+#fcEditorWrap .CodeMirror-linebackground.fc-trace-line {
+  background: color-mix(in srgb, var(--accent) 16%, transparent); }
 
 .fc-trace-panel { margin-top: 14px; border-top: 1px dashed var(--border);
   padding-top: 14px; }

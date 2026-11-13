@@ -282,6 +282,7 @@
     ir: null, chart: null, chartByStart: {}, lineToNodes: {},
     vb: null, full: null, svgEl: null,
     trace: null, tracePos: 0, traceTimer: null, tracePlaying: false,
+    traceEditorLine: 0,
     output: "", inputs: [], generated: false
   };
 
@@ -327,6 +328,7 @@
     if (!(opts && opts.keepTrace)) {
       stopTrace(false);
       state.trace = null;
+      clearTraceEditorLine();
       $("#tracePanel").hidden = true;
     }
     document.querySelectorAll(".fc-fn-btn").forEach(function (b) {
@@ -419,6 +421,7 @@
       renderInputRows();
       bumpFlowchartCounter();
       state.output = ""; state.trace = null; state.generated = true;
+      clearTraceEditorLine();
       $("#tracePanel").hidden = true;
       $("#outputBox").textContent = "";
       $("#outputEmpty").hidden = false;
@@ -531,14 +534,35 @@
   function editorLineFor(node) { return node && node.line ? node.line : 0; }
   function highlightEditorLine(line, keepView) {
     if (!editor || !line) return;
+    /* keepView (trace stepping): never touch the selection.
+       CodeMirror's setSelection scrolls the selection into view ALL
+       BY ITSELF — and pulls the browser window toward the editor —
+       so the round-4 guard (skipping only the explicit
+       scrollIntoView) still bounced the page ~500px on every Next
+       click, away from the trace controls. A line class gives the
+       same "you are here" highlight with zero scrolling. Genuine
+       user actions (node clicks) pass no keepView and keep the
+       select + scroll behaviour below, unchanged. */
+    if (keepView) { setTraceEditorLine(line); return; }
     editor.setSelection({ line: line - 1, ch: 0 },
       { line: line - 1, ch: (editor.getLine(line - 1) || "").length });
-    /* keepView: a trace step must never move the page. CodeMirror's
-       scrollIntoView also pulls the WINDOW toward the editor, so
-       stepping through a run bounced the page on every Next click
-       (round-4 trace fix) — the panel scroll now happens exactly
-       once, when a trace starts, in startTracePlayback. */
-    if (!keepView) editor.scrollIntoView({ line: line - 1, ch: 0 }, 120);
+    editor.scrollIntoView({ line: line - 1, ch: 0 }, 120);
+  }
+
+  function setTraceEditorLine(line) {
+    if (typeof editor.addLineClass !== "function") return;
+    if (state.traceEditorLine && state.traceEditorLine !== line)
+      clearTraceEditorLine();
+    editor.addLineClass(line - 1, "background", "fc-trace-line");
+    state.traceEditorLine = line;
+  }
+
+  function clearTraceEditorLine() {
+    if (editor && state.traceEditorLine &&
+        typeof editor.removeLineClass === "function")
+      editor.removeLineClass(state.traceEditorLine - 1, "background",
+        "fc-trace-line");
+    state.traceEditorLine = 0;
   }
   function nodeElById(id) {
     if (!state.svgEl) return null;
@@ -707,6 +731,7 @@
   function showTraceNote(msg) {
     stopTrace(false);
     state.trace = null;
+    clearTraceEditorLine();
     $("#tracePanel").hidden = false;
     $("#traceRange").max = "0";
     $("#traceRange").value = "0";
@@ -908,7 +933,7 @@
     state.tracePlaying = false;
     var b = $("#btnPlay");
     if (b) b.innerHTML = icon("play", 16);
-    if (clearMarks !== false) clearTraceMarks();
+    if (clearMarks !== false) { clearTraceMarks(); clearTraceEditorLine(); }
   }
 
   function togglePlay() {
@@ -1384,7 +1409,9 @@
       state: state, selectChart: selectChart, showTraceStep: showTraceStep,
       stepNode: stepNode, startTracePlayback: startTracePlayback,
       buildIndexes: buildIndexes, renderInputRows: renderInputRows,
-      collectInputs: collectInputs };
+      collectInputs: collectInputs, highlightEditorLine: highlightEditorLine,
+      clearTraceEditorLine: clearTraceEditorLine,
+      setEditor: function (e) { editor = e; } };
   }
 
   document.addEventListener("DOMContentLoaded", function () {
