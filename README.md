@@ -18,7 +18,7 @@ An advanced, browser-first Python learning platform for students — a modern mu
   - Offline heuristic explainer covering 12 common Python error patterns
   - Backend AI via the Render API (developer's Gemini key) → visitor's own optional key → offline fallback
   - A "🆘 Stuck?" button that drafts your code and error into a community question
-- **Flowchart Lab** (`flowchart.html`) — draw a program's flow as a diagram, explain it with AI, or turn a flowchart into code
+- **Flowchart Lab** (`flowchart.html`) — paste Python and get a precise AST-drawn flowchart (functions as sub-charts, static warnings), watch it play back with a living trace (steps, variables, branch highlighting), export it for lab records (PNG/SVG/lab sheet), and ask AI to explain it or check its logic
 - **Skillzify Circle** (`community.html`) — the learner community: public profiles (verified progress), anchored Q&A (ask from a lesson, exercise, or error, with code attached; best answers earn XP), and a project showcase (share a build, star others, fork into the compiler). An "✨ Ask AI" button gives a Socratic hint on any question.
 - **Dashboard** (`dashboard.html`) — overall % ring, per-section progress bars, day streak 🔥, recent run history, **Next Up** card (mastery-ranked), **~15-minute daily plan**, **exercise accuracy by topic with weak-spot flags**, today's challenge, review queue, and downloadable **section-completion certificates** (canvas-rendered PNG)
 - **Profile** (`profile.html`) — GitHub-style identity: identicon avatar, editable name/bio (syncs to Firebase), pinned items, **32 achievements** (with progress bars on locked badges), activity feed, and a shareable public profile (`profile.html?uid=`)
@@ -109,12 +109,12 @@ skillzify-v2/
 ├── render.yaml         # Render one-click deploy
 ├── assets/
 │   ├── css/style.css   # Theme variables, layout, responsive
+│   ├── css/flowchart.css # Flowchart Lab styles
 │   ├── js/app.js       # Theme toggle, nav, toast, storage utils
 │   ├── js/auth.js      # Firebase Authentication (Email/Password)
 │   ├── js/learn-core.js    # Lesson catalog (250), sections, unlock chain, XP
-│   ├── js/lessons-b.js     # Beginner lessons (b11–b70)
-│   ├── js/lessons-i.js     # Intermediate lessons (i13–i90)
-│   ├── js/lessons-a.js     # Advanced lessons (a11–a90)
+│   ├── js/lessons-index.js # Lesson index (all 250, lightweight)
+│   ├── js/lessons-sec-*.js # Per-section lesson chunks, loaded on demand (7 files)
 │   ├── js/quiz-extra.js    # Extra quiz questions per lesson
 │   ├── js/learn.js     # Learn page rendering (sections + review)
 │   ├── js/mastery.js   # Mastery Engine (0–100 scores, Next Up, daily plan)
@@ -128,8 +128,8 @@ skillzify-v2/
 │   ├── js/paths.js     # Path rendering + enrollment
 │   ├── js/projects-data.js # 14 guided projects
 │   ├── js/compiler.js  # Pyodide runner + workspace + AI explainer
-│   ├── js/flowchart-gen.py  # Flowchart generator (Python → diagram JSON)
-│   ├── js/flowchart-algo.py # Flowchart generator (pseudocode → diagram JSON)
+│   ├── js/flowchart-app.js # Flowchart Lab: rendering, living trace, exports, AI
+│   ├── js/flowchart_ast.py # AST-based Python → flowchart IR converter (runs in Pyodide)
 │   ├── js/dashboard.js # Dashboard rendering + analytics + certificates
 │   ├── js/profile.js   # Profile rendering (Firebase-synced name)
 │   ├── js/community.js # Community API (Q&A, showcase, profiles)
