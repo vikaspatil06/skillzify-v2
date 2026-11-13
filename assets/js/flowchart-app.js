@@ -245,6 +245,26 @@
     return lines.join("\n");
   }
 
+  /* Round 6 — shapes jumped on hover. The global stylesheet (style.css,
+     Learn-path buttons) has `.node { transition: transform .2s }` and
+     `.node:hover { transform: scale(1.09) }`; Mermaid's shapes are also
+     class "node", and a CSS transform OVERRIDES the SVG transform
+     attribute — so hovering a shape scaled it AND dropped its
+     translate(), leaping it toward the origin. No flowchart.css rule
+     can fix this (any transform value there would override the
+     attribute too), so each group's position is pinned INLINE: the
+     inline style beats the stylesheet's :hover rule, and transition:
+     none kills the leaked animation. Pure translates, so the CSS
+     value is exactly equivalent to the attribute. */
+  function pinNodePositions(svg) {
+    svg.querySelectorAll("g.node").forEach(function (g) {
+      var t = g.getAttribute("transform");
+      if (!t) return;
+      g.style.transform = t;
+      g.style.transition = "none";
+    });
+  }
+
   var renderSeq = 0;
   function renderChart(chart) {
     var seq = ++renderSeq;
@@ -270,6 +290,7 @@
       state.svgEl = svg;
       state.full = contentBox(svg);
       state.vb = null;
+      pinNodePositions(svg);
       attachNodeClicks();
       if (state.trace) markTraceFrame();
       fitView();
