@@ -483,7 +483,7 @@
       if (err) {
         setDrillBusy(false);
         // Sign-in link only when signed out (ai.js capLink returns
-        // "" for signed-in users at the 200/day cap).
+        // "" for signed-in users at the 10/day cap).
         var drillCap = (err && err.code === "DAILY_CAP" && AI.capLink)
           ? AI.capLink() : "";
         if (status) status.innerHTML = '<p class="fail">⚠️ ' + esc(err.message || "The AI drill generator is unreachable right now.") + drillCap + '</p>';
@@ -526,7 +526,7 @@
     n.style.display = "";
     if (err && err.code === "DAILY_CAP") {
       // Sign-in link only when signed out (ai.js capLink returns ""
-      // for signed-in users at the 200/day cap).
+      // for signed-in users at the 10/day cap).
       n.innerHTML = esc(err.message || "You've used your AI answers for today — they reset tomorrow.") +
         (window.SkillzifyAI && window.SkillzifyAI.capLink ? window.SkillzifyAI.capLink() : "");
     } else {
@@ -655,7 +655,7 @@
       if (askBtn) askBtn.disabled = false;
       if (err) {
         // Sign-in link only when signed out (ai.js capLink returns
-        // "" for signed-in users at the 200/day cap).
+        // "" for signed-in users at the 10/day cap).
         var tutorCap = (err && err.code === "DAILY_CAP" && AI.capLink)
           ? AI.capLink() : "";
         box.innerHTML = '<h4>🤖 AI Tutor</h4><p class="hint">' + esc(err.message || "The AI tutor is unreachable right now.") + tutorCap +
@@ -874,7 +874,7 @@
   // Until auth.js fires onReady, render NO hint; onReady (and every
   // later auth change) refreshes it — same pattern as dashboard.js.
   var authResolved = false;
-  // Signed-out users get 20 AI answers/day (200 when signed in) —
+  // Signed-out users get 5 AI answers/day (10 when signed in) —
   // one plain-text line under the tutor button, only when signed out.
   function signedOutCapHint() {
     try {
@@ -882,7 +882,7 @@
       if (!auth || typeof auth.currentUser !== "function") return "";
       if (typeof auth.onReady === "function" && !authResolved) return "";
       if (!auth.currentUser()) {
-        return '<p class="hint" id="tutor-cap-hint">Signed out? AI answers are 20/day — sign in for 200/day.</p>';
+        return '<p class="hint" id="tutor-cap-hint">Signed out? AI answers are 5/day — sign in for 10/day.</p>';
       }
     } catch (e) {}
     return "";

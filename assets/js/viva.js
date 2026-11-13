@@ -45,7 +45,7 @@
   }
   function $(id) { return document.getElementById(id); }
   // DAILY_CAP sign-in link, via the shared ai.js helper: "" when
-  // signed in (at the 200/day cap), the link only when signed out.
+  // signed in (at the 10/day cap), the link only when signed out.
   function aiCapLink() {
     try { return (window.SkillzifyAI && window.SkillzifyAI.capLink) ? window.SkillzifyAI.capLink() : ""; } catch (e) { return ""; }
   }

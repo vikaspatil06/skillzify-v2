@@ -237,7 +237,7 @@
         btn.textContent = "Build my path →";
         if (err) {
           // Sign-in link only when signed out (ai.js capLink returns
-          // "" for signed-in users at the 200/day cap).
+          // "" for signed-in users at the 10/day cap).
           var bmpCap = (err && err.code === "DAILY_CAP" && window.SkillzifyAI && window.SkillzifyAI.capLink)
             ? window.SkillzifyAI.capLink() : "";
           out.innerHTML = '<p class="hint">⚠️ ' + esc(err.message || "Couldn't build a path.") + bmpCap + "</p>"; return;

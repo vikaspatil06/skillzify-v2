@@ -407,7 +407,7 @@
         if (err || !res || !res.text) {
           // P2-30: DAILY_CAP errors append the sign-in link, mirroring
           // placement's askExplain — a signed-out user who hits the
-          // 20/day cap gets a path to the 200/day cap.
+          // 5/day cap gets a path to the 10/day cap.
           var capLink = (err && err.code === "DAILY_CAP" && window.SkillzifyAI && window.SkillzifyAI.capLink) ? window.SkillzifyAI.capLink() : "";
           out.innerHTML = '<p class="comm-form-error">' + esc((err && err.message) || "The AI didn't answer — try again in a moment.") + "</p>" + capLink;
           return;

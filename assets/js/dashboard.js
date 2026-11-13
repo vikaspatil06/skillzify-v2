@@ -360,8 +360,8 @@
       // note's sign-in link for the new auth state (M3, item 2).
       var lastFailErr = null;
       var renderFailNote = function (err) {
-        // DAILY_CAP carries the server's message verbatim (20/day signed
-        // out, 200/day signed in) — plus a sign-in link only when signed
+        // DAILY_CAP carries the server's message verbatim (5/day signed
+        // out, 10/day signed in) — plus a sign-in link only when signed
         // out (ai.js capLink returns "" for signed-in users at cap).
         lastFailErr = err || null;
         var cap = err && err.code === "DAILY_CAP";
@@ -437,7 +437,7 @@
         renderStaticDaily();
         if (challengeFailedRecently()) renderFailNote();
         // M2: never auto-fetch a personal challenge for a signed-out
-        // user — the anonymous 20/day cap would silently burn one
+        // user — the anonymous 5/day cap would silently burn one
         // answer. Firebase restores the session async, so a
         // currentUser() check here at load time would misclassify
         // signed-in users as anonymous; wait for auth.js to resolve

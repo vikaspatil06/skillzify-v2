@@ -1162,7 +1162,7 @@
       setAiButtons(false);
       if (err) {
         // DAILY_CAP: sign-in link only when signed out (ai.js capLink
-        // returns "" for signed-in users at the 200/day cap).
+        // returns "" for signed-in users at the 10/day cap).
         var capLink = (err.code === "DAILY_CAP" && AI.capLink) ? AI.capLink() : "";
         if (opts.error) {
           renderAi("<h4>⚠️ AI unavailable</h4><p>" + esc(err.message || "The backend didn't answer.") + capLink + "</p>" +

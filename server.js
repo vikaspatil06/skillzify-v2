@@ -11,8 +11,8 @@
    flowchart-explain, flowchart-code.
    JSON modes return { explanation, json } where `json` is the
    parsed, shape-validated object the UI renders from.
-   Limits: 30 AI req/min per IP (abuse guard) + 200 AI calls/day
-   per signed-in user (uid), 20/day for anonymous users. The day's
+   Limits: 30 AI req/min per IP (abuse guard) + 10 AI calls/day
+   per signed-in user (uid), 5/day for anonymous users. The day's
    ~60,000 provider capacity is split (owner's division, 12 Nov
    2026): a 10,000/day admin reserve (ADMIN_EMAIL, below; usage at
    GET /api/usage) and a shared 50,000/day pool that every non-admin
@@ -126,12 +126,12 @@ const FAILOVER_BUDGET_MS = 40000;
 // The client aborts at 60 s, so 55 s leaves room to deliver the answer.
 // Overridable via env only for tests (MAX_TOKENS_DEADLINE_MS).
 const MAX_TOKENS_DEADLINE_MS = Number(process.env.MAX_TOKENS_DEADLINE_MS) || 55000;
-const DAILY_CAP_USER = 200;
-const DAILY_CAP_ANON = 20;
+const DAILY_CAP_USER = 10;
+const DAILY_CAP_ANON = 5;
 // Skillzify admin (Vikas — patil.vikas6306@gmail.com): a 10,000/day
 // cap + a usage view at GET /api/usage. The check needs BOTH the
 // signed-in uid AND the matching email — an email alone (no uid) is
-// anonymous and stays capped at 20/day. On a server with the
+// anonymous and stays capped at 5/day. On a server with the
 // Firebase credential configured, identity comes from the VERIFIED
 // ID token (resolveIdentity), so the email can't be claimed; the
 // client-supplied fallback applies only with no credential set.
@@ -145,7 +145,7 @@ const ADMIN_DAILY_CAP = Number(process.env.ADMIN_DAILY_CAP) || 10000;
 // the admin's reserve and the rest is ONE shared pool for every
 // learner answer (signed-in or anonymous), enforced by a single
 // daily counter (poolKey) alongside the per-identity caps — a
-// learner still can't pass their own 200/20, and all learners
+// learner still can't pass their own 10/5, and all learners
 // together can't pass the pool. Override with DAILY_CAPACITY_TOTAL
 // / USER_POOL_DAILY_CAP env.
 const DAILY_CAPACITY_TOTAL = Number(process.env.DAILY_CAPACITY_TOTAL) || 60000;
@@ -154,7 +154,7 @@ const USER_POOL_DAILY_CAP = Number(process.env.USER_POOL_DAILY_CAP) || Math.max(
 const app = express();
 // Render terminates TLS behind a proxy/load balancer: without this,
 // req.ip is the proxy's address and every signed-out user would share
-// one anonymous 20/day bucket. P2-50: Cloudflare fronts Render, so a
+// one anonymous 5/day bucket. P2-50: Cloudflare fronts Render, so a
 // request passes through TWO proxies (Cloudflare edge, then Render's
 // router) — trust proxy 1 resolved req.ip to a shared edge IP. The
 // [proxy] log line below records the X-Forwarded-For chain on every

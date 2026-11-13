@@ -97,8 +97,8 @@
   /* P2-54 + P2-49: auth readiness and cache clearing.
      - uid() is gated on SkillzifyAuth.onReady: an early tap in the
        first second before Firebase restores the session used to read
-       currentUser() === null and burn the anonymous 20/day cap instead
-       of the signed-in 200/day. runJob now waits for onReady before it
+       currentUser() === null and burn the anonymous 5/day cap instead
+       of the signed-in 10/day. runJob now waits for onReady before it
        resolves the uid (for the payload AND the cache key). A genuinely
        signed-out user still resolves at once: onReady fires with a
        null user as soon as the session state is known, and when the
@@ -138,12 +138,12 @@
   }
 
   // Sign-in link for DAILY_CAP errors — shown ONLY to signed-out
-  // users. A signed-in user who hit the 200/day cap gets the plain
+  // users. A signed-in user who hit the 10/day cap gets the plain
   // server message with no link (the link would just bounce them to
   // auth.html and back to the dashboard). All DAILY_CAP error sites
   // must go through this helper; none hardcodes the link anymore.
   function capLink() {
-    return uid() ? "" : ' <a href="auth.html">Sign in for 200 AI answers/day</a>';
+    return uid() ? "" : ' <a href="auth.html">Sign in for 10 AI answers/day</a>';
   }
 
   // Today's AI usage for the requester (GET /api/usage): { used, cap,
@@ -515,8 +515,8 @@
     var code = (e && e.code) || "";
     var msg = (e && typeof e.message === "string" && e.message) ? e.message : "";
     if (code === "DAILY_CAP") {
-      // The server's message already carries the right cap (20/day signed
-      // out, 200/day signed in) — keep it verbatim. Never hardcode a number
+      // The server's message already carries the right cap (5/day signed
+      // out, 10/day signed in) — keep it verbatim. Never hardcode a number
       // in the fallback.
       if (msg) return { code: code, message: msg };
       return { code: code, message: "You've used your AI answers for today — they reset tomorrow." };

@@ -133,7 +133,7 @@
   // auth.js fires onReady, render NO hint; onReady (and every later
   // auth change) refreshes it — same pattern as dashboard.js.
   var authResolved = false;
-  // Signed-out users get 20 AI answers/day (200/day signed in) — the
+  // Signed-out users get 5 AI answers/day (10/day signed in) — the
   // tutor card says so, and only there. Guarded: no auth module, no hint.
   function capHintHtml() {
     var signedOut = false;
@@ -143,7 +143,7 @@
       if (typeof auth.onReady === "function" && !authResolved) return "";
       signedOut = !auth.currentUser();
     } catch (e) { signedOut = false; }
-    return signedOut ? '<p class="hint" style="margin-top:0">Signed out? AI answers are 20/day — sign in for 200/day.</p>' : "";
+    return signedOut ? '<p class="hint" style="margin-top:0">Signed out? AI answers are 5/day — sign in for 10/day.</p>' : "";
   }
   // M3: refresh the tutor cap hint when auth state changes (e.g.
   // sign-in/out in another tab) — re-renders the hint line only,
@@ -177,7 +177,7 @@
           if (m.slice(-1) !== ".") m += ".";
           if (err && err.code === "DAILY_CAP") {
             // Sign-in link only when signed out (ai.js capLink
-            // returns "" for signed-in users at the 200/day cap).
+            // returns "" for signed-in users at the 10/day cap).
             ans.innerHTML = esc(m) + " Try again." +
               (AI.capLink ? AI.capLink() : "");
           } else {
@@ -237,7 +237,7 @@
           if (note) {
             if (err && err.code === "DAILY_CAP") {
               // Sign-in link only when signed out (ai.js capLink
-              // returns "" for signed-in users at the 200/day cap).
+              // returns "" for signed-in users at the 10/day cap).
               note.innerHTML = esc(err.message || "You've used your AI answers for today — they reset tomorrow.") +
                 (AI.capLink ? AI.capLink() : "");
             } else {
