@@ -127,6 +127,14 @@
 .fc-scroll:active { cursor: grabbing; }
 .fc-stage { height: 560px; }
 .fc-stage svg { width: 100%; height: 100%; display: block; }
+/* The global .node rule (Learn-path buttons, style.css) also leaks
+   font-size:1.7rem + font-weight:800 into Mermaid's <g class="node">
+   groups — inert as box properties on a <g>, but they INHERIT into
+   the labels, so chart text rendered bold and oversized and spilled
+   out of the boxes Mermaid sized for 16px (visible in the stage and
+   in the Lab Sheet PDF). Neutralise the leak on chart SVGs. */
+.fc-stage svg g.node, #fcPrintSheet svg g.node {
+  font-size: 16px; font-weight: 400; }
 .fc-zoom { position: absolute; right: 10px; top: 10px; display: flex; gap: 6px;
   z-index: 5; }
 .fc-zoom .btn { padding: 7px 9px; background: var(--card); }
@@ -236,6 +244,12 @@
 @media print {
   body.fc-printing header, body.fc-printing nav, body.fc-printing footer,
   body.fc-printing .fc-app, body.fc-printing #siteNav, body.fc-printing #siteFooter {
+    display: none !important; }
+  /* The site-wide toast is position:fixed and hidden on screen only
+     by a translateY slide-down — in print it lands on EVERY page as
+     a blank pill (Vikas's phone PDF, 14 Nov 2026). Keep all toasts
+     out of the sheet. */
+  body.fc-printing .toast, body.fc-printing .fc-toast {
     display: none !important; }
   body.fc-printing #fcPrintSheet { display: block !important; color: #111; }
   body.fc-printing { background: #fff !important; }
