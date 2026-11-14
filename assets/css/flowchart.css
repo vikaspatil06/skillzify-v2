@@ -246,12 +246,24 @@
   #fcPrintSheet pre { border: 1px solid #ccc; border-radius: 6px;
     padding: 10px 12px; font-size: 11.5px; white-space: pre-wrap;
     font-family: ui-monospace, monospace; }
-  #fcPrintSheet svg { max-width: 100%; height: auto; }
-  /* every chart in the sheet gets its own page after the first, and
-     each chart scales to fit a single page (a tall chart is shrunk,
-     never sliced across pages) */
+  /* The exported SVG markup carries inline pixel width/height (needed
+     for the PNG/SVG files); in print those MUST be overridden or a
+     large chart keeps its pixel width, overflows the page and its
+     content is centred off-page — the sheet came out blank but for
+     one node (Vikas's phone PDF, 14 Nov 2026). !important beats the
+     inline style; the viewBox keeps the drawing proportional and
+     max-height keeps a tall chart on one page. */
+  #fcPrintSheet svg { width: 100% !important; height: auto !important;
+    max-width: 100%; }
+  /* every chart in the sheet gets its own page after the first;
+     a chart's heading stays with its chart */
   #fcPrintSheet .ps-chart + .ps-chart { break-before: page; }
-  #fcPrintSheet .ps-chart svg { max-height: 242mm; width: auto; }
+  #fcPrintSheet .ps-chart h2 { break-after: avoid; }
+  /* One chart, one page: cap the height so a tall chart scales to
+     fit its page whole. (Letting it flow full-width across pages
+     made Chrome strand a sliver fragment — a lone node cap —
+     on an otherwise blank page.) */
+  #fcPrintSheet .ps-chart svg { max-height: 240mm; }
 }
 @media (prefers-reduced-motion: reduce) {
   .fc-loadnote::before { animation: none; }
