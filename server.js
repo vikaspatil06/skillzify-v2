@@ -121,27 +121,32 @@ const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const ATTEMPT_TIMEOUT_MS = Number(process.env.ATTEMPT_TIMEOUT_MS) || 12000;
 const FAILOVER_BUDGET_MS = 40000;
 // Circuit breaker (optimization audit #3, 13 Nov 2026): per-model
-// health memory for TIMEOUT-class failures only. A model that hits
-// BREAKER_THRESHOLD consecutive attempt timeouts is skipped for
-// BREAKER_COOLDOWN_MS, so unlucky requests stop re-walking dead
-// chain entries at 12 s apiece (the 12 Nov load test: 3.8-flash and
-// gemma-4-31b-it scored 0 successes, all timeout-class). A success
-// resets the model's counter at once; HTTP failures (429/503/404)
-// are cheap and never touch the breaker. Safety valves: a pinned
-// call (onlyModel — the MAX_TOKENS retry) is never skipped, and if
-// EVERY model in the list is open the breaker is ignored for that
-// call, so a request always gets its full chain when nothing else
-// is available. Env overrides exist for the test harness.
+// health memory for TIMEOUT-class and QUOTA-class failures. A model
+// that hits BREAKER_THRESHOLD consecutive attempt timeouts — or,
+// since the 14 Nov 2026 staging stress test, consecutive upstream
+// 429s — is skipped for BREAKER_COOLDOWN_MS, so unlucky requests
+// stop re-walking dead chain entries (timeouts at 12 s apiece in the
+// 12 Nov load test: 3.8-flash and gemma-4-31b-it scored 0 successes,
+// all timeout-class; the stress test: the whole Gemini family quota-
+// dry, every request re-walking it before Groq answered, 7 s average
+// latency). Timeout and quota strikes are counted separately; a
+// success resets both at once. The other retryable HTTP failures
+// (503 overloaded, 404 model unavailable) stay cheap and never touch
+// the breaker. Safety valves: a pinned call (onlyModel — the
+// MAX_TOKENS retry) is never skipped, and if EVERY model in the
+// list is open the breaker is ignored for that call, so a request
+// always gets its full chain when nothing else is available. Env
+// overrides exist for the test harness.
 const BREAKER_THRESHOLD = Number(process.env.BREAKER_THRESHOLD) || 2;
 const BREAKER_COOLDOWN_MS = Number(process.env.BREAKER_COOLDOWN_MS) || 5 * 60 * 1000;
-const modelHealth = {}; // "gemini:<model>" / "groq:<model>" -> { timeouts, openUntil }
+const modelHealth = {}; // "gemini:<model>" / "groq:<model>" -> { timeouts, quotas, openUntil }
 function breakerIsOpen(kind, model) {
   var h = modelHealth[kind + ":" + model];
   return !!(h && h.openUntil > Date.now());
 }
 function breakerNoteTimeout(kind, model) {
   var k = kind + ":" + model;
-  var h = modelHealth[k] || (modelHealth[k] = { timeouts: 0, openUntil: 0 });
+  var h = modelHealth[k] || (modelHealth[k] = { timeouts: 0, quotas: 0, openUntil: 0 });
   h.timeouts++;
   if (h.timeouts >= BREAKER_THRESHOLD && h.openUntil <= Date.now()) {
     h.openUntil = Date.now() + BREAKER_COOLDOWN_MS;
@@ -149,9 +154,19 @@ function breakerNoteTimeout(kind, model) {
     console.log("[ai] circuit breaker open for " + k + " — skipping for " + Math.round(BREAKER_COOLDOWN_MS / 1000) + "s");
   }
 }
+function breakerNoteQuota(kind, model) {
+  var k = kind + ":" + model;
+  var h = modelHealth[k] || (modelHealth[k] = { timeouts: 0, quotas: 0, openUntil: 0 });
+  h.quotas++;
+  if (h.quotas >= BREAKER_THRESHOLD && h.openUntil <= Date.now()) {
+    h.openUntil = Date.now() + BREAKER_COOLDOWN_MS;
+    h.quotas = 0;
+    console.log("[ai] circuit breaker open for " + k + " (quota) — skipping for " + Math.round(BREAKER_COOLDOWN_MS / 1000) + "s");
+  }
+}
 function breakerNoteSuccess(kind, model) {
   var h = modelHealth[kind + ":" + model];
-  if (h) { h.timeouts = 0; h.openUntil = 0; }
+  if (h) { h.timeouts = 0; h.quotas = 0; h.openUntil = 0; }
 }
 // P1-23: the MAX_TOKENS retry gets its OWN deadline (started + 55 s) instead
 // of the 40 s failover budget — a slow first call (up to 4 x 12 s = 48 s)
@@ -855,6 +870,7 @@ app.post("/api/explain", async (req, res) => {
         if (r.ok) { breakerNoteSuccess("gemini", model); return { r: r, model: model, keyIdx: ki }; }
         var g = providerError(r.status);
         if (r.status === 429 || r.status === 503 || r.status === 404) {
+          if (r.status === 429) breakerNoteQuota("gemini", model);
           console.log("[ai] model " + model + " key#" + (ki + 1) + " fail " + g.code + " — trying next");
           lastErr = g;
           continue;
@@ -940,6 +956,7 @@ app.post("/api/explain", async (req, res) => {
       }
       var g = providerError(r.status);
       if (r.status === 429 || r.status === 503 || r.status === 404) {
+        if (r.status === 429) breakerNoteQuota("groq", model);
         console.log("[ai] groq model " + model + " fail " + g.code + " — trying next");
         lastErr = g;
         continue;
