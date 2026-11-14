@@ -247,6 +247,11 @@
     padding: 10px 12px; font-size: 11.5px; white-space: pre-wrap;
     font-family: ui-monospace, monospace; }
   #fcPrintSheet svg { max-width: 100%; height: auto; }
+  /* every chart in the sheet gets its own page after the first, and
+     each chart scales to fit a single page (a tall chart is shrunk,
+     never sliced across pages) */
+  #fcPrintSheet .ps-chart + .ps-chart { break-before: page; }
+  #fcPrintSheet .ps-chart svg { max-height: 242mm; width: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   .fc-loadnote::before { animation: none; }

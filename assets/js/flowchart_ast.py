@@ -38,6 +38,46 @@ def _short(text, limit=MAX_NODE_LABEL):
     return t
 
 
+def _wrap_label(text, width=54, max_lines=4):
+    """Node labels: complete text, wrapped — never cut mid-expression.
+    Labels up to MAX_NODE_LABEL stay on one line (unchanged behaviour);
+    longer ones wrap, preferring a break right after `and`/`or`, then
+    at spaces. Only a label needing more than max_lines lines has its
+    tail truncated. Lines are joined with a newline; the web app turns
+    it into a <br/> for Mermaid. (The old _short cap of 72 chars cut
+    the A* chained condition off at "(grid[neighbor[…" — the full
+    condition is the whole point of a decision diamond.)"""
+    t = " ".join(str(text).split())
+    if len(t) <= MAX_NODE_LABEL:
+        return t
+    segs, buf = [], ""
+    for w in t.split(" "):
+        buf = (buf + " " + w).strip()
+        if w in ("and", "or"):
+            segs.append(buf)
+            buf = ""
+    if buf:
+        segs.append(buf)
+    lines = []
+    for s in segs:
+        cur = ""
+        for w in s.split(" "):
+            trial = (cur + " " + w).strip()
+            if len(trial) <= width or not cur:
+                cur = trial
+            else:
+                lines.append(cur)
+                cur = w
+        if cur:
+            lines.append(cur)
+    if len(lines) > max_lines:
+        keep = lines[: max_lines - 1]
+        rest = " ".join(lines[max_lines - 1:])
+        keep.append(rest[: width - 1].rstrip() + "…")
+        lines = keep
+    return "\n".join(lines)
+
+
 def _unparse(node, src_lines):
     if node is None:
         return ""
@@ -100,7 +140,7 @@ class ChartBuilder(object):
             nid = base + "_" + str(n)
             n += 1
         self.used_ids.add(nid)
-        rec = {"id": nid, "kind": kind, "label": _short(label),
+        rec = {"id": nid, "kind": kind, "label": _wrap_label(label),
                "line": line or 0, "endLine": end_line or line or 0}
         if note:
             rec["note"] = note

@@ -224,7 +224,11 @@
     chart.nodes.forEach(function (n) {
       if (n.kind === "merge") { lines.push("  " + n.id + '(("·"))'); return; }
       var sh = SHAPES[n.kind] || SHAPES.process;
-      lines.push("  " + n.id + sh[0] + mmdLabel(n.label || n.kind) + sh[1]);
+      /* the converter wraps long labels with newlines — each line is
+         sanitised on its own, then joined with <br/> (Mermaid splits
+         SVG-text labels into tspans on it) */
+      var lab = (n.label || n.kind).split("\n").map(mmdLabel).join("<br/>");
+      lines.push("  " + n.id + sh[0] + lab + sh[1]);
     });
     chart.edges.forEach(function (e) {
       if (e.kind === "call" || e.kind === "except") return;
@@ -991,7 +995,11 @@
   /* ---------------- exports ---------------- */
   function serializeSvg(bgMode) {
     if (!state.svgEl) return null;
-    var clone = state.svgEl.cloneNode(true);
+    return serializeSvgEl(state.svgEl, state.full, bgMode);
+  }
+
+  function serializeSvgEl(srcSvg, full, bgMode) {
+    var clone = srcSvg.cloneNode(true);
     clone.classList.remove("fc-anim");
     clone.querySelectorAll(".fc-trace-current,.fc-trace-done,.fc-trace-dim,.fc-flash")
       .forEach(function (g) {
@@ -1011,7 +1019,7 @@
        is reset to state.full (the full chart box) before serialising
        and the raster size is derived from it — a zoomed-in learner
        still exports the complete diagram. */
-    var fb = state.full, cvb = clone.viewBox.baseVal;
+    var fb = full, cvb = clone.viewBox.baseVal;
     var fx = fb ? fb.x : (cvb.x || 0), fy = fb ? fb.y : (cvb.y || 0);
     var w = fb ? fb.w : (cvb.width || 800), h = fb ? fb.h : (cvb.height || 600);
     clone.setAttribute("viewBox", fx + " " + fy + " " + w + " " + h);
@@ -1100,7 +1108,7 @@
       toast("This browser cannot copy images — use PNG export instead.");
       return;
     }
-    var data = serializeSvg("white");
+    var data = serializeSvg($("#bgSelect").value);
     svgToPngBlob(data, 2, function (blob) {
       if (!blob) { toast("Copy failed — PNG export will work instead."); return; }
       var item = {};
@@ -1113,8 +1121,57 @@
     });
   }
 
+  /* Render one chart offscreen (for the Lab Sheet) and serialise it
+     with the SAME pipeline as the PNG/SVG exports, honouring the
+     Background select. The temp host must be attached (not
+     display:none) or getBBox — and therefore the content box — is
+     unavailable. */
+  var sheetSeq = 0;
+  function renderChartOffscreen(chart, bgMode) {
+    return ensureMermaid().then(function () {
+      return window.mermaid.render("fcSheet" + (++sheetSeq), chartToMermaid(chart));
+    }).then(function (out) {
+      var host = el("div");
+      host.style.cssText = "position:absolute;left:-99999px;top:0;visibility:hidden;";
+      document.body.appendChild(host);
+      host.innerHTML = out.svg;
+      var svg = host.querySelector("svg");
+      if (!svg) { host.remove(); return null; }
+      svg.removeAttribute("width");
+      svg.removeAttribute("height");
+      svg.style.maxWidth = "none";
+      pinNodePositions(svg);
+      var data = serializeSvgEl(svg, contentBox(svg), bgMode);
+      host.remove();
+      return data;
+    });
+  }
+
+  /* Every chart the current code produced, as print-ready sections
+     (Vikas, 14 Nov 2026: the Lab Sheet PDF must contain ALL the
+     flowcharts for the code, not only the one on screen). */
+  function buildPrintCharts(bgMode) {
+    var charts = (state.ir && state.ir.charts && state.ir.charts.length)
+      ? state.ir.charts : (state.chart ? [state.chart] : []);
+    var multi = charts.length > 1;
+    var out = [];
+    var chain = Promise.resolve();
+    charts.forEach(function (ch) {
+      chain = chain.then(function () {
+        return renderChartOffscreen(ch, bgMode);
+      }).then(function (data) {
+        if (data) out.push({
+          heading: multi ? "Flowchart — " + (ch.kind === "main" ? "<main>" : ch.name + "()")
+                         : "Flowchart",
+          svg: data.str
+        });
+      });
+    });
+    return chain.then(function () { return out; });
+  }
+
   /* Lab Sheet: a print-mode restyle of THIS page (print CSS in
-     flowchart.css hides app chrome and lays out title/code/chart/output). */
+     flowchart.css hides app chrome and lays out title/code/charts/output). */
   function openLabSheet() {
     if (!needChart()) return;
     var title = $("#sheetTitle").value.trim() || "Flowchart Lab Sheet";
@@ -1123,15 +1180,35 @@
     $("#printOutput").textContent = state.output || "(run the trace to capture output)";
     var host = $("#printChart");
     host.innerHTML = "";
-    var data = serializeSvg("white");
-    if (data) host.innerHTML = data.str;
-    document.body.classList.add("fc-printing");
-    var done = function () {
-      document.body.classList.remove("fc-printing");
-      window.removeEventListener("afterprint", done);
+    var bg = $("#bgSelect").value;
+    var finish = function () {
+      document.body.classList.add("fc-printing");
+      var done = function () {
+        document.body.classList.remove("fc-printing");
+        window.removeEventListener("afterprint", done);
+      };
+      window.addEventListener("afterprint", done);
+      setTimeout(function () { window.print(); }, 60);
     };
-    window.addEventListener("afterprint", done);
-    setTimeout(function () { window.print(); }, 60);
+    buildPrintCharts(bg).then(function (sections) {
+      if (!sections.length) throw new Error("no chart sections");
+      sections.forEach(function (sec) {
+        var wrap = el("div", "ps-chart");
+        var h = el("h2");
+        h.textContent = sec.heading;
+        wrap.appendChild(h);
+        var div = el("div");
+        div.innerHTML = sec.svg;
+        wrap.appendChild(div);
+        host.appendChild(wrap);
+      });
+      finish();
+    }).catch(function () {
+      /* fallback: the on-screen chart, exactly as before */
+      var data = serializeSvg(bg);
+      if (data) host.innerHTML = data.str;
+      finish();
+    });
   }
 
   /* ---------------- AI layer ---------------- */
@@ -1449,7 +1526,8 @@
       inputLabels: inputLabels, toast: toast, hideToast: hideToast,
       state: state, selectChart: selectChart, showTraceStep: showTraceStep,
       stepNode: stepNode, startTracePlayback: startTracePlayback,
-      buildIndexes: buildIndexes, renderInputRows: renderInputRows,
+      buildIndexes: buildIndexes, buildPrintCharts: buildPrintCharts,
+      renderInputRows: renderInputRows,
       collectInputs: collectInputs, highlightEditorLine: highlightEditorLine,
       clearTraceEditorLine: clearTraceEditorLine,
       setEditor: function (e) { editor = e; } };
