@@ -210,6 +210,22 @@ const app = express();
 // observed chain turns out longer or shorter than two hops.
 // Direct connections without the header still fall back to the socket.
 app.set("trust proxy", 2);
+// Cap + rate-limit identity (14 Nov 2026): req.ip STILL resolved to
+// rotating Cloudflare edge IPs in production — the admin overview
+// showed a dozen one-call "anon" buckets (172.68.x / 104.22.x edge
+// addresses) all from a single browser, so the 5/day anonymous cap
+// never accumulated for anyone and signed-out users sailed past it.
+// Cloudflare sets CF-Connecting-IP to the original visitor IP on
+// every request it carries — one stable value per visitor regardless
+// of edge rotation — so identity keys prefer it and fall back to
+// req.ip for traffic that did not come through Cloudflare (direct /
+// local). The header is trusted only because Cloudflare fronts this
+// origin and overwrites the header at its edge.
+function clientIp(req) {
+  var cf = req.headers && req.headers["cf-connecting-ip"];
+  if (typeof cf === "string" && cf.trim()) return cf.trim();
+  return req.ip;
+}
 app.use(express.json({ limit: "200kb" }));
 
 /* ---- CORS: the API is called cross-origin from GitHub Pages ----
@@ -248,7 +264,7 @@ app.use(function (req, res, next) {
    req.ip must be the leftmost (client) entry of X-Forwarded-For.
    Health pings are not logged — they carry no cap identity. */
 app.use("/api/explain", function (req, res, next) {
-  console.log("[proxy] ip=" + req.ip + " xff=" + (req.headers["x-forwarded-for"] || "(none)"));
+  console.log("[proxy] ip=" + clientIp(req) + " edge=" + req.ip + " cf=" + (req.headers["cf-connecting-ip"] || "(none)") + " xff=" + (req.headers["x-forwarded-for"] || "(none)"));
   next();
 });
 
@@ -266,10 +282,11 @@ const hits = new Map();
 app.use("/api/", (req, res, next) => {
   if (req.method === "GET" && (req.path === "/health" || req.path === "/api/health")) return next();
   const now = Date.now();
-  const arr = (hits.get(req.ip) || []).filter((t) => now - t < 60000);
-  if (arr.length === 0) hits.delete(req.ip); // prune the stale key
+  const ip = clientIp(req);
+  const arr = (hits.get(ip) || []).filter((t) => now - t < 60000);
+  if (arr.length === 0) hits.delete(ip); // prune the stale key
   arr.push(now);
-  hits.set(req.ip, arr);
+  hits.set(ip, arr);
   if (arr.length > 30) return res.status(429).json({ error: "Too many requests — slow down a little.", code: "RATE_LIMIT" });
   next();
 });
@@ -540,7 +557,7 @@ app.get("/api/usage", async (req, res) => {
   var uid = ident.uid;
   var email = ident.email;
   var admin = !!uid && email === ADMIN_EMAIL;
-  var used = await capGetCount(dailyKey(uid, req.ip));
+  var used = await capGetCount(dailyKey(uid, clientIp(req)));
   res.json({ ok: true, date: dayStr(), used: used, cap: admin ? ADMIN_DAILY_CAP : (uid ? DAILY_CAP_USER : DAILY_CAP_ANON), admin: admin });
 });
 /* ---------------- admin overview ---------------- */
@@ -778,7 +795,7 @@ app.post("/api/explain", async (req, res) => {
   // P2-47: reserve one answer BEFORE the Gemini call (increment-first);
   // every failure return below releases it again via releaseCap().
   var myCap = isAdminUser ? ADMIN_DAILY_CAP : (uid ? DAILY_CAP_USER : DAILY_CAP_ANON);
-  var reserved = await dailyReserve(uid, req.ip, isAdminUser);
+  var reserved = await dailyReserve(uid, clientIp(req), isAdminUser);
   if (!reserved) {
     return res.status(429).json({ error: "You've used your " + myCap.toLocaleString("en-IN") + " AI answers for today — they reset tomorrow.", code: "DAILY_CAP" });
   }
@@ -791,12 +808,12 @@ app.post("/api/explain", async (req, res) => {
   if (!isAdminUser) {
     poolReserved = await dailyReservePool();
     if (!poolReserved) {
-      await dailyRelease(uid, req.ip);
+      await dailyRelease(uid, clientIp(req));
       return res.status(429).json({ error: "Skillzify's shared pool of " + USER_POOL_DAILY_CAP.toLocaleString("en-IN") + " AI answers for today is used up — it resets tomorrow.", code: "POOL_CAP" });
     }
   }
   async function releaseCap() {
-    if (reserved) { reserved = false; await dailyRelease(uid, req.ip); }
+    if (reserved) { reserved = false; await dailyRelease(uid, clientIp(req)); }
     if (poolReserved) { poolReserved = false; await dailyReleasePool(); }
   }
   // A success the client never received (disconnected before delivery —
