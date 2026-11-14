@@ -198,15 +198,24 @@
   };
 
   function mmdLabel(s) {
-    /* Mermaid runs with htmlLabels:false, so label text lands in SVG
-       <text> verbatim — HTML-escaping here would print literally
-       ("while n &gt; 0?"). Escape ONLY what a quoted Mermaid label
-       cannot contain raw: the double quote itself (as Mermaid's own
-       #quot; entity) — plus the structural characters that would
-       break the graph syntax (pipes, brackets). */
+    /* Label text for Mermaid (htmlLabels:false), calibrated against
+       Mermaid 10.9.1 in a real Chromium probe (14 Nov 2026):
+       - () [] {} | & ; and > are all safe RAW inside a quoted label
+         and render exactly. The previous build blanked ()[]{} to
+         spaces, which destroyed real code labels — "len(grid[0])"
+         became "len grid 0", "open_set = []" became "open_set ="
+         (Vikas's A* report). Numeric entities (#40; etc.) do NOT
+         work here: with htmlLabels:false they print literally.
+       - A raw " ends the quoted label (parse error), and #quot;
+         prints literally as "&quot;" — so " is swapped for the
+         fullwidth ＂ (U+FF02), which renders as a double quote.
+       - A raw < is double-escaped by Mermaid's SVG-text path and
+         prints as "&lt;" (visible on live charts: "while n &lt; 3?")
+         — so < is swapped for the fullwidth ＜ (U+FF1C). */
     return String(s == null ? "" : s)
-      .replace(/"/g, "#quot;")
-      .replace(/\|/g, "¦").replace(/[\[\]{}()]/g, " ").replace(/\s+/g, " ").trim();
+      .replace(/</g, "＜")
+      .replace(/"/g, "＂")
+      .replace(/\s+/g, " ").trim();
   }
 
   function chartToMermaid(chart) {
@@ -1366,7 +1375,11 @@
     if (!window.CodeMirror) { ta.hidden = false; return; }
     editor = window.CodeMirror.fromTextArea(ta, {
       mode: "python", theme: "dracula", lineNumbers: true,
-      indentUnit: 4, tabSize: 4, viewportMargin: Infinity
+      /* viewportMargin stays finite and the editor box is a FIXED
+         height in CSS: with Infinity + height:auto the box grew to
+         fit every pasted line and spread over the other cards
+         (Vikas's A* paste report, 14 Nov 2026). */
+      indentUnit: 4, tabSize: 4, viewportMargin: 40
     });
     editor.setValue(DEFAULT_CODE);
     editor.on("cursorActivity", onEditorCursor);
