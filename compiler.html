@@ -16,14 +16,6 @@
   <link rel="icon" href="assets/logo-light-small.png">
   <link rel="stylesheet" href="assets/css/style.css?v=37">
   <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.css">
-  <script>
-    /* Monaco (the VS Code editor engine), pinned 0.45.0 on jsDelivr.
-       SKZ_MONACO_VS is the single place the base lives — compiler.js
-       reads it for the AMD paths + the worker bootstrap. */
-    window.SKZ_MONACO_VS = "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs";
-    var require = { paths: { vs: window.SKZ_MONACO_VS } };
-  </script>
-  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -37,12 +29,16 @@
       --ide-accent: #0078d4; --ide-tab: #181818; --ide-hover: #2a2d2e;
       --ide-input: #313131;
     }
-    /* Page scroll appears only when needed: on normal screens the shell
-       still fills exactly the viewport (no scrollbar); on short windows
-       where even the minimum layout (editor 200px + panel 120px + chrome)
-       exceeds the viewport, the page scrolls instead of cutting content off. */
-    body.ide-page { overflow-x: hidden; overflow-y: auto; }
-    body.ide-page main { display: flex; flex-direction: column; height: calc(100vh - 68px); }
+    /* No page scroll, ever (Vikas, 15 Nov 2026): the page is a
+       viewport-locked app shell — the nav keeps its natural height,
+       main takes exactly what remains, and every region scrolls inside
+       itself (sidebar views and lists, the editor, the terminal, the
+       AI thread). The old rule guessed the nav height (100vh - 68px)
+       and allowed page scroll on short windows; any mismatch pushed
+       the status bar below the fold and the page scrolled. */
+    body.ide-page { overflow: hidden; height: 100vh; height: 100dvh;
+      display: flex; flex-direction: column; }
+    body.ide-page main { display: flex; flex-direction: column; flex: 1; min-height: 0; }
     body.ide-page footer { display: none; }
 
     .ide { display: flex; flex: 1; min-height: 0; background: var(--ide-bg); color: var(--ide-text);
@@ -72,6 +68,11 @@
     .side-view { display: none; flex-direction: column; min-height: 0; flex: 1;
       scrollbar-width: thin; scrollbar-color: #424242 transparent; }
     .side-view.active { display: flex; }
+    /* Explorer's accordion stack scrolls as a whole when the sections
+       together outgrow the sidebar (short windows, everything expanded);
+       in normal conditions the files section flexes and lists scroll
+       internally instead. */
+    #view-explorer { overflow-y: auto; }
     .side-title { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--ide-muted);
       padding: 12px 16px 8px; display: flex; align-items: center; justify-content: space-between;
       text-transform: uppercase; }
@@ -247,7 +248,7 @@
       border-bottom: 1px solid var(--ide-border); font-family: "JetBrains Mono", monospace; flex-shrink: 0; }
     .breadcrumbs .sep { margin: 0 6px; }
 
-    #editor-host { flex: 1; min-height: 200px; position: relative; overflow: hidden; }
+    #editor-host { flex: 1; min-height: 0; position: relative; overflow: hidden; }
     /* Monaco mounts here (Code Studio 2.0) */
     #monaco-host { position: absolute; inset: 0; }
     /* sidebar drag handle (width persists) */
@@ -324,13 +325,20 @@
       padding: 4px 7px; border-radius: 4px; }
     .findbar button:hover { color: #fff; background: var(--ide-hover); }
 
-    /* bottom panel — max-height keeps 320px for the tab bar, breadcrumbs,
-       editor minimum and status bar, so the panel can never push the status
-       bar off-screen (same 320px as the JS drag clamp in compiler.js) */
-    .panel-resize { height: 5px; background: transparent; cursor: ns-resize; flex-shrink: 0; touch-action: none; }
-    .panel-resize:hover { background: var(--ide-accent); }
-    .panel { height: 230px; min-height: 120px; max-height: calc(100% - 320px); display: flex; flex-direction: column;
+    /* bottom panel — FIXED height (Vikas, 15 Nov 2026): the console keeps
+       one constant size and scrolls internally; the editor takes the rest
+       of the column, also scrolling internally. No drag-resize and no
+       persisted heights — nothing grows or shifts as output arrives.
+       (The ⛶ toggle still offers a deliberate 60% mode via inline height.) */
+    .panel-resize { display: none; }
+    .panel { flex: 0 0 auto; height: 240px; display: flex; flex-direction: column; position: relative;
       background: var(--ide-side); border-top: 1px solid var(--ide-border); flex-shrink: 0; }
+    /* smart-scroll pill: appears when new output lands while the reader
+       is scrolled up in the terminal */
+    #term-jump { position: absolute; right: 12px; bottom: 10px; z-index: 5; background: var(--ide-accent);
+      color: #fff; border: 0; border-radius: 999px; padding: 5px 12px; font-size: 11.5px; font-weight: 600;
+      cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.45); font-family: "Inter", sans-serif; }
+    #term-jump:hover { background: #0098ff; }
     .panel-tabs { display: flex; align-items: center; gap: 2px; padding: 0 12px; flex-shrink: 0;
       border-bottom: 1px solid var(--ide-border); }
     .panel-tabs button.ptab { background: none; border: 0; color: var(--ide-muted); font-size: 11px;
@@ -598,6 +606,7 @@
       </div>
       <div class="panel-resize" id="panel-resize"></div>
       <div class="panel" id="panel">
+        <button id="term-jump" class="chip-off" title="Jump to the latest output">↓ New output</button>
         <div class="panel-tabs">
           <button class="ptab active" data-ptab="terminal">TERMINAL</button>
           <button class="ptab" data-ptab="problems">PROBLEMS <span class="badge" id="prob-badge" style="display:none">0</span></button>
@@ -649,6 +658,23 @@
 <script src="assets/js/auth.js?v=8"></script>
 <script src="assets/js/sync.js?v=20"></script>
 <script src="assets/js/ai.js?v=23"></script>
-<script src="assets/js/compiler.js?v=23"></script>
+<script>
+  /* Monaco (the VS Code editor engine), pinned 0.45.0 on jsDelivr.
+     SKZ_MONACO_VS is the single place the base lives — compiler.js
+     reads it for the AMD paths + the worker bootstrap.
+     LOADED LAST ON PURPOSE (15 Nov 2026): the loader installs a
+     global AMD define, and every UMD script that evaluates while it
+     exists — the Firebase compat builds above, dynamically-injected
+     Pyodide — registers as an AMD module instead of setting its
+     window global. That broke sign-in on this page alone (firebase
+     never appeared, so the nav showed "Login" while other pages
+     showed the signed-in state) and the Python runtime. Keep this
+     block after the Firebase tags, immediately before compiler.js
+     (the consumer of require). */
+  window.SKZ_MONACO_VS = "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs";
+  var require = { paths: { vs: window.SKZ_MONACO_VS } };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<script src="assets/js/compiler.js?v=25"></script>
 </body>
 </html>

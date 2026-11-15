@@ -921,7 +921,17 @@
     printLine("⏳ Loading Python 3.11 runtime…", "dim");
     var s = document.createElement("script");
     s.src = "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js";
+    // AMD guard (15 Nov 2026): Monaco's loader installs a global
+    // define, and Pyodide's UMD build registers as an AMD module
+    // instead of setting window.loadPyodide when it sees one — the
+    // script downloaded fine yet the runtime "could not load". Hide
+    // define/require while the script evaluates; restore them the
+    // moment it has run (the saved references keep Monaco's config).
+    var savedDefine = window.define, savedRequire = window.require;
+    window.define = undefined; window.require = undefined;
+    function restoreAMD() { window.define = savedDefine; window.require = savedRequire; }
     s.onload = function () {
+      restoreAMD();
       // P2-57: a script that loads but doesn't define loadPyodide used
       // to throw here, leaving pyodideLoading true forever and Run
       // wedged on "still loading…". Guard it so a retry is possible.
@@ -948,7 +958,7 @@
         printLine("❌ Could not load the Python runtime. Check your connection and reload.", "err");
       }
     };
-    s.onerror = function () { pyodideLoading = false; printLine("❌ Could not download Pyodide — internet required.", "err"); };
+    s.onerror = function () { restoreAMD(); pyodideLoading = false; printLine("❌ Could not download Pyodide — internet required.", "err"); };
     document.head.appendChild(s);
   }
 
@@ -1102,15 +1112,29 @@
     "__r = eval(__co, __ns)",
     "if _inspect.iscoroutine(__r): await __r"
   ].join("\n");
+  // Smart scroll (15 Nov 2026): the terminal sticks to the bottom only
+  // when the reader is already there. If they scrolled up to read, new
+  // output holds their place and lights the "↓ New output" pill instead
+  // of yanking the view down. Every console append path settles through
+  // conSettle with a stick flag captured BEFORE the append.
+  function conStick(con) { return con.scrollHeight - con.scrollTop - con.clientHeight < 48; }
+  function conSettle(con, stick) {
+    if (stick) con.scrollTop = con.scrollHeight;
+    else { var j = document.getElementById("term-jump"); if (j) j.classList.remove("chip-off"); }
+  }
   function printLine(text, cls) {
     var con = document.getElementById("console");
+    var stick = conStick(con);
     var d = document.createElement("div");
     if (cls) d.className = cls;
     d.textContent = text;
     con.appendChild(d);
-    con.scrollTop = con.scrollHeight;
+    conSettle(con, stick);
   }
-  function clearTerminal() { document.getElementById("console").innerHTML = ""; }
+  function clearTerminal() {
+    document.getElementById("console").innerHTML = "";
+    var j = document.getElementById("term-jump"); if (j) j.classList.add("chip-off");
+  }
   function copyOutput() {
     var t = document.getElementById("console").innerText;
     if (navigator.clipboard) navigator.clipboard.writeText(t).then(function () { toast("Terminal output copied 📋", "success"); });
@@ -2093,6 +2117,7 @@
   }
   function printTraceback(text) {
     var con = document.getElementById("console");
+    var stick = conStick(con);
     String(text).split("\n").forEach(function (line) {
       var d = document.createElement("div");
       d.className = "err";
@@ -2114,7 +2139,7 @@
       }
       con.appendChild(d);
     });
-    con.scrollTop = con.scrollHeight;
+    conSettle(con, stick);
   }
   function gotoFileLine(file, line) {
     if (file && ws.files.hasOwnProperty(file) && file !== ws.active) openFile(file);
@@ -2126,6 +2151,7 @@
   function printAiFixRow() {
     if (!lastError) return;
     var con = document.getElementById("console");
+    var stick = conStick(con);
     var row = document.createElement("div");
     row.className = "ai-fix-row";
     var b = document.createElement("button");
@@ -2134,7 +2160,7 @@
     b.addEventListener("click", aiFixWithDiff);
     row.appendChild(b);
     con.appendChild(row);
-    con.scrollTop = con.scrollHeight;
+    conSettle(con, stick);
   }
 
   /* ================= AI ================= */
@@ -2686,6 +2712,16 @@
     if (rkBtn) rkBtn.addEventListener("click", restartKernel);
     document.getElementById("copy-out-btn").addEventListener("click", copyOutput);
     document.getElementById("clear-out-btn").addEventListener("click", function () { clearTerminal(); printLine("Terminal cleared.", "dim"); });
+    /* smart-scroll pill: click jumps to the latest output; scrolling
+       back to the bottom by hand dismisses it */
+    var tj = document.getElementById("term-jump");
+    var conEl = document.getElementById("console");
+    if (tj && conEl) {
+      tj.addEventListener("click", function () { conEl.scrollTop = conEl.scrollHeight; tj.classList.add("chip-off"); });
+      conEl.addEventListener("scroll", function () {
+        if (conEl.scrollHeight - conEl.scrollTop - conEl.clientHeight < 48) tj.classList.add("chip-off");
+      });
+    }
     document.getElementById("panel-toggle").addEventListener("click", function () {
       var p = document.getElementById("panel");
       p.style.height = p.style.height === "60%" ? "" : "60%";
@@ -2874,9 +2910,10 @@
        through clampPanelHeight, so dragging can never push the panel
        (and the status bar below it) off the bottom of the screen. */
     (function () {
-      var handle = document.getElementById("panel-resize");
+      var handle = null; // fixed panel (15 Nov 2026): drag-resize retired at Vikas's call
       var panel = document.getElementById("panel");
       var dragging = false;
+      if (!handle || !panel) return;
       handle.addEventListener("pointerdown", function (e) {
         dragging = true;
         try { handle.setPointerCapture(e.pointerId); } catch (err) {}
@@ -2903,11 +2940,8 @@
       try {
         var sw = parseInt(localStorage.getItem("skillzify_side_w") || "", 10);
         if (sb && sw >= 180 && sw <= 520) sb.style.width = sw + "px";
-        var ph = parseInt(localStorage.getItem("skillzify_panel_h") || "", 10);
-        if (panel && ph >= 120) {
-          var colH = panel.parentElement.getBoundingClientRect().height || (ph + 320);
-          panel.style.height = clampPanelHeight(ph, colH) + "px";
-        }
+        // Panel height is fixed by CSS now (15 Nov 2026) — the old
+        // persisted drag height (skillzify_panel_h) is no longer applied.
       } catch (e) {}
       var handle = document.getElementById("sidebar-resize");
       if (!handle || !sb) return;
