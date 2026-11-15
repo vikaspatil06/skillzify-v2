@@ -22,7 +22,13 @@
   <style>
     /* ============ VS Code-like IDE shell (always dark, like the real thing) ============ */
     /* Code Studio 2.0: VS Code "Dark Modern" palette — editor #1f1f1f,
-       side/activity/panel #181818, borders #2b2b2b, status bar #0078d4. */
+       side/activity/panel #181818, borders #2b2b2b, status bar #0078d4.
+       Stylesheet map (rules stay in cascade order — read top to bottom):
+       shell/layout → activity bar → sidebar + accordion sections →
+       sidebar rows (files/samples/snippets/outline) → sidebar forms →
+       search view → AI view → history → settings view → editor column
+       (tabs, breadcrumbs, editor host, inline AI, diff, fallback) →
+       find bar → bottom panel/terminal → status bar → mobile. */
     :root {
       --ide-bg: #1f1f1f; --ide-side: #181818; --ide-activity: #181818;
       --ide-border: #2b2b2b; --ide-text: #cccccc; --ide-muted: #8b8b8b;
@@ -145,6 +151,14 @@
     .side-section { padding: 0 16px 16px; }
     .side-section label { font-size: 11px; color: var(--ide-muted); display: block; margin: 10px 0 4px;
       text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+    /* sidebar form variants (absorbed from inline styles, 15 Nov 2026) */
+    .side-section label.gap-top { margin-top: 16px; }
+    .side-section label.check-row { display: flex; gap: 6px; align-items: center; font-size: 11px;
+      color: var(--ide-muted); text-transform: none; letter-spacing: 0; font-weight: 400; margin: 8px 0 0; }
+    .side-section label.check-row input { width: auto; }
+    .side-note { font-size: 11px; color: var(--ide-muted); }
+    .side-note.tight { margin: 0 0 4px; }
+    .side-note a { color: #9d6bff; }
     .ide-input, .ide-select {
       width: 100%; background: var(--ide-input); border: 1px solid transparent; color: var(--ide-text);
       border-radius: 4px; padding: 6px 9px; font-size: 12.5px; font-family: inherit; box-sizing: border-box;
@@ -161,6 +175,7 @@
     .side-scroll { overflow-y: auto; flex: 1; min-height: 0; }
 
     /* search view — grouped results with highlighted matches */
+    #view-search .side-section { padding-bottom: 6px; }
     .search-count { font-size: 11px; color: var(--ide-muted); padding: 0 16px 6px; }
     .search-file-head { display: flex; align-items: center; gap: 6px; padding: 9px 12px 2px; font-size: 12px;
       font-family: "JetBrains Mono", monospace; color: var(--ide-text); }
@@ -199,6 +214,7 @@
     #view-ai #ai-output { min-height: 0; }
     #view-ai .ai-settings { max-height: 188px; overflow-y: auto; flex-shrink: 0;
       scrollbar-width: thin; scrollbar-color: #424242 transparent; }
+    #ai-output .ai-hint { color: var(--ide-muted); }
 
     .hist-item-ide { border-bottom: 1px solid var(--ide-border); padding: 9px 16px; }
     .hist-item-ide:hover { background: rgba(255,255,255,.02); }
@@ -221,6 +237,7 @@
     .swatch.on { border-color: var(--ide-accent); }
     .font-row { display: flex; gap: 8px; align-items: center; }
     .font-row input[type="range"] { flex: 1; accent-color: var(--ide-accent); height: 20px; min-width: 0; }
+    #fs-val { font-size: 12px; color: var(--ide-muted); }
     .set-row { display: flex; align-items: center; justify-content: space-between; padding: 3px 0; font-size: 13px; }
 
     /* activity-bar problems badge */
@@ -232,6 +249,7 @@
     .main-col { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
     .tab-bar { display: flex; background: var(--ide-side); border-bottom: 1px solid var(--ide-border);
       align-items: stretch; min-height: 36px; overflow-x: auto; flex-shrink: 0; }
+    #tabs { display: flex; }
     .tab { display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 13px;
       font-family: "JetBrains Mono", monospace; background: var(--ide-tab); color: var(--ide-muted);
       border-right: 1px solid var(--ide-border); cursor: pointer; white-space: nowrap; user-select: none; }
@@ -302,7 +320,7 @@
     .pkg-row .pkg-state .pkg-ver { color: #34d399; }
     .pkg-spin { display: inline-block; animation: pkgspin 1s linear infinite; }
     @keyframes pkgspin { to { transform: rotate(360deg); } }
-    /* P2-58: plain-text fallback editor (when the CodeMirror CDN fails)
+    /* P2-58: plain-text fallback editor (when the Monaco CDN fails)
        — fill the editor pane like the real editor, same mono font. */
     #editor-fallback { width: 100%; height: calc(100% - 34px); min-height: 160px; box-sizing: border-box;
       background: #282a36; color: #f8f8f2; border: 0; resize: none; outline: none; padding: 10px 12px;
@@ -319,6 +337,8 @@
       padding: 10px 14px; font-size: 12px; }
     .welcome-keys kbd { background: var(--ide-input); border-radius: 4px; padding: 2px 7px;
       font-family: "JetBrains Mono", monospace; font-size: 11px; }
+    .welcome-cta { margin-top: 16px; }
+    #welcome-new { width: auto; padding: 10px 28px; }
 
     /* find bar — wraps on narrow screens so the close button stays reachable (P2-30) */
     .findbar { display: none; align-items: center; gap: 6px; padding: 6px 12px; background: var(--ide-side);
@@ -337,9 +357,12 @@
        of the column, also scrolling internally. No drag-resize and no
        persisted heights — nothing grows or shifts as output arrives.
        (The ⛶ toggle still offers a deliberate 60% mode via inline height.) */
-    .panel-resize { display: none; }
     .panel { flex: 0 0 auto; height: 240px; display: flex; flex-direction: column; position: relative;
       background: var(--ide-side); border-top: 1px solid var(--ide-border); flex-shrink: 0; }
+    /* hidden console (hide/unhide feature): display:none lets the
+       editor flex into the freed space; the 240px / 60% height modes
+       are untouched, so unhiding restores them exactly */
+    .panel.hidden { display: none; }
     /* smart-scroll pill: appears when new output lands while the reader
        is scrolled up in the terminal */
     #term-jump { position: absolute; right: 12px; bottom: 10px; z-index: 5; background: var(--ide-accent);
@@ -394,6 +417,7 @@
       padding: 3px 8px; border-radius: 3px; font-family: inherit; }
     .status-bar button.st-item:hover { background: rgba(255,255,255,.15); }
     .status-bar .right { margin-left: auto; display: flex; gap: 16px; align-items: center; }
+    #st-file { font-family: "JetBrains Mono", monospace; }
 
     /* mobile sidebar close (P2-31): hidden on desktop, shown ≤860px */
     .sidebar-close { display: none; }
@@ -486,7 +510,7 @@
 
       <div class="side-view" id="view-search">
         <div class="side-title">SEARCH</div>
-        <div class="side-section" style="padding-bottom:6px">
+        <div class="side-section">
           <input class="ide-input" id="search-input" placeholder="Search in all files…">
         </div>
         <div class="search-count" id="search-count"></div>
@@ -503,7 +527,7 @@
           <button class="chip" id="trace-code-btn">🔍 Trace code</button>
         </div>
         <div class="ai-box-ide" id="ai-output">
-          <p style="color:var(--ide-muted)">Ask the AI to write code, explain your file, or fix an error. Runs on the site backend — no setup needed.</p>
+          <p class="ai-hint">Ask the AI to write code, explain your file, or fix an error. Runs on the site backend — no setup needed.</p>
         </div>
         <div id="ai-chat-bar">
           <input class="ide-input" id="ai-chat-input" placeholder="Ask about your code…" aria-label="Ask the AI about your code">
@@ -513,10 +537,10 @@
         <div class="side-section ai-settings">
           <label for="ai-key">API key (optional fallback)</label>
           <input class="ide-input" type="password" id="ai-key" placeholder="AIza..." autocomplete="off">
-          <label style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--ide-muted);text-transform:none;letter-spacing:0;font-weight:400;margin:8px 0 0"><input type="checkbox" id="ai-remember" checked style="width:auto"> Remember this key in this browser</label>
+          <label class="check-row"><input type="checkbox" id="ai-remember" checked> Remember this key in this browser</label>
           <button class="ide-btn ghost" id="ai-save">Save key</button>
-          <p style="font-size:11px;color:var(--ide-muted)">Your key is stored in this browser only — it never leaves your device except to call the Gemini API. With "Remember" off it is kept for this session only and never stored. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#9d6bff">Get a free Gemini key →</a></p>
-          <p style="font-size:11px;color:var(--ide-muted)">A saved key is used when the daily AI limit is reached, so you can keep going.</p>
+          <p class="side-note">Your key is stored in this browser only — it never leaves your device except to call the Gemini API. With "Remember" off it is kept for this session only and never stored. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free Gemini key →</a></p>
+          <p class="side-note">A saved key is used when the daily AI limit is reached, so you can keep going.</p>
         </div>
       </div>
 
@@ -547,7 +571,7 @@
           <div class="font-row">
             <button class="mini-btn" id="fs-down">A−</button>
             <input type="range" id="fs-range" min="10" max="24" step="1" value="14" aria-label="Font size">
-            <span id="fs-val" style="font-size:12px;color:var(--ide-muted)">14px</span>
+            <span id="fs-val">14px</span>
             <button class="mini-btn" id="fs-up">A＋</button>
           </div>
           <label for="tabsize-select">Indentation</label>
@@ -559,10 +583,10 @@
           <label>Options</label>
           <div class="set-row"><span>Word wrap</span><button class="mini-btn toggle" id="wrap-btn">Wrap: off</button></div>
           <div class="set-row"><span>Minimap</span><button class="mini-btn toggle" id="minimap-btn">Minimap: on</button></div>
-          <label style="margin-top:16px">Packages</label>
-          <p style="font-size:11px;color:var(--ide-muted);margin:0 0 4px">Install Python libraries into this browser session (they reset when the kernel restarts).</p>
+          <label class="gap-top">Packages</label>
+          <p class="side-note tight">Install Python libraries into this browser session (they reset when the kernel restarts).</p>
           <div id="pkg-list"></div>
-          <label style="margin-top:16px">Workspace</label>
+          <label class="gap-top">Workspace</label>
           <button class="ide-btn ghost" id="upload-btn">⬆ Import .py file</button>
           <button class="ide-btn ghost" id="reset-ws-btn">🗑 Reset workspace</button>
           <button class="ide-btn ghost" id="restore-ws-btn" style="display:none">↩ Restore backed-up workspace</button>
@@ -575,7 +599,7 @@
     <!-- main column -->
     <div class="main-col">
       <div class="tab-bar">
-        <div id="tabs" style="display:flex"></div>
+        <div id="tabs"></div>
         <div class="tab-actions">
           <button id="find-btn" title="Find (Ctrl+F)">🔍</button>
           <button class="run" id="run-btn" disabled title="Run (Ctrl+Enter)">▶ Run</button>
@@ -607,11 +631,11 @@
               <div><kbd>Ctrl+I</kbd> &nbsp;AI inline edit at the cursor</div>
               <div><kbd>Right-click</kbd> &nbsp;AI: explain / improve selection</div>
             </div>
-            <p style="margin-top:16px"><button class="ide-btn" id="welcome-new" style="width:auto;padding:10px 28px">＋ New Python file</button></p>
+            <p class="welcome-cta"><button class="ide-btn" id="welcome-new">＋ New Python file</button></p>
           </div>
         </div>
       </div>
-      <div class="panel-resize" id="panel-resize"></div>
+      <!-- bottom panel: terminal / problems / output history -->
       <div class="panel" id="panel">
         <button id="term-jump" class="chip-off" title="Jump to the latest output">↓ New output</button>
         <div class="panel-tabs">
@@ -623,6 +647,7 @@
             <button id="copy-out-btn" title="Copy terminal output">📋</button>
             <button id="clear-out-btn" title="Clear terminal">🗑</button>
             <button id="panel-toggle" title="Maximize / restore panel">⛶</button>
+            <button id="panel-hide-btn" title="Hide console">✕</button>
           </div>
         </div>
         <div class="panel-body">
@@ -633,11 +658,13 @@
           <div class="pview" id="pview-outhist"><div id="outhist-list"><div class="empty-note">No runs yet — output history appears here.</div></div></div>
         </div>
       </div>
+      <!-- status bar -->
       <div class="status-bar">
+        <button class="st-item" id="panel-toggle-vis" title="Show/hide console">🖥</button>
         <button class="st-item" id="st-run" title="Run current file">▶</button>
         <span class="st-item" id="st-lang">🐍 Python 3.11</span>
         <button class="st-item" id="st-check" title="Check for problems">✓ 0 problems</button>
-        <span class="st-item" id="st-file" style="font-family:'JetBrains Mono',monospace">main.py</span>
+        <span class="st-item" id="st-file">main.py</span>
         <div class="right">
           <span class="st-item" id="st-save" title="Workspace save status">Saved ✓</span>
           <span class="st-item st-hide-sm" id="st-pos">Ln 1, Col 1</span>
@@ -682,6 +709,6 @@
   var require = { paths: { vs: window.SKZ_MONACO_VS } };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
-<script src="assets/js/compiler.js?v=25"></script>
+<script src="assets/js/compiler.js?v=26"></script>
 </body>
 </html>

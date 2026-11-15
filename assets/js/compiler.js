@@ -23,6 +23,7 @@
   var TAB_KEY = "skillzify_tab_size";
   var CHAT_KEY = "skillzify_ai_chat";
   var SEC_KEY = "skillzify_side_secs";
+  var PANEL_HIDDEN_KEY = "skillzify_panel_hidden";
 
   var pyodide = null;
   var pyodideLoading = false; // guards double-load + retry (P2-35)
@@ -39,16 +40,6 @@
   var outlineSyms = [];   // symbols of the active file (Outline section)
   var outlineFilter = "";
   var pkgVersion = {};    // package name -> version string, once installed
-
-  /* Panel height clamp — the terminal may only grow by dragging (or the
-     maximize toggle) and must never push the status bar off-screen.
-     Reserve = tab bar (~36) + breadcrumbs (~27) + editor min-height
-     (200) + resize handle (5) + status bar (28) + slack (~24) = 320px.
-     The same 320px reserve is the CSS max-height on .panel, so the
-     maximize toggle is capped by the same budget. */
-  function clampPanelHeight(h, colH) {
-    return Math.max(120, Math.min(colH - 320, h));
-  }
 
   var SNIPPETS = {
     hello: { name: "👋 Hello World", code: 'print("Hello, Skillzify!")\nname = input("Your name: ")\nprint(f"Welcome, {name}! 🎉")' },
@@ -1397,6 +1388,25 @@
     });
   }
 
+  /* Console panel visibility (hide/unhide): shown by default. Hiding
+     adds .hidden (display:none) so the editor flexes into the freed
+     space — Monaco's automaticLayout follows on its own. The ⛶
+     toggle's inline 60% height is deliberately left untouched, so
+     unhiding restores whatever height mode was active. The choice is
+     persisted (PANEL_HIDDEN_KEY) and re-applied during init; every
+     control (header ✕, status-bar toggle, Ctrl+`, Problems badge)
+     goes through setPanelHidden so the state lives in one place. */
+  function setPanelHidden(h) {
+    var p = document.getElementById("panel");
+    if (!p) return;
+    p.classList.toggle("hidden", !!h);
+    try { localStorage.setItem(PANEL_HIDDEN_KEY, h ? "1" : "0"); } catch (e) {}
+  }
+  function panelHidden() {
+    var p = document.getElementById("panel");
+    return !!p && p.classList.contains("hidden");
+  }
+
   /* ================= find & replace ================= */
   var findState = { cursor: null, query: "" };
   function openFind(replaceMode) {
@@ -2588,9 +2598,10 @@
     if (scb) scb.addEventListener("click", function () { setSidebarOpen(false); });
     var sbd = document.getElementById("sidebar-backdrop");
     if (sbd) sbd.addEventListener("click", function () { setSidebarOpen(false); });
-    /* problems badge button: jumps to the panel's Problems tab */
+    /* problems badge button: jumps to the panel's Problems tab,
+       unhiding the panel first if it was hidden */
     var apb = document.getElementById("activity-problems");
-    if (apb) apb.addEventListener("click", function () { switchPtab("problems"); });
+    if (apb) apb.addEventListener("click", function () { setPanelHidden(false); switchPtab("problems"); });
     });
 
     guard("panel-tabs", function () {
@@ -2726,6 +2737,18 @@
       var p = document.getElementById("panel");
       p.style.height = p.style.height === "60%" ? "" : "60%";
     });
+    /* hide / unhide the console panel: the header ✕ hides it, the
+       status-bar toggle (always visible) flips it, and Ctrl+` toggles
+       from anywhere — all through setPanelHidden. */
+    var phb = document.getElementById("panel-hide-btn");
+    if (phb) phb.addEventListener("click", function () { setPanelHidden(true); });
+    var ptv = document.getElementById("panel-toggle-vis");
+    if (ptv) ptv.addEventListener("click", function () { setPanelHidden(!panelHidden()); });
+    document.addEventListener("keydown", function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "`") { e.preventDefault(); setPanelHidden(!panelHidden()); }
+    });
+    /* restore the persisted visibility choice */
+    try { if (localStorage.getItem(PANEL_HIDDEN_KEY) === "1") setPanelHidden(true); } catch (e) {}
     /* problems check */
     document.getElementById("st-check").addEventListener("click", function () { checkProblems(false); });
     /* search */
@@ -2906,42 +2929,14 @@
     });
 
     guard("resize", function () {
-    /* panel resize — pointer events (mouse + touch). The height goes
-       through clampPanelHeight, so dragging can never push the panel
-       (and the status bar below it) off the bottom of the screen. */
-    (function () {
-      var handle = null; // fixed panel (15 Nov 2026): drag-resize retired at Vikas's call
-      var panel = document.getElementById("panel");
-      var dragging = false;
-      if (!handle || !panel) return;
-      handle.addEventListener("pointerdown", function (e) {
-        dragging = true;
-        try { handle.setPointerCapture(e.pointerId); } catch (err) {}
-        e.preventDefault();
-      });
-      handle.addEventListener("pointermove", function (e) {
-        if (!dragging) return;
-        var rect = panel.parentElement.getBoundingClientRect();
-        panel.style.height = clampPanelHeight(rect.bottom - e.clientY, rect.height) + "px";
-      });
-      function endDrag() {
-        if (dragging && /px$/.test(panel.style.height || "")) {
-          try { localStorage.setItem("skillzify_panel_h", String(parseInt(panel.style.height, 10))); } catch (e) {}
-        }
-        dragging = false;
-      }
-      handle.addEventListener("pointerup", endDrag);
-      handle.addEventListener("pointercancel", endDrag);
-    })();
-    /* sidebar resize + persisted pane sizes (Code Studio 2.0) */
+    /* sidebar resize + persisted width (Code Studio 2.0). The bottom
+       panel is fixed-height in CSS — its drag-resize and persisted
+       height were retired on 15 Nov 2026. */
     (function () {
       var sb = document.getElementById("sidebar");
-      var panel = document.getElementById("panel");
       try {
         var sw = parseInt(localStorage.getItem("skillzify_side_w") || "", 10);
         if (sb && sw >= 180 && sw <= 520) sb.style.width = sw + "px";
-        // Panel height is fixed by CSS now (15 Nov 2026) — the old
-        // persisted drag height (skillzify_panel_h) is no longer applied.
       } catch (e) {}
       var handle = document.getElementById("sidebar-resize");
       if (!handle || !sb) return;
