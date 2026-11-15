@@ -1,11 +1,15 @@
 /* ============================================================
-   Skillzify v2 — compiler.js (Code Studio)
+   Skillzify v2 — compiler.js (Code Studio 2.0)
    VS Code-like Python IDE:
+   - Monaco editor (the real VS Code engine) with per-file models,
+     a plain-textarea fallback when the CDN is unreachable
    - multi-file workspace (localStorage) with tabs + explorer
    - Pyodide execution (all files visible to imports)
-   - terminal / problems / output-history panel
+   - terminal / problems / output-history panel, live problems,
+     clickable tracebacks, restartable kernel
+   - AI in the editor: Ctrl+I inline edit with a diff preview,
+     selection actions, error -> AI Fix, plus the sidebar chat
    - search across files, find/replace, code history
-   - AI Generate / Explain / Fix via backend
    ============================================================ */
 (function () {
   "use strict";
@@ -16,16 +20,25 @@
   var AI_KEY = "skillzify_ai_key";
   var CM_THEME_KEY = "skillzify_cm_theme";
   var CM_FONT_KEY = "skillzify_cm_font";
+  var TAB_KEY = "skillzify_tab_size";
+  var CHAT_KEY = "skillzify_ai_chat";
+  var SEC_KEY = "skillzify_side_secs";
 
   var pyodide = null;
   var pyodideLoading = false; // guards double-load + retry (P2-35)
-  var editor = null;
+  var editor = null;           // facade: Monaco adapter OR textarea fallback
+  var monacoEd = null;         // raw Monaco editor instance (null in fallback mode)
+  var monacoDiffEd = null;     // diff editor while an AI proposal is shown
   var ws = null;               // {files:{}, tabs:[], active}
   var lastError = "";
+  var lastErrorInfo = null;    // {file, line} parsed from the last traceback
   var runToken = 0;
   var RUN_TIMEOUT_MS = 15000;
   var outHistory = [];
   var problems = [];
+  var outlineSyms = [];   // symbols of the active file (Outline section)
+  var outlineFilter = "";
+  var pkgVersion = {};    // package name -> version string, once installed
 
   /* Panel height clamp — the terminal may only grow by dragging (or the
      maximize toggle) and must never push the status bar off-screen.
@@ -116,8 +129,11 @@
   function updateDirtyTab() {
     try {
       if (!ws || !ws.active) return;
+      var dirty = !!(editor && editor.getValue() !== ws.files[ws.active]);
       var tab = document.querySelector('.tab[data-tab="' + ws.active + '"]');
-      if (tab) tab.classList.toggle("dirty", !!(editor && editor.getValue() !== ws.files[ws.active]));
+      if (tab) tab.classList.toggle("dirty", dirty);
+      var dot = document.querySelector('.file-item[data-file="' + ws.active.replace(/"/g, "") + '"] .fdirty');
+      if (dot) dot.classList.toggle("on", dirty);
     } catch (e) {}
   }
 
@@ -189,15 +205,20 @@
 
   function renderExplorer() {
     var host = document.getElementById("file-list");
+    if (!host) return;
     var names = Object.keys(ws.files).sort();
     host.innerHTML = names.map(function (n) {
       return '<div class="file-item' + (n === ws.active ? " active" : "") + '" data-file="' + esc(n) + '">' +
-        '<span>🐍</span><span class="fname">' + esc(n) + '</span>' +
-        '<button class="fdel" data-del="' + esc(n) + '" title="Delete">✕</button></div>';
+        '<span class="fglyph">🐍</span><span class="fname">' + esc(n) + '</span>' +
+        '<span class="fdirty" title="Unsaved changes"></span>' +
+        '<span class="frow-acts">' +
+        '<button class="fact" data-ren="' + esc(n) + '" title="Rename">✎</button>' +
+        '<button class="fact fdel" data-del="' + esc(n) + '" title="Delete">✕</button></span></div>';
     }).join("");
     host.querySelectorAll(".file-item").forEach(function (el) {
       el.addEventListener("click", function (e) {
-        if (e.target.hasAttribute("data-del")) return;
+        if (e.target.closest && (e.target.closest("[data-del]") || e.target.closest("[data-ren]"))) return;
+        if (e.target.classList && e.target.classList.contains("fname-edit")) return;
         openFile(el.getAttribute("data-file"));
       });
     });
@@ -207,6 +228,77 @@
         deleteFile(b.getAttribute("data-del"));
       });
     });
+    host.querySelectorAll("[data-ren]").forEach(function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        startRename(b.getAttribute("data-ren"));
+      });
+    });
+    var foot = document.getElementById("explorer-foot");
+    if (foot) {
+      var lines = 0;
+      names.forEach(function (n) { lines += String(ws.files[n] || "").split("\n").length; });
+      foot.textContent = names.length + (names.length === 1 ? " file" : " files") + " · " + lines + " lines";
+    }
+    updateDirtyTab();
+  }
+
+  /* Inline rename (VS Code style): the row's name becomes an input;
+     Enter / blur commits, Esc cancels. */
+  function startRename(name) {
+    var row = document.querySelector('.file-item[data-file="' + name.replace(/"/g, "") + '"]');
+    if (!row) return;
+    var span = row.querySelector(".fname");
+    if (!span || row.querySelector(".fname-edit")) return;
+    var input = document.createElement("input");
+    input.className = "fname-edit";
+    input.value = name;
+    input.setAttribute("aria-label", "Rename file");
+    span.replaceWith(input);
+    input.focus();
+    var dot = name.lastIndexOf(".");
+    try { input.setSelectionRange(0, dot > 0 ? dot : name.length); } catch (e) {}
+    var done = false;
+    function commit() {
+      if (done) return;
+      done = true;
+      renameFile(name, input.value);
+    }
+    function cancel() {
+      if (done) return;
+      done = true;
+      renderExplorer();
+    }
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); commit(); }
+      else if (e.key === "Escape") { e.preventDefault(); cancel(); }
+      e.stopPropagation();
+    });
+    input.addEventListener("blur", commit);
+    input.addEventListener("click", function (e) { e.stopPropagation(); });
+  }
+  function renameFile(oldName, rawNew) {
+    var n = validName(rawNew);
+    if (!n) { toast("Invalid name — use letters, numbers, _ or -", "error"); renderExplorer(); return; }
+    if (n === oldName) { renderExplorer(); return; }
+    if (ws.files.hasOwnProperty(n)) { toast("File already exists", "error"); renderExplorer(); return; }
+    persistActiveFile();
+    ws.files[n] = ws.files[oldName];
+    delete ws.files[oldName];
+    if (!ws.mtimes) ws.mtimes = {};
+    ws.mtimes[n] = Date.now();
+    delete ws.mtimes[oldName];
+    if (!ws.deleted) ws.deleted = {};
+    ws.deleted[oldName] = Date.now(); // tombstone the old name, like a delete
+    delete ws.deleted[n];
+    ws.tabs = ws.tabs.map(function (t) { return t === oldName ? n : t; });
+    if (editor && editor.__dropFile) editor.__dropFile(oldName); // retire the old Monaco model
+    if (ws.active === oldName) {
+      ws.active = n;
+      if (editor) editor.setValue(ws.files[n]);
+    }
+    saveWS(); renderExplorer(); renderTabs(); updateStatusBar();
+    toast("Renamed to " + n, "success");
   }
 
   function renderTabs() {
@@ -235,6 +327,7 @@
     var sf = document.getElementById("st-file");
     if (sf) sf.textContent = ws.active || "—";
     document.getElementById("welcome").style.display = ws.active ? "none" : "flex";
+    try { renderOutline(); } catch (e) {}
   }
 
   function openFile(name) {
@@ -244,6 +337,7 @@
     if (ws.tabs.indexOf(name) < 0) ws.tabs.push(name);
     if (editor) { editor.setValue(ws.files[name]); editor.focus(); }
     saveWS(); renderExplorer(); renderTabs(); updateStatusBar();
+    refreshMarkers();
   }
   function closeTab(name) {
     persistActiveFile();
@@ -272,6 +366,7 @@
     if (!confirm("Delete " + name + "?")) return;
     persistActiveFile();
     delete ws.files[name];
+    if (editor && editor.__dropFile) editor.__dropFile(name); // dispose its Monaco model too
     if (!ws.mtimes) ws.mtimes = {};
     delete ws.mtimes[name];
     if (!ws.deleted) ws.deleted = {};
@@ -287,9 +382,9 @@
   }
 
   /* ================= editor fallback (P1-7) =================
-     Plain <textarea> editor with the CodeMirror-shaped API the rest
-     of compiler.js uses, so code can still be typed, searched and run
-     when the CodeMirror CDN fails (editor == null otherwise leaves a
+     Plain <textarea> editor with the same facade API the rest of
+     compiler.js uses, so code can still be typed, searched and run
+     when the Monaco CDN fails (editor == null otherwise leaves a
      silently empty editor area). No syntax highlighting — everything
      else (get/set value, cursor, find/replace, Ctrl+Enter to run)
      keeps working. */
@@ -305,6 +400,7 @@
     ta.setAttribute("spellcheck", "false");
     ta.setAttribute("aria-label", "Code editor (plain-text fallback)");
     try { ta.style.fontSize = curFont() + "px"; } catch (e) {}
+    try { ta.style.tabSize = String(curTabSize()); } catch (e) {}
     host.appendChild(ta);
     var opts = { theme: "dracula", lineWrapping: false };
     var handlers = {};
@@ -381,12 +477,424 @@
           } catch (e) {}
         }
         if (k === "fontSize") { try { ta.style.fontSize = (parseInt(v, 10) || 14) + "px"; } catch (e) {} }
+        if (k === "tabSize") { try { ta.style.tabSize = String(parseInt(v, 10) || 4); } catch (e) {} }
       },
       getOption: function (k) { return opts[k]; },
       refresh: function () {},
       on: function (ev, fn) { (handlers[ev] = handlers[ev] || []).push(fn); },
       addKeyMap: function () {}
     };
+  }
+
+  /* ================= Monaco editor (Code Studio 2.0) =================
+     The real VS Code engine, loaded from the pinned CDN in
+     compiler.html. The adapter exposes the same facade API the rest
+     of compiler.js was written against (getValue / setValue /
+     getCursor / …), so the workspace, runner and AI code did not
+     change shape. Each workspace file gets its OWN Monaco model, so
+     undo history and scroll state survive tab switches — like VS
+     Code. If the CDN is unreachable the textarea fallback above is
+     used instead and the page stays fully functional. */
+  var MONACO_THEME_MAP = { "dracula": "skz-dracula", "material-darker": "skz-material", "nord": "skz-nord", "monokai": "monokai", "eclipse": "vs" };
+  function minimapOn() {
+    try { return localStorage.getItem("skillzify_minimap") !== "0"; } catch (e) { return true; }
+  }
+  function defineMonacoThemes(monaco) {
+    monaco.editor.defineTheme("skz-dracula", {
+      base: "vs-dark", inherit: true,
+      rules: [
+        { token: "comment", foreground: "6272a4", fontStyle: "italic" },
+        { token: "keyword", foreground: "ff79c6" },
+        { token: "string", foreground: "f1fa8c" },
+        { token: "number", foreground: "bd93f9" },
+        { token: "type", foreground: "8be9fd" },
+        { token: "identifier", foreground: "f8f8f2" },
+        { token: "delimiter", foreground: "f8f8f2" }
+      ],
+      colors: { "editor.background": "#282a36", "editor.lineHighlightBackground": "#44475a55", "editorLineNumber.foreground": "#6272a4", "editorCursor.foreground": "#f8f8f2", "editor.selectionBackground": "#44475a" }
+    });
+    monaco.editor.defineTheme("skz-material", {
+      base: "vs-dark", inherit: true,
+      rules: [
+        { token: "comment", foreground: "546e7a", fontStyle: "italic" },
+        { token: "keyword", foreground: "c792ea" },
+        { token: "string", foreground: "c3e88d" },
+        { token: "number", foreground: "f78c6c" },
+        { token: "type", foreground: "ffcb6b" },
+        { token: "identifier", foreground: "eeffff" },
+        { token: "delimiter", foreground: "89ddff" }
+      ],
+      colors: { "editor.background": "#212121", "editor.lineHighlightBackground": "#2a2a2a", "editorLineNumber.foreground": "#424242", "editorCursor.foreground": "#ffcc00", "editor.selectionBackground": "#214283" }
+    });
+    monaco.editor.defineTheme("skz-nord", {
+      base: "vs-dark", inherit: true,
+      rules: [
+        { token: "comment", foreground: "616e88", fontStyle: "italic" },
+        { token: "keyword", foreground: "81a1c1" },
+        { token: "string", foreground: "a3be8c" },
+        { token: "number", foreground: "b48ead" },
+        { token: "type", foreground: "8fbcbb" },
+        { token: "identifier", foreground: "d8dee9" },
+        { token: "delimiter", foreground: "eceff4" }
+      ],
+      colors: { "editor.background": "#2e3440", "editor.lineHighlightBackground": "#3b4252", "editorLineNumber.foreground": "#4c566a", "editorCursor.foreground": "#d8dee9", "editor.selectionBackground": "#434c5e" }
+    });
+  }
+
+  function makeMonacoEditor(host, initialValue) {
+    var monaco = window.monaco;
+    defineMonacoThemes(monaco);
+    var mount = document.createElement("div");
+    mount.id = "monaco-host";
+    host.appendChild(mount);
+    var theme = "dracula";
+    try { theme = localStorage.getItem(CM_THEME_KEY) || "dracula"; } catch (e) {}
+    var models = {};     // filename -> ITextModel
+    var viewStates = {}; // filename -> saved view state
+    var curName = ws && ws.active ? ws.active : null;
+    function modelFor(name, value) {
+      var key = name || "__scratch__";
+      if (!models[key]) models[key] = monaco.editor.createModel(value == null ? "" : String(value), "python");
+      return models[key];
+    }
+    var ed = monaco.editor.create(mount, {
+      model: modelFor(curName, initialValue),
+      theme: MONACO_THEME_MAP[theme] || "skz-dracula",
+      fontFamily: "'JetBrains Mono', monospace",
+      fontSize: curFont(),
+      minimap: { enabled: minimapOn() },
+      automaticLayout: true,
+      bracketPairColorization: { enabled: true },
+      guides: { bracketPairs: true, indentation: true },
+      stickyScroll: { enabled: true },
+      wordWrap: "off",
+      tabSize: curTabSize(),
+      insertSpaces: true,
+      scrollBeyondLastLine: false,
+      renderWhitespace: "selection",
+      smoothScrolling: true,
+      cursorBlinking: "smooth",
+      padding: { top: 8 }
+    });
+    monacoEd = ed;
+    registerAiActions(ed);
+    var opts = { theme: theme, lineWrapping: false };
+    var handlers = {};
+    function fire(ev) { (handlers[ev] || []).forEach(function (fn) { try { fn(); } catch (e) {} }); }
+    ed.onDidChangeModelContent(function () { fire("change"); });
+    ed.onDidChangeCursorPosition(function () { fire("cursorActivity"); });
+    function curModel() { return ed.getModel(); }
+    function offToPos(model, off) {
+      var p = model.getPositionAt(Math.max(0, off));
+      return { line: p.lineNumber - 1, ch: p.column - 1 };
+    }
+    function posToOff(model, pos) {
+      return model.getOffsetAt({ lineNumber: (pos && pos.line || 0) + 1, column: (pos && pos.ch || 0) + 1 });
+    }
+    function showFile(name, value) {
+      var cur = ed.getModel();
+      if (curName && models[curName] === cur) { try { viewStates[curName] = ed.saveViewState(); } catch (e) {} }
+      curName = name;
+      var m = modelFor(name, value);
+      if (value != null && m.getValue() !== value) m.setValue(value);
+      if (ed.getModel() !== m) ed.setModel(m);
+      if (name && viewStates[name]) { try { ed.restoreViewState(viewStates[name]); } catch (e) {} }
+    }
+    function makeSearchCursor(q, fromPos, opts2) {
+      var model = curModel();
+      var fold = !!(opts2 && opts2.caseFold);
+      var needle = fold ? String(q).toLowerCase() : String(q);
+      var at = fromPos ? posToOff(model, fromPos) : 0;
+      var cur = { fromOff: -1, toOff: -1 };
+      function hay() { var v = model.getValue(); return fold ? v.toLowerCase() : v; }
+      function findNext() {
+        var i = hay().indexOf(needle, at);
+        if (i < 0) return false;
+        cur.fromOff = i; cur.toOff = i + needle.length; at = cur.toOff;
+        return true;
+      }
+      function findPrevious() {
+        var i = hay().lastIndexOf(needle, Math.max(0, at - needle.length - 1));
+        if (i < 0) return false;
+        cur.fromOff = i; cur.toOff = i + needle.length; at = i;
+        return true;
+      }
+      return {
+        findNext: findNext, findPrevious: findPrevious,
+        from: function () { return offToPos(model, cur.fromOff); },
+        to: function () { return offToPos(model, cur.toOff); },
+        replace: function (rep) {
+          if (cur.fromOff < 0) return;
+          var r = new monaco.Range(
+            offToPos(model, cur.fromOff).line + 1, offToPos(model, cur.fromOff).ch + 1,
+            offToPos(model, cur.toOff).line + 1, offToPos(model, cur.toOff).ch + 1);
+          model.pushEditOperations([], [{ range: r, text: String(rep) }], null);
+          at = cur.fromOff + String(rep).length;
+          cur.toOff = at;
+        }
+      };
+    }
+    return {
+      getValue: function () { var m = curModel(); return m ? m.getValue() : ""; },
+      setValue: function (v) {
+        v = String(v == null ? "" : v);
+        var name = ws && ws.active ? ws.active : null;
+        if (name !== curName) { showFile(name, v); return; }
+        var m = curModel();
+        if (m && m.getValue() !== v) m.setValue(v);
+      },
+      getCursor: function () {
+        var p = ed.getPosition();
+        return p ? { line: p.lineNumber - 1, ch: p.column - 1 } : { line: 0, ch: 0 };
+      },
+      setCursor: function (pos) {
+        var np = { lineNumber: (pos && pos.line || 0) + 1, column: (pos && pos.ch || 0) + 1 };
+        ed.setPosition(np);
+        ed.revealPositionInCenterIfOutsideViewport(np);
+      },
+      focus: function () { try { ed.focus(); } catch (e) {} },
+      getSelection: function () {
+        var s = ed.getSelection();
+        if (!s || s.isEmpty()) return "";
+        return curModel().getValueInRange(s);
+      },
+      setSelection: function (from, to) {
+        var r = new monaco.Range((from.line || 0) + 1, (from.ch || 0) + 1, (to.line || 0) + 1, (to.ch || 0) + 1);
+        ed.setSelection(r);
+        ed.revealRangeInCenterIfOutsideViewport(r);
+      },
+      scrollIntoView: function (range) {
+        if (range && range.from) {
+          ed.revealRangeInCenter(new monaco.Range(range.from.line + 1, range.from.ch + 1, (range.to ? range.to.line : range.from.line) + 1, (range.to ? range.to.ch : range.from.ch) + 1));
+        }
+      },
+      getSearchCursor: makeSearchCursor,
+      lastLine: function () { var m = curModel(); return m ? m.getLineCount() - 1 : 0; },
+      operation: function (fn) { fn(); },
+      setOption: function (k, v) {
+        opts[k] = v;
+        if (k === "theme") monaco.editor.setTheme(MONACO_THEME_MAP[v] || "vs-dark");
+        else if (k === "lineWrapping") ed.updateOptions({ wordWrap: v ? "on" : "off" });
+        else if (k === "fontSize") ed.updateOptions({ fontSize: parseInt(v, 10) || 14 });
+        else if (k === "minimap") ed.updateOptions({ minimap: { enabled: !!v } });
+        else if (k === "tabSize") ed.updateOptions({ tabSize: parseInt(v, 10) || 4 });
+      },
+      getOption: function (k) { return opts[k]; },
+      refresh: function () { try { ed.layout(); } catch (e) {} },
+      on: function (ev, fn) { (handlers[ev] = handlers[ev] || []).push(fn); },
+      addKeyMap: function () {
+        ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, function () { runCode(); });
+      },
+      __dropFile: function (name) {
+        if (models[name]) {
+          try { models[name].dispose(); } catch (e) {}
+          delete models[name];
+          delete viewStates[name];
+        }
+      }
+    };
+  }
+
+  /* Monaco bootstrap: AMD-load the editor with a timeout, so a hung
+     CDN falls back to the textarea instead of wedging the page. */
+  function initMonacoEditor(theme, font, onReady, onFail) {
+    var done = false;
+    function fail() {
+      if (done) return;
+      done = true;
+      try { onFail(); } catch (e) {}
+    }
+    try {
+      if (!window.MonacoEnvironment) {
+        var base = String(window.SKZ_MONACO_VS || "").replace(/\/vs\/?$/, "/");
+        var abs = new URL(base, location.href).href;
+        window.MonacoEnvironment = {
+          getWorkerUrl: function () {
+            var code = "self.MonacoEnvironment = { baseUrl: '" + abs + "' }; importScripts('" + abs + "vs/base/worker/workerMain.js');";
+            return URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
+          }
+        };
+      }
+    } catch (e) {}
+    var timer = setTimeout(fail, 9000);
+    try {
+      window.require(["vs/editor/editor.main"], function () {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        try {
+          editor = makeMonacoEditor(document.getElementById("editor-host"), ws.active ? ws.files[ws.active] : "");
+          registerPyCompletions(window.monaco);
+          onReady(); // wireEditor: keymap, theme/font, change + save wiring
+        } catch (e) {
+          editor = null;
+          monacoEd = null;
+          try { onFail(); } catch (e2) {}
+        }
+      }, function () { clearTimeout(timer); fail(); });
+    } catch (e) { clearTimeout(timer); fail(); }
+  }
+
+  /* ================= Python completions (local, no AI) ================= */
+  var PY_KEYWORDS = ["and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with", "yield", "True", "False", "None"];
+  var PY_BUILTINS = ["print", "input", "len", "range", "int", "str", "float", "bool", "list", "dict", "set", "tuple", "type", "isinstance", "enumerate", "zip", "map", "filter", "sorted", "reversed", "sum", "min", "max", "abs", "round", "open", "repr", "id", "help", "dir", "vars", "getattr", "setattr", "hasattr", "super", "object", "Exception", "ValueError", "TypeError", "IndexError", "KeyError", "NameError", "ZeroDivisionError"];
+  var PY_MODULE_MEMBERS = {
+    os: ["path", "getcwd", "listdir", "makedirs", "remove", "rename", "environ", "name", "sep", "urandom"],
+    sys: ["argv", "exit", "path", "platform", "version", "maxsize", "stdin", "stdout", "stderr", "setrecursionlimit", "getrecursionlimit"],
+    math: ["pi", "e", "sqrt", "floor", "ceil", "fabs", "pow", "log", "log2", "log10", "sin", "cos", "tan", "asin", "acos", "atan", "degrees", "radians", "gcd", "factorial", "inf", "nan", "isclose"],
+    random: ["random", "randint", "randrange", "choice", "choices", "shuffle", "sample", "uniform", "seed", "gauss"],
+    json: ["dumps", "loads", "dump", "load", "JSONDecodeError"],
+    re: ["match", "search", "findall", "finditer", "sub", "split", "compile", "escape", "IGNORECASE", "MULTILINE"],
+    collections: ["Counter", "defaultdict", "deque", "namedtuple", "OrderedDict", "ChainMap"],
+    itertools: ["count", "cycle", "repeat", "chain", "compress", "product", "permutations", "combinations", "accumulate", "groupby", "zip_longest"],
+    time: ["time", "sleep", "ctime", "strftime", "localtime", "gmtime", "perf_counter", "monotonic"],
+    datetime: ["datetime", "date", "time", "timedelta", "timezone", "now", "today", "utcnow", "fromisoformat"]
+  };
+  var PY_SNIPPETS = [
+    { label: "def", detail: "function definition", body: "def ${1:name}(${2:args}):\n    ${0:pass}" },
+    { label: "class", detail: "class definition", body: "class ${1:Name}:\n    def __init__(self${2:, args}):\n        ${0:pass}" },
+    { label: "for", detail: "for loop", body: "for ${1:item} in ${2:items}:\n    ${0:pass}" },
+    { label: "while", detail: "while loop", body: "while ${1:condition}:\n    ${0:pass}" },
+    { label: "if", detail: "if statement", body: "if ${1:condition}:\n    ${0:pass}" },
+    { label: "ifmain", detail: "main guard", body: "if __name__ == \"__main__\":\n    ${0:main()}" },
+    { label: "try", detail: "try / except", body: "try:\n    ${1:pass}\nexcept ${2:Exception} as e:\n    ${0:print(e)}" },
+    { label: "with", detail: "with statement", body: "with open(${1:\"file.txt\"}) as ${2:f}:\n    ${0:pass}" },
+    { label: "listcomp", detail: "list comprehension", body: "[${1:x} for ${2:x} in ${3:items}]" },
+    { label: "print", detail: "print()", body: "print(${0})" }
+  ];
+  function collectWorkspaceSymbols() {
+    var out = [], seen = {};
+    if (!ws || !ws.files) return out;
+    Object.keys(ws.files).forEach(function (fname) {
+      var src = String(ws.files[fname] || "");
+      var re = /(^|\n)[ \t]*(?:async[ \t]+)?def[ \t]+([A-Za-z_]\w*)|^[ \t]*class[ \t]+([A-Za-z_]\w*)|^[ \t]*([A-Za-z_]\w*)[ \t]*=(?!=)/gm, m;
+      while ((m = re.exec(src))) {
+        var name = m[2] || m[3] || m[4];
+        if (!name || seen[name]) continue;
+        seen[name] = 1;
+        out.push({ name: name, kind: m[2] ? "function" : (m[3] ? "class" : "variable"), file: fname });
+      }
+    });
+    return out;
+  }
+  /* ================= outline (sidebar) =================
+     Same def/class/assignment patterns collectWorkspaceSymbols uses
+     for completions, applied per line of the ACTIVE file so the
+     Outline gets line numbers + indentation depth. def/class entries
+     nest by an indent stack; assignments are listed at top level. */
+  function parseFileSymbols(src) {
+    var out = [], stack = [];
+    var lines = String(src || "").split("\n");
+    for (var i = 0; i < lines.length; i++) {
+      var raw = lines[i];
+      var indent = (raw.match(/^[ \t]*/) || [""])[0].replace(/\t/g, "    ").length;
+      var m = raw.match(/^[ \t]*(?:async[ \t]+)?def[ \t]+([A-Za-z_]\w*)/) ||
+              raw.match(/^[ \t]*class[ \t]+([A-Za-z_]\w*)/);
+      var kind = null, name = null;
+      if (m) { name = m[1]; kind = raw.match(/^[ \t]*class[ \t]/) ? "class" : "def"; }
+      else if (indent === 0) {
+        var a = raw.match(/^([A-Za-z_]\w*)[ \t]*=(?!=)/);
+        if (a) { name = a[1]; kind = "var"; }
+      }
+      if (!name) continue;
+      if (kind === "var") { out.push({ name: name, kind: kind, line: i, depth: 0 }); continue; }
+      while (stack.length && stack[stack.length - 1].indent >= indent) stack.pop();
+      out.push({ name: name, kind: kind, line: i, depth: stack.length });
+      stack.push({ indent: indent });
+    }
+    return out;
+  }
+  function renderOutline() {
+    var host = document.getElementById("outline-list");
+    if (!host || !ws) return;
+    var src = "";
+    if (ws.active) src = (editor && editor.getValue && ws.files.hasOwnProperty(ws.active)) ? editor.getValue() : (ws.files[ws.active] || "");
+    outlineSyms = parseFileSymbols(src);
+    var q = outlineFilter.trim().toLowerCase();
+    var shown = outlineSyms.filter(function (s) { return !q || s.name.toLowerCase().indexOf(q) >= 0; });
+    if (!ws.active) { host.innerHTML = '<div class="side-empty">No file open.</div>'; return; }
+    if (!shown.length) {
+      host.innerHTML = '<div class="side-empty">' + (outlineSyms.length ? "No symbols match the filter." : "No functions or classes yet.") + "</div>";
+      return;
+    }
+    host.innerHTML = shown.map(function (s) {
+      var glyph = s.kind === "def" ? "ƒ" : (s.kind === "class" ? "C" : "x");
+      return '<div class="ol-item" data-line="' + s.line + '" style="padding-left:' + (22 + s.depth * 13) + 'px">' +
+        '<span class="olg ol-k-' + s.kind + '">' + glyph + '</span>' +
+        '<span class="ol-name">' + esc(s.name) + "</span></div>";
+    }).join("");
+    host.querySelectorAll(".ol-item").forEach(function (el) {
+      el.addEventListener("click", function () {
+        var ln = +el.getAttribute("data-line");
+        if (editor) { editor.setCursor({ line: ln, ch: 0 }); editor.focus(); }
+      });
+    });
+    updateOutlineCursor();
+  }
+  /* Highlight the def/class that contains the cursor (indent stack
+     over the cached symbols — no reparse on cursor moves). */
+  function updateOutlineCursor() {
+    try {
+      if (!editor || !outlineSyms.length) return;
+      var cur = editor.getCursor().line, stack = [], curLine = -1;
+      for (var i = 0; i < outlineSyms.length; i++) {
+        var s = outlineSyms[i];
+        if (s.line > cur) break;
+        if (s.kind === "var") continue;
+        while (stack.length && stack[stack.length - 1].depth >= s.depth) stack.pop();
+        stack.push(s);
+      }
+      if (stack.length) curLine = stack[stack.length - 1].line;
+      document.querySelectorAll(".ol-item").forEach(function (el) {
+        el.classList.toggle("cur", +el.getAttribute("data-line") === curLine);
+      });
+    } catch (e) {}
+  }
+
+  function registerPyCompletions(monaco) {
+    if (!monaco || !monaco.languages || registerPyCompletions._done) return;
+    registerPyCompletions._done = true;
+    monaco.languages.registerCompletionItemProvider("python", {
+      triggerCharacters: ["."],
+      provideCompletionItems: function (model, position) {
+        var K = monaco.languages.CompletionItemKind;
+        var word = model.getWordUntilPosition(position);
+        var range = {
+          startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
+          startColumn: word.startColumn, endColumn: word.endColumn
+        };
+        var linePrefix = model.getValueInRange({ startLineNumber: position.lineNumber, startColumn: 1, endLineNumber: position.lineNumber, endColumn: position.column });
+        var suggestions = [];
+        var dot = linePrefix.match(/([A-Za-z_][\w]*)\.$/);
+        if (dot) {
+          // resolve `import x as y` aliases in the current file
+          var mod = dot[1];
+          var alias = model.getValue().match(new RegExp("import\\s+([A-Za-z_][\\w.]*)\\s+as\\s+" + mod + "\\b"));
+          if (alias) mod = alias[1].split(".")[0];
+          (PY_MODULE_MEMBERS[mod] || []).forEach(function (mem) {
+            suggestions.push({ label: mem, kind: K.Method, detail: mod + "." + mem, range: range });
+          });
+          return { suggestions: suggestions };
+        }
+        PY_KEYWORDS.forEach(function (w) { suggestions.push({ label: w, kind: K.Keyword, range: range }); });
+        PY_BUILTINS.forEach(function (w) { suggestions.push({ label: w, kind: K.Function, detail: "builtin", range: range }); });
+        collectWorkspaceSymbols().forEach(function (s) {
+          suggestions.push({
+            label: s.name,
+            kind: s.kind === "class" ? K.Class : (s.kind === "function" ? K.Function : K.Variable),
+            detail: s.kind + " · " + s.file,
+            range: range
+          });
+        });
+        PY_SNIPPETS.forEach(function (s) {
+          suggestions.push({
+            label: s.label, kind: K.Snippet, detail: s.detail, range: range,
+            insertText: s.body, insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+          });
+        });
+        return { suggestions: suggestions };
+      }
+    });
   }
 
   /* ================= helpers ================= */
@@ -421,6 +929,13 @@
       window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/" }).then(function (py) {
         pyodide = py;
         pyodideLoading = false;
+        // Make every workspace file importable right away (Run also
+        // rewrites them, but imports/checks can happen before a run).
+        try {
+          if (ws && ws.files) Object.keys(ws.files).forEach(function (n) {
+            try { py.FS.writeFile(n, ws.files[n]); } catch (e) {}
+          });
+        } catch (e) {}
         printLine("✅ Python 3.11 ready (Pyodide). Press ▶ Run.", "dim");
         setRunUI(false);
         checkProblems(true);
@@ -553,6 +1068,8 @@
      (valid Python too). */
   var BOOTSTRAP = [
     "import ast as _ast, inspect as _inspect",
+    "import os as _os",
+    "_os.environ['MPLBACKEND'] = 'agg'",
     "__uc = __USER_CODE__",
     "__tree = _ast.parse(__uc)",
     "__shadowed = False",
@@ -599,6 +1116,43 @@
     if (navigator.clipboard) navigator.clipboard.writeText(t).then(function () { toast("Terminal output copied 📋", "success"); });
   }
 
+  /* Compatibility lever: before executing, auto-load any Pyodide-bundled
+     packages the code imports (numpy, pandas, matplotlib…) so plain
+     `import numpy` just works, and pin matplotlib to the headless "agg"
+     backend. The watchdog is paused while packages download — a slow
+     first fetch must not look like an infinite loop — and re-armed when
+     execution actually starts. Any failure here falls through to a
+     normal run (the import error then surfaces in the terminal). */
+  function loadImportsThenRun(src, code) {
+    function start() {
+      restartKillTimer();
+      try { return pyodide.runPythonAsync(src); }
+      catch (e) { return Promise.reject(e); }
+    }
+    if (!pyodide.loadPackagesFromImports) return start();
+    clearKillTimer();
+    return pyodide.loadPackagesFromImports(code).then(function (loaded) {
+      try {
+        // The resolved value's shape varies by Pyodide build: an array
+        // of names on some, an array of package objects on others.
+        var names = [];
+        if (loaded && loaded.length) {
+          for (var i = 0; i < loaded.length; i++) {
+            var p = loaded[i];
+            names.push(typeof p === "string" ? p : (p && p.name) || String(p));
+          }
+        }
+        if (names.length) {
+          printLine("📦 Auto-loaded package(s): " + names.join(", "), "dim");
+          if (names.indexOf("matplotlib") !== -1) {
+            try { pyodide.runPython("import matplotlib\nmatplotlib.use('agg')"); } catch (e) {}
+          }
+        }
+      } catch (e) {}
+      return start();
+    }, function () { return start(); });
+  }
+
   /* ================= run ================= */
   function runCode() {
     if (!pyodide) {
@@ -619,6 +1173,7 @@
     clearTerminal();
     cancelStdin();
     setRunUI(true);
+    printLine("── ▶ " + ws.active + " · " + new Date().toLocaleTimeString() + " ──", "dim");
     printLine("$ python " + ws.active, "dim");
 
     // make every workspace file importable
@@ -639,20 +1194,19 @@
     var t0 = performance.now();
     restartKillTimer();
 
-    var p;
-    try {
-      // replacer FUNCTION: user code may contain $& / $' which replace() would otherwise interpret
-      var src = BOOTSTRAP.replace("__USER_CODE__", function () { return JSON.stringify(code); });
-      p = pyodide.runPythonAsync(src);
-    } catch (e) { p = Promise.reject(e); }
+    // replacer FUNCTION: user code may contain $& / $' which replace() would otherwise interpret
+    var src = BOOTSTRAP.replace("__USER_CODE__", function () { return JSON.stringify(code); });
+    var p = loadImportsThenRun(src, code);
     p.then(function () {
       if (my !== runToken) return;
       clearKillTimer();
       cancelStdin();
       var ms = Math.round(performance.now() - t0);
       drainOut();
-      printLine("✅ Finished in " + ms + " ms", "ok-meta");
+      printLine("✅ Finished in " + ms + " ms · exit 0", "ok-meta");
       lastError = "";
+      lastErrorInfo = null;
+      refreshAiChips();
       pushOutHist(true, ms);
       recordRun(true, ms);
       saveCodeHistory();
@@ -663,11 +1217,15 @@
       clearKillTimer();
       cancelStdin();
       var ms = Math.round(performance.now() - t0);
-      var short = simplifyTraceback(String((e && e.message) || e));
+      var rawMsg = String((e && e.message) || e);
+      var short = simplifyTraceback(rawMsg);
+      lastErrorInfo = parseTracebackFrame(rawMsg, ws.active);
       drainOut();
-      printLine(short, "err");
-      printLine("❌ Error after " + ms + " ms — see PROBLEMS or ask AI →", "err");
+      printTraceback(short);
+      printLine("❌ Error after " + ms + " ms · exit 1 — see PROBLEMS or ask AI →", "err");
       lastError = short;
+      refreshAiChips();
+      printAiFixRow();
       pushOutHist(false, ms);
       recordRun(false, ms);
       saveCodeHistory();
@@ -683,6 +1241,25 @@
     drainOut();
     printLine("⏹ Stopped by user.", "err");
     setRunUI(false);
+  }
+
+  /* Restart kernel: throw the Pyodide instance away and boot a fresh
+     one. Variables/globals from earlier runs are gone (that's the
+     point); workspace files are kept and rewritten into the new
+     filesystem by the loader's ready handler. */
+  function restartKernel() {
+    runToken++;
+    clearKillTimer();
+    cancelStdin();
+    pyodide = null;
+    pyodideLoading = false;
+    lastErrorInfo = null;
+    refreshMarkers();
+    clearTerminal();
+    printLine("🔄 Kernel restarted — fresh Python runtime, your files are unchanged.", "dim");
+    setRunUI(false);
+    loadPyodideRuntime();
+    toast("Python kernel restarted 🔄", "success");
   }
 
   function simplifyTraceback(msg) {
@@ -736,6 +1313,8 @@
       if (host) host.innerHTML = '<div class="empty-note">⏳ Python runtime still loading — try again in a moment.</div>';
       var badge = document.getElementById("prob-badge");
       if (badge) badge.style.display = "none";
+      var ab0 = document.getElementById("activity-problems");
+      if (ab0) ab0.style.display = "none";
       if (!silent) switchPtab("problems");
       return problems;
     }
@@ -750,6 +1329,7 @@
       }
     }
     renderProblems();
+    refreshMarkers();
     if (!silent) switchPtab("problems");
     return problems;
   }
@@ -758,6 +1338,12 @@
     var btn = document.getElementById("st-check");
     badge.style.display = problems.length ? "" : "none";
     badge.textContent = problems.length;
+    var ab = document.getElementById("activity-problems");
+    if (ab) {
+      ab.style.display = problems.length ? "" : "none";
+      var abb = document.getElementById("activity-problems-badge");
+      if (abb) abb.textContent = problems.length;
+    }
     if (btn) btn.textContent = "✓ " + problems.length + " problem" + (problems.length === 1 ? "" : "s");
     var host = document.getElementById("problems-list");
     if (!problems.length) { host.innerHTML = '<div class="empty-note">✅ No problems detected in ' + esc(ws.active || "—") + '.</div>'; return; }
@@ -842,28 +1428,61 @@
     }
   }
 
-  /* ================= search across files ================= */
+  /* ================= search across files =================
+     Live (debounced input in the terminal init section): results are
+     grouped by file with the match highlighted; a click opens the
+     file with the match selected. */
   function searchFiles(q) {
     var host = document.getElementById("search-results");
+    var countEl = document.getElementById("search-count");
     q = (q || "").trim();
-    if (!q) { host.innerHTML = ""; return; }
-    var ql = q.toLowerCase(), hits = [];
-    Object.keys(ws.files).forEach(function (name) {
+    if (!q) { host.innerHTML = ""; if (countEl) countEl.textContent = ""; return; }
+    var ql = q.toLowerCase(), total = 0, groups = [];
+    Object.keys(ws.files).sort().forEach(function (name) {
+      var hits = [];
       ws.files[name].split("\n").forEach(function (line, i) {
-        if (line.toLowerCase().indexOf(ql) >= 0) hits.push({ f: name, l: i + 1, t: line.trim().slice(0, 80) });
+        var at = line.toLowerCase().indexOf(ql);
+        if (at >= 0) hits.push({ l: i + 1, c: at, t: line });
       });
+      if (hits.length) { groups.push({ f: name, hits: hits }); total += hits.length; }
     });
-    host.innerHTML = hits.length
-      ? hits.slice(0, 100).map(function (h) {
-          return '<div class="search-hit" data-f="' + esc(h.f) + '" data-l="' + h.l + '">' +
-            '<div class="sf">' + esc(h.f) + '</div><div class="sl">line ' + h.l + ': ' + esc(h.t) + '</div></div>';
-        }).join("")
-      : '<div class="empty-note">No matches for "' + esc(q) + '"</div>';
+    if (countEl) {
+      countEl.textContent = total
+        ? total + (total === 1 ? " result" : " results") + " in " + groups.length + (groups.length === 1 ? " file" : " files")
+        : "";
+    }
+    if (!total) {
+      host.innerHTML = '<div class="empty-note">No matches for "' + esc(q) + '"</div>';
+      return;
+    }
+    var shown = 0;
+    host.innerHTML = groups.map(function (g) {
+      var head = '<div class="search-file-head"><span>🐍</span><span>' + esc(g.f) + '</span>' +
+        '<span class="cnt">' + g.hits.length + "</span></div>";
+      var rows = g.hits.map(function (h) {
+        if (shown >= 200) return "";
+        shown++;
+        var line = h.t, at = h.c;
+        // window long lines around the match so the highlight shows
+        if (line.length > 110) {
+          var from = Math.max(0, at - 40);
+          line = (from > 0 ? "…" : "") + line.slice(from, from + 110);
+          at = at - from + (from > 0 ? 1 : 0);
+        }
+        var html = esc(line.slice(0, at)) + "<mark>" + esc(line.slice(at, at + q.length)) + "</mark>" + esc(line.slice(at + q.length));
+        return '<div class="search-hit" data-f="' + esc(g.f) + '" data-l="' + h.l + '" data-c="' + h.c + '" data-len="' + q.length + '">' +
+          '<span class="sl-no">' + h.l + '</span><span class="sl">' + html + "</span></div>";
+      }).join("");
+      return head + rows;
+    }).join("") + (total > shown ? '<div class="empty-note">Showing the first ' + shown + " results — refine the search to see more.</div>" : "");
     host.querySelectorAll(".search-hit").forEach(function (el) {
       el.addEventListener("click", function () {
         openFile(el.getAttribute("data-f"));
-        var ln = +el.getAttribute("data-l") - 1;
-        if (editor) { editor.setCursor({ line: ln, ch: 0 }); editor.focus(); }
+        var ln = +el.getAttribute("data-l") - 1, c = +el.getAttribute("data-c"), len = +el.getAttribute("data-len");
+        if (editor) {
+          editor.setSelection({ line: ln, ch: c }, { line: ln, ch: c + len });
+          editor.focus();
+        }
       });
     });
   }
@@ -914,10 +1533,27 @@
   }
 
   /* ================= status bar / editor prefs ================= */
+  function currentSymbol(code, lineIdx) {
+    var lines = String(code || "").split("\n"), sym = "";
+    for (var i = 0; i <= Math.min(lineIdx, lines.length - 1); i++) {
+      var m = lines[i].match(/^\s*(?:async\s+)?(?:def|class)\s+([A-Za-z_]\w*)/);
+      if (m) sym = m[1];
+    }
+    return sym;
+  }
   function updateStatusBar() {
     if (!editor) return;
     var c = editor.getCursor();
     document.getElementById("st-pos").textContent = "Ln " + (c.line + 1) + ", Col " + (c.ch + 1);
+    // breadcrumbs: explorer › file › enclosing def/class at the cursor
+    try {
+      var bc = document.getElementById("breadcrumbs");
+      if (bc && ws.active) {
+        var sym = currentSymbol(editor.getValue(), c.line);
+        bc.innerHTML = "explorer <span class='sep'>›</span> " + esc(ws.active) +
+          (sym ? " <span class='sep'>›</span> " + esc(sym) : "");
+      }
+    } catch (e) {}
     // refresh dirty dot without full re-render
     if (ws.active) {
       var tab = document.querySelector('.tab[data-tab="' + ws.active.replace(/"/g, "") + '"]');
@@ -929,23 +1565,44 @@
     try { localStorage.setItem(CM_THEME_KEY, t); } catch (e) {}
     var sel = document.getElementById("theme-select");
     if (sel) sel.value = t;
+    try {
+      document.querySelectorAll(".swatch").forEach(function (s) {
+        s.classList.toggle("on", s.getAttribute("data-theme-val") === t);
+      });
+    } catch (e) {}
     var st = document.getElementById("st-theme");
     if (st) st.textContent = t.charAt(0).toUpperCase() + t.slice(1).replace("-darker", "");
   }
   function applyFont(px) {
     px = Math.max(10, Math.min(24, px));
-    var cm = document.querySelector("#editor-host .CodeMirror");
-    if (cm) cm.style.fontSize = px + "px";
-    // P2-59: no CodeMirror node in fallback mode — size the fallback
-    // textarea through its setOption instead.
-    else if (editor) { try { editor.setOption("fontSize", px); } catch (e) {} }
+    // Both editors honour a "fontSize" option through the facade —
+    // Monaco via updateOptions, the fallback textarea via its style
+    // (P2-59).
+    if (editor) { try { editor.setOption("fontSize", px); } catch (e) {} }
     if (editor) editor.refresh();
     try { localStorage.setItem(CM_FONT_KEY, String(px)); } catch (e) {}
     var fv = document.getElementById("fs-val");
     if (fv) fv.textContent = px + "px";
+    var fr = document.getElementById("fs-range");
+    if (fr && +fr.value !== px) fr.value = px;
   }
   function curFont() {
     try { return parseInt(localStorage.getItem(CM_FONT_KEY) || "14", 10) || 14; } catch (e) { return 14; }
+  }
+  function curTabSize() {
+    try {
+      var n = parseInt(localStorage.getItem(TAB_KEY) || "4", 10);
+      return [2, 4, 8].indexOf(n) >= 0 ? n : 4;
+    } catch (e) { return 4; }
+  }
+  function applyTabSize(n) {
+    n = [2, 4, 8].indexOf(+n) >= 0 ? +n : 4;
+    if (editor) { try { editor.setOption("tabSize", n); } catch (e) {} }
+    try { localStorage.setItem(TAB_KEY, String(n)); } catch (e) {}
+    var sel = document.getElementById("tabsize-select");
+    if (sel) sel.value = String(n);
+    var st = document.getElementById("st-tabsize");
+    if (st) st.textContent = "Spaces: " + n;
   }
 
   /* ================= share / download / upload ================= */
@@ -1118,11 +1775,436 @@
     toast("Downloaded " + ws.active + " ⬇️", "success");
   }
 
+  /* ================= packages (stretch, Code Studio 2.0) =================
+     A small curated shelf: Pyodide-bundled wheels install via
+     loadPackage; pure-Python wheels via micropip. Installs live in
+     the current kernel only — a restart clears them, like a real
+     ephemeral environment. Status is reported in the terminal. */
+  var PKGS = [
+    { name: "numpy", how: "bundle" },
+    { name: "pandas", how: "bundle" },
+    { name: "matplotlib", how: "bundle" },
+    { name: "tabulate", how: "pip" },
+    { name: "emoji", how: "pip" }
+  ];
+  var pkgState = {}; // name -> "installing" | "installed"
+  function renderPackages() {
+    var host = document.getElementById("pkg-list");
+    if (!host) return;
+    host.innerHTML = PKGS.map(function (p) {
+      var st = pkgState[p.name];
+      var state = st === "installed"
+        ? '<span class="pkg-ver">✓ Installed' + (pkgVersion[p.name] ? " · v" + esc(pkgVersion[p.name]) : "") + "</span>"
+        : st === "installing"
+          ? '<span class="pkg-spin">⟳</span> Installing…'
+          : (p.how === "bundle" ? "built into Pyodide" : "via micropip");
+      return '<div class="pkg-row"><span class="pkg-name">' + esc(p.name) + '</span>' +
+        '<span class="pkg-state">' + state + '</span>' +
+        '<button class="mini-btn" data-pkg="' + esc(p.name) + '"' + (st ? " disabled" : "") + '>Install</button></div>';
+    }).join("");
+    host.querySelectorAll("[data-pkg]").forEach(function (b) {
+      b.addEventListener("click", function () { installPackage(b.getAttribute("data-pkg")); });
+    });
+  }
+  function installPackage(name) {
+    var p = null;
+    PKGS.forEach(function (x) { if (x.name === name) p = x; });
+    if (!p || pkgState[name]) return;
+    if (!pyodide) { toast("Python runtime is still loading — try again in a moment", "error"); return; }
+    pkgState[name] = "installing";
+    renderPackages();
+    switchPtab("terminal");
+    printLine("📦 Installing " + name + "…", "dim");
+    function done(ok, msg) {
+      if (ok) {
+        pkgState[name] = "installed";
+        // Report the version where the package exposes one.
+        try {
+          var v = pyodide.runPython("import " + name + "\ngetattr(" + name + ", '__version__', '')");
+          if (v) pkgVersion[name] = String(v);
+        } catch (e) {}
+      } else delete pkgState[name];
+      renderPackages();
+      printLine(ok ? "✅ " + name + " installed — `import " + name + "` works now."
+        : "❌ Could not install " + name + (msg ? " — " + msg : ""), ok ? "ok-meta" : "err");
+    }
+    try {
+      if (p.how === "bundle") {
+        pyodide.loadPackage(name).then(function () { done(true); },
+          function (e) { done(false, String((e && e.message) || e).slice(0, 140)); });
+      } else {
+        pyodide.loadPackage("micropip").then(function () {
+          return pyodide.pyimport("micropip").install(name);
+        }).then(function () { done(true); },
+          function (e) { done(false, String((e && e.message) || e).slice(0, 140)); });
+      }
+    } catch (e) { done(false, String((e && e.message) || e).slice(0, 140)); }
+  }
+
+  /* ================= AI in the editor (Code Studio 2.0) =================
+     Ctrl+I inline edit, right-click selection actions and the
+     terminal's AI Fix all funnel into ONE proposal flow: the AI's
+     code is shown as a Monaco diff over the current file, and only
+     an explicit Accept touches the model. In fallback-editor mode
+     there is no diff view — the sidebar Fix button (direct apply)
+     remains the path there. */
+  function registerAiActions(ed) {
+    var monaco = window.monaco;
+    ed.addAction({
+      id: "skz-ai-inline", label: "✨ AI: Edit with instruction…",
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyI],
+      contextMenuGroupId: "ai", contextMenuOrder: 1,
+      run: function () { openInlineAi(); }
+    });
+    ed.addAction({
+      id: "skz-ai-explain", label: "✨ AI: Explain selection",
+      contextMenuGroupId: "ai", contextMenuOrder: 2, precondition: "editorHasSelection",
+      run: function () { aiExplainSelection(); }
+    });
+    ed.addAction({
+      id: "skz-ai-improve", label: "✨ AI: Improve selection",
+      contextMenuGroupId: "ai", contextMenuOrder: 3, precondition: "editorHasSelection",
+      run: function () { aiEditWithInstruction("Improve this code: make it cleaner, more readable and more Pythonic. Keep exactly the same behaviour and the same function/variable names where possible."); }
+    });
+    ed.addAction({
+      id: "skz-ai-comment", label: "✨ AI: Add comments to selection",
+      contextMenuGroupId: "ai", contextMenuOrder: 4, precondition: "editorHasSelection",
+      run: function () { aiEditWithInstruction("Add clear, beginner-friendly comments to this code. Do not change any code — only add or improve comments."); }
+    });
+  }
+  function aiTargetRange() {
+    if (!monacoEd) return null;
+    var model = monacoEd.getModel();
+    if (!model) return null;
+    var sel = monacoEd.getSelection();
+    if (sel && !sel.isEmpty()) return { range: sel, text: model.getValueInRange(sel) };
+    var pos = monacoEd.getPosition();
+    if (!pos) return null;
+    var lineText = model.getLineContent(pos.lineNumber);
+    if (!lineText.trim()) {
+      return { range: model.getFullModelRange(), text: model.getValue() };
+    }
+    return { range: new window.monaco.Range(pos.lineNumber, 1, pos.lineNumber, model.getLineMaxColumn(pos.lineNumber)), text: lineText };
+  }
+  function openInlineAi() {
+    if (!monacoEd || !ws.active) { toast("Open a file first", "error"); return; }
+    var host = document.getElementById("editor-host");
+    var box = document.getElementById("inline-ai");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "inline-ai";
+      box.innerHTML = '<input id="inline-ai-input" placeholder="Tell the AI what to change… e.g. turn this into a while loop" aria-label="AI edit instruction">' +
+        '<div class="ia-hint">Enter generates a diff to review · Esc cancels · targets the selection, or the current line</div>';
+      host.appendChild(box);
+      var inp = box.querySelector("input");
+      inp.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          var v = inp.value.trim();
+          box.classList.remove("on");
+          if (v) aiEditWithInstruction(v);
+          else if (monacoEd) monacoEd.focus();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          box.classList.remove("on");
+          if (monacoEd) monacoEd.focus();
+        }
+      });
+    }
+    var pos = monacoEd.getPosition();
+    var coords = null;
+    try { coords = pos ? monacoEd.getScrolledVisiblePosition(pos) : null; } catch (e) {}
+    if (coords) {
+      box.style.left = Math.max(8, Math.min(coords.left, Math.max(8, host.clientWidth - 500))) + "px";
+      box.style.top = Math.min(coords.top + 26, Math.max(8, host.clientHeight - 90)) + "px";
+    } else { box.style.left = "16px"; box.style.top = "16px"; }
+    box.classList.add("on");
+    var input = box.querySelector("input");
+    input.value = "";
+    input.focus();
+  }
+  function extractAiCode(text, mode) {
+    var m = String(text || "").match(/```(?:python)?\n?([\s\S]*?)```/i);
+    if (m) return m[1].replace(/\s+$/, "");
+    if (mode === "generate" || mode === "fix") {
+      var t = String(text || "").trim();
+      return t || null;
+    }
+    return null;
+  }
+  function aiEditWithInstruction(instruction) {
+    if (!monacoEd || !ws.active) { toast("Inline AI needs the full editor", "error"); return; }
+    var AI = window.SkillzifyAI;
+    if (!AI) { toast("AI module didn't load", "error"); return; }
+    var t = aiTargetRange();
+    if (!t) return;
+    showDiff(null, null, "🤖 " + instruction);
+    AI.ask({
+      mode: "generate",
+      code: "INSTRUCTION: " + instruction + "\n\nRewrite the Python code below following the instruction. Output ONLY the rewritten code inside a single ```python fenced block — no explanations, no extra text.\n\nCODE:\n" + t.text,
+      error: ""
+    }, function (err, res) {
+      if (err) {
+        closeDiff();
+        toast("AI didn't answer — " + ((err && err.message) || "backend error"), "error");
+        return;
+      }
+      var code = extractAiCode(res && res.text, "generate");
+      if (!code) {
+        closeDiff();
+        renderAi("<h4>🤖 Inline AI</h4><p>" + esc((res && res.text) || "Empty answer.") + "</p>");
+        return;
+      }
+      var model = monacoEd.getModel();
+      var full = model.getValue();
+      var startOff = model.getOffsetAt(t.range.getStartPosition());
+      var endOff = model.getOffsetAt(t.range.getEndPosition());
+      showDiff(full, full.slice(0, startOff) + code + full.slice(endOff), "AI edit — review the diff");
+    });
+  }
+  function aiExplainSelection() {
+    if (!monacoEd) return;
+    var sel = monacoEd.getSelection();
+    var model = monacoEd.getModel();
+    if (!sel || sel.isEmpty() || !model) { toast("Select some code first", "error"); return; }
+    aiCall({ mode: "", code: model.getValueInRange(sel), error: "" }, "explanation", null);
+  }
+  function aiFixWithDiff() {
+    if (!ws.active || !lastError) return;
+    persistActiveFile();
+    if (!monacoEd) {
+      var fb = document.getElementById("fix-code-btn");
+      if (fb) fb.click();
+      return;
+    }
+    var AI = window.SkillzifyAI;
+    if (!AI) { toast("AI module didn't load", "error"); return; }
+    showDiff(null, null, "🤖 Fixing " + ws.active + "…");
+    AI.ask({ mode: "fix", code: ws.files[ws.active], error: lastError }, function (err, res) {
+      if (err) {
+        closeDiff();
+        renderAi("<h4>⚠️ AI unavailable</h4><p>" + esc((err && err.message) || "The backend didn't answer.") + "</p>" +
+          "<p class='hint'>Showing the offline explainer instead — this isn't the AI's answer.</p>" +
+          AI.explainErrorHTML(lastError));
+        return;
+      }
+      var code = extractAiCode(res && res.text, "fix");
+      if (!code) { closeDiff(); toast("The AI didn't return a fix", "error"); return; }
+      showDiff(monacoEd.getModel().getValue(), code, "AI fix — review the diff");
+    });
+  }
+
+  /* ---- diff overlay (one proposal at a time) ---- */
+  var diffState = null;
+  function ensureDiffOverlay() {
+    var ov = document.getElementById("diff-overlay");
+    if (ov) return ov;
+    ov = document.createElement("div");
+    ov.id = "diff-overlay";
+    ov.innerHTML = '<div class="diff-bar"><span class="t" id="diff-title">AI proposal</span>' +
+      '<span style="color:var(--ide-muted)" id="diff-note"></span><span class="sp"></span>' +
+      '<button class="mini-btn primary" id="diff-accept">✓ Accept</button>' +
+      '<button class="mini-btn" id="diff-reject">✕ Reject</button></div><div id="diff-host"></div>';
+    document.getElementById("editor-host").appendChild(ov);
+    document.getElementById("diff-accept").addEventListener("click", acceptDiff);
+    document.getElementById("diff-reject").addEventListener("click", function () { closeDiff(); });
+    return ov;
+  }
+  function showDiff(original, proposed, label) {
+    if (!monacoEd) return;
+    var monaco = window.monaco;
+    var ov = ensureDiffOverlay();
+    ov.classList.add("on");
+    document.getElementById("diff-title").textContent = label || "AI proposal";
+    if (!monacoDiffEd) {
+      monacoDiffEd = monaco.editor.createDiffEditor(document.getElementById("diff-host"), {
+        theme: MONACO_THEME_MAP[editor.getOption("theme")] || "skz-dracula",
+        originalEditable: false,
+        readOnly: true,
+        renderSideBySide: true,
+        automaticLayout: true,
+        minimap: { enabled: false },
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: curFont(),
+        scrollBeyondLastLine: false
+      });
+    }
+    if (original == null) {
+      document.getElementById("diff-note").textContent = "thinking…";
+      return;
+    }
+    document.getElementById("diff-note").textContent = "green/red shows what changes — Accept applies it to your file";
+    if (diffState) { try { diffState.om.dispose(); diffState.mm.dispose(); } catch (e) {} diffState = null; }
+    var om = monaco.editor.createModel(original, "python");
+    var mm = monaco.editor.createModel(proposed, "python");
+    monacoDiffEd.setModel({ original: om, modified: mm });
+    diffState = { proposed: proposed, om: om, mm: mm };
+  }
+  function closeDiff() {
+    var ov = document.getElementById("diff-overlay");
+    if (ov) ov.classList.remove("on");
+    if (diffState) {
+      try { diffState.om.dispose(); diffState.mm.dispose(); } catch (e) {}
+      diffState = null;
+    }
+    if (monacoEd) monacoEd.focus();
+  }
+  function acceptDiff() {
+    if (!diffState || !monacoEd) { closeDiff(); return; }
+    var model = monacoEd.getModel();
+    if (!model) { closeDiff(); return; }
+    var proposed = diffState.proposed;
+    model.pushEditOperations([], [{ range: model.getFullModelRange(), text: proposed }], null);
+    closeDiff();
+    persistActiveFile(); saveWS(); renderTabs(); updateStatusBar();
+    toast("AI edit applied ✓ — press Run to test it", "success");
+  }
+
+  /* ---- error markers + traceback tools ---- */
+  function refreshMarkers() {
+    if (!monacoEd || !ws || !ws.active) return;
+    var model = monacoEd.getModel();
+    if (!model) return;
+    var monaco = window.monaco;
+    var marks = [];
+    function col(line) {
+      try { return Math.max(2, model.getLineMaxColumn(Math.min(line, model.getLineCount()))); } catch (e) { return 2; }
+    }
+    problems.forEach(function (p) {
+      if (p.file === ws.active && p.line) {
+        marks.push({ severity: monaco.MarkerSeverity.Error, message: p.msg, startLineNumber: p.line, startColumn: 1, endLineNumber: p.line, endColumn: col(p.line) });
+      }
+    });
+    if (lastErrorInfo && lastErrorInfo.file === ws.active && lastErrorInfo.line) {
+      marks.push({ severity: monaco.MarkerSeverity.Error, message: lastErrorInfo.msg || "Runtime error", startLineNumber: lastErrorInfo.line, startColumn: 1, endLineNumber: lastErrorInfo.line, endColumn: col(lastErrorInfo.line) });
+    }
+    monaco.editor.setModelMarkers(model, "skillzify", marks);
+  }
+  function parseTracebackFrame(raw, activeFile) {
+    var found = null;
+    String(raw || "").split("\n").forEach(function (l) {
+      var m = l.match(/File "([^"]+)", line (\d+)/);
+      if (!m) return;
+      if (m[1] === "<code-studio>") found = { file: activeFile, line: +m[2] };
+      else if (ws && ws.files && ws.files.hasOwnProperty(m[1])) found = { file: m[1], line: +m[2] };
+    });
+    if (found) found.msg = simplifyTraceback(raw).split("\n").pop() || "Runtime error";
+    return found;
+  }
+  function printTraceback(text) {
+    var con = document.getElementById("console");
+    String(text).split("\n").forEach(function (line) {
+      var d = document.createElement("div");
+      d.className = "err";
+      var m = line.match(/^(.*File )"([^"]+)"(, line )(\d+)(.*)$/);
+      var linkable = m && (m[2] === "<code-studio>" || (ws.files && ws.files.hasOwnProperty(m[2])));
+      if (linkable) {
+        var file = m[2] === "<code-studio>" ? ws.active : m[2];
+        var ln = +m[4];
+        d.appendChild(document.createTextNode(m[1] + '"' + m[2] + '"' + m[3]));
+        var a = document.createElement("span");
+        a.className = "tb-link";
+        a.textContent = m[4];
+        a.title = "Go to " + file + ":" + ln;
+        a.addEventListener("click", function () { gotoFileLine(file, ln); });
+        d.appendChild(a);
+        d.appendChild(document.createTextNode(m[5] || ""));
+      } else {
+        d.textContent = line;
+      }
+      con.appendChild(d);
+    });
+    con.scrollTop = con.scrollHeight;
+  }
+  function gotoFileLine(file, line) {
+    if (file && ws.files.hasOwnProperty(file) && file !== ws.active) openFile(file);
+    if (editor && line) {
+      editor.setCursor({ line: line - 1, ch: 0 });
+      editor.focus();
+    }
+  }
+  function printAiFixRow() {
+    if (!lastError) return;
+    var con = document.getElementById("console");
+    var row = document.createElement("div");
+    row.className = "ai-fix-row";
+    var b = document.createElement("button");
+    b.className = "ai-fix-btn";
+    b.textContent = "🔧 AI Fix — preview the corrected code as a diff";
+    b.addEventListener("click", aiFixWithDiff);
+    row.appendChild(b);
+    con.appendChild(row);
+    con.scrollTop = con.scrollHeight;
+  }
+
   /* ================= AI ================= */
   /* AI calls go through the shared client (assets/js/ai.js):
      backend -> personal key -> offline heuristic. The heuristic
      table now lives in ai.js (SkillzifyAI.explainErrorHTML). */
-  function renderAi(html) { document.getElementById("ai-output").innerHTML = html; switchView("ai"); }
+  /* The AI sidebar is a chat (Code Studio 2.0): every answer appends
+     a message to the thread in #ai-output instead of replacing it,
+     and the composer at the bottom appends the learner's questions. */
+  function aiMsgEl(html, who) {
+    var host = document.getElementById("ai-output");
+    var d = document.createElement("div");
+    d.className = "ai-msg" + (who ? " " + who : "");
+    d.innerHTML = html;
+    host.appendChild(d);
+    host.scrollTop = host.scrollHeight;
+    return d;
+  }
+  /* Chat persistence: the thread survives reloads (localStorage,
+     capped so it can never crowd out the workspace). Only FINAL
+     messages are stored — never the "Working…" placeholder. */
+  var AI_CHAT_HINT = '<p style="color:var(--ide-muted)">Ask the AI to write code, explain your file, or fix an error. Runs on the site backend — no setup needed.</p>';
+  function loadChatLog() {
+    try { var v = JSON.parse(localStorage.getItem(CHAT_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+  }
+  function persistAiMsg(html, who) {
+    try {
+      var log = loadChatLog();
+      log.push({ who: who || "", html: String(html) });
+      while (log.length > 40) log.shift();
+      var json = JSON.stringify(log);
+      while (json.length > 180000 && log.length > 1) { log.shift(); json = JSON.stringify(log); }
+      localStorage.setItem(CHAT_KEY, json);
+    } catch (e) {}
+  }
+  function restoreChat() {
+    var host = document.getElementById("ai-output");
+    if (!host) return;
+    var log = loadChatLog();
+    if (!log.length) return;
+    host.innerHTML = "";
+    log.forEach(function (m) {
+      var d = document.createElement("div");
+      d.className = "ai-msg" + (m.who ? " " + m.who : "");
+      d.innerHTML = m.html;
+      host.appendChild(d);
+    });
+    host.scrollTop = host.scrollHeight;
+  }
+  function clearChat() {
+    try { localStorage.removeItem(CHAT_KEY); } catch (e) {}
+    var host = document.getElementById("ai-output");
+    if (host) host.innerHTML = AI_CHAT_HINT;
+  }
+  /* Adaptive quick actions: the error chips exist only while there
+     is a recent run error to act on. */
+  function refreshAiChips() {
+    var has = !!lastError;
+    ["fix-code-btn", "explain-error-btn"].forEach(function (id) {
+      var b = document.getElementById(id);
+      if (b) b.classList.toggle("chip-off", !has);
+    });
+  }
+  function appendAiUser(text) {
+    var html = '<div class="who">YOU</div><div class="ai-bubble">' + esc(text) + "</div>";
+    aiMsgEl(html, "user");
+    persistAiMsg(html, "user");
+    switchView("ai");
+  }
+  function renderAi(html) { aiMsgEl(html); persistAiMsg(html); switchView("ai"); }
   // The buttons that trigger aiCall — disabled while an AI answer is in
   // flight so impatient re-clicks can't queue duplicate cap-consuming
   // requests. (Five buttons, four actions: Explain has two entry points.)
@@ -1141,21 +2223,18 @@
       return;
     }
     setAiButtons(true);
-    renderAi('<p style="color:var(--ide-muted)">🤖 Working…</p>');
+    var pending = aiMsgEl('<p style="color:var(--ide-muted)">🤖 Working…</p>');
+    switchView("ai");
     // The backend can take ~2 min on a cold start (60s timeout + retry):
     // say so after 12s instead of leaving "Working…" frozen.
     var stageTimer = setTimeout(function () {
-      // Update the waiting text without yanking the user into the AI
-      // panel: refresh the stored text always, but only switch views
-      // if the AI panel is already the one on screen.
-      document.getElementById("ai-output").innerHTML = '<p style="color:var(--ide-muted)">🤖 Still working — the AI backend is slow to wake on the free tier. Hang on…</p>';
-      var aiView = document.getElementById("view-ai");
-      if (aiView && aiView.classList.contains("active")) switchView("ai");
+      pending.innerHTML = '<p style="color:var(--ide-muted)">🤖 Still working — the AI backend is slow to wake on the free tier. Hang on…</p>';
     }, 12000);
     AI.ask({
       mode: opts.mode || "",
       code: opts.code || "",
       error: opts.error || "",
+      context: opts.context || "",
       extra: { note: "From Code Studio." }
     }, function (err, res) {
       clearTimeout(stageTimer);
@@ -1165,18 +2244,20 @@
         // returns "" for signed-in users at the 10/day cap).
         var capLink = (err.code === "DAILY_CAP" && AI.capLink) ? AI.capLink() : "";
         if (opts.error) {
-          renderAi("<h4>⚠️ AI unavailable</h4><p>" + esc(err.message || "The backend didn't answer.") + capLink + "</p>" +
+          pending.innerHTML = "<h4>⚠️ AI unavailable</h4><p>" + esc(err.message || "The backend didn't answer.") + capLink + "</p>" +
             "<p class='hint'>Showing the offline explainer instead — this isn't the AI's answer.</p>" +
-            AI.explainErrorHTML(opts.error));
+            AI.explainErrorHTML(opts.error);
         } else {
-          renderAi("<h4>⚠️ AI unavailable</h4><p>" + esc(err.message || "The backend didn't answer.") + capLink + "</p>");
+          pending.innerHTML = "<h4>⚠️ AI unavailable</h4><p>" + esc(err.message || "The backend didn't answer.") + capLink + "</p>";
         }
+        persistAiMsg(pending.innerHTML);
         return;
       }
       var text = (res && res.text) || "";
       if (!text) {
-        renderAi(opts.error ? AI.explainErrorHTML(opts.error)
-          : "<h4>⚠️ AI unavailable</h4><p>Empty answer.</p>");
+        pending.innerHTML = opts.error ? AI.explainErrorHTML(opts.error)
+          : "<h4>⚠️ AI unavailable</h4><p>Empty answer.</p>";
+        persistAiMsg(pending.innerHTML);
         return;
       }
       var m = text.match(/```(?:python)?\n?([\s\S]*?)```/i);
@@ -1196,7 +2277,10 @@
       if (res.cached) via += " (cached)";
       var html = "<h4>🤖 " + label + via + "</h4><p>" + esc(text).replace(/\n/g, "<br>") + "</p>";
       if (codeErr) html += "<p>⚠️ Couldn't load the code into the editor: " + esc(codeErr) + " — the code is shown above; copy it from there.</p>";
-      renderAi(html);
+      pending.innerHTML = html;
+      persistAiMsg(html);
+      var host = document.getElementById("ai-output");
+      if (host) host.scrollTop = host.scrollHeight;
     });
   }
 
@@ -1229,24 +2313,94 @@
     }
   }
 
-  /* ================= snippets ================= */
+  /* ================= samples & snippets (sidebar) ================= */
+  function loadSample(key) {
+    var s = SNIPPETS[key];
+    if (s && ws.active && editor) {
+      editor.setValue(s.code);
+      persistActiveFile(); saveWS(); renderTabs(); updateStatusBar();
+      toast("Sample loaded 📥", "success");
+    }
+  }
+  function renderSamples() {
+    var host = document.getElementById("sample-list");
+    if (!host) return;
+    host.innerHTML = Object.keys(SNIPPETS).map(function (k) {
+      return '<div class="sample-item" data-sample="' + esc(k) + '"><span class="sname">' + esc(SNIPPETS[k].name) + "</span></div>";
+    }).join("");
+    host.querySelectorAll("[data-sample]").forEach(function (el) {
+      el.addEventListener("click", function () { loadSample(el.getAttribute("data-sample")); });
+    });
+  }
+  function snippetList() {
+    var A = window.SkillzifyActivity;
+    try { return (A && A.snippets) ? A.snippets() : []; } catch (e) { return []; }
+  }
+  function renderSnippets() {
+    var host = document.getElementById("snip-list");
+    if (!host) return;
+    var fEl = document.getElementById("snippet-filter");
+    var q = ((fEl && fEl.value) || "").trim().toLowerCase();
+    var list = snippetList().filter(function (s) {
+      return !q || String(s.title || "").toLowerCase().indexOf(q) >= 0;
+    });
+    if (!list.length) {
+      host.innerHTML = '<div class="side-empty">' + (snippetList().length ? "No snippets match the filter." : "No saved snippets yet — ＋ saves the current file.") + "</div>";
+      return;
+    }
+    host.innerHTML = list.map(function (s) {
+      return '<div class="snip-item" data-snip="' + esc(s.id) + '"><span class="sname">' + esc(s.title || "Untitled") + '</span>' +
+        '<span class="srow-acts"><button class="fact fdel" data-sdel="' + esc(s.id) + '" title="Delete snippet">✕</button></span></div>';
+    }).join("");
+    host.querySelectorAll("[data-snip]").forEach(function (el) {
+      el.addEventListener("click", function (e) {
+        if (e.target.closest && e.target.closest("[data-sdel]")) return;
+        openSnippet(el.getAttribute("data-snip"));
+      });
+    });
+    host.querySelectorAll("[data-sdel]").forEach(function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var A = window.SkillzifyActivity;
+        var id = b.getAttribute("data-sdel");
+        var snip = null;
+        snippetList().forEach(function (s) { if (s.id === id) snip = s; });
+        if (!A || !A.deleteSnippet) return;
+        if (!confirm('Delete snippet "' + ((snip && snip.title) || "Untitled") + '"?')) return;
+        A.deleteSnippet(id);
+        renderSnippets();
+        toast("Snippet deleted", "success");
+      });
+    });
+  }
+  /* Open a saved snippet as its own file — the same landing the
+     #snippet-<id> deep link uses, so the current work is never
+     clobbered. */
+  function openSnippet(id) {
+    var snip = null;
+    snippetList().forEach(function (s) { if (s.id === id) snip = s; });
+    if (!snip || !snip.code) return;
+    persistActiveFile();
+    var base = validName((snip.title || "snippet").replace(/[^A-Za-z0-9_\- ]/g, "").trim().replace(/\s+/g, "-").toLowerCase()) || "snippet.py";
+    var fname = base, fi = 2;
+    while (ws.files.hasOwnProperty(fname)) fname = base.replace(/\.py$/, "") + "-" + (fi++) + ".py";
+    ws.files[fname] = snip.code;
+    if (!ws.mtimes) ws.mtimes = {};
+    ws.mtimes[fname] = Date.now();
+    if (ws.deleted) delete ws.deleted[fname];
+    if (ws.tabs.indexOf(fname) < 0) ws.tabs.push(fname);
+    ws.active = fname;
+    if (editor) editor.setValue(snip.code);
+    saveWS(); renderExplorer(); renderTabs(); updateStatusBar();
+    toast("Snippet loaded 📝", "success");
+  }
   function initSnippets() {
-    var sel = document.getElementById("snippet-select");
-    sel.innerHTML = '<option value="">— Load sample —</option>';
-    Object.keys(SNIPPETS).forEach(function (k) {
-      var o = document.createElement("option");
-      o.value = k; o.textContent = SNIPPETS[k].name;
-      sel.appendChild(o);
-    });
-    sel.addEventListener("change", function () {
-      var s = SNIPPETS[sel.value];
-      if (s && ws.active && editor) {
-        editor.setValue(s.code);
-        persistActiveFile(); saveWS(); renderTabs(); updateStatusBar();
-        toast("Sample loaded 📥", "success");
-      }
-      sel.value = "";
-    });
+    renderSamples();
+    renderSnippets();
+    var sf = document.getElementById("snippet-filter");
+    if (sf) sf.addEventListener("input", function () { renderSnippets(); });
+    var of = document.getElementById("outline-filter");
+    if (of) of.addEventListener("input", function () { outlineFilter = of.value; renderOutline(); });
     document.getElementById("save-snippet-btn").addEventListener("click", function () {
       var A = window.SkillzifyActivity; if (!A || !ws.active) return;
       var code = ws.files[ws.active].trim();
@@ -1254,7 +2408,34 @@
       var title = prompt("Name this snippet:", ws.active);
       if (title == null) return;
       A.saveSnippet(title.trim() || ws.active, "", code);
+      renderSnippets();
       toast("Snippet saved 📝", "success");
+    });
+  }
+
+  /* ================= sidebar accordion sections =================
+     Collapsed state persists across reloads (SEC_KEY). Clicking a
+     section header toggles it; the header's action buttons don't. */
+  function initSideSections() {
+    var state = {};
+    try { state = JSON.parse(localStorage.getItem(SEC_KEY) || "{}") || {}; } catch (e) {}
+    document.querySelectorAll(".side-sec-head").forEach(function (head) {
+      var sec = null;
+      if (head.closest) sec = head.closest(".side-sec");
+      else { var p = head.parentElement; while (p && !(p.classList && p.classList.contains("side-sec"))) p = p.parentElement; sec = p; }
+      var key = head.getAttribute("data-sec");
+      if (!sec || !key) return;
+      if (state[key]) { sec.classList.add("collapsed"); head.setAttribute("aria-expanded", "false"); }
+      head.addEventListener("click", function (e) {
+        if (e.target.closest && e.target.closest(".sec-act")) return;
+        var now = sec.classList.toggle("collapsed");
+        head.setAttribute("aria-expanded", now ? "false" : "true");
+        try {
+          var s2 = JSON.parse(localStorage.getItem(SEC_KEY) || "{}") || {};
+          s2[key] = now;
+          localStorage.setItem(SEC_KEY, JSON.stringify(s2));
+        } catch (e2) {}
+      });
     });
   }
 
@@ -1300,25 +2481,18 @@
     }
 
     guard("editor", function () {
-    if (window.CodeMirror) {
-      var theme = "dracula", font = 14;
-      try {
-        theme = localStorage.getItem(CM_THEME_KEY) || "dracula";
-        font = parseInt(localStorage.getItem(CM_FONT_KEY) || "14", 10) || 14;
-      } catch (e) {}
-      editor = window.CodeMirror(document.getElementById("editor-host"), {
-        mode: "python", theme: theme, lineNumbers: true,
-        indentUnit: 4, tabSize: 4, matchBrackets: true,
-        value: ws.active ? ws.files[ws.active] : ""
-      });
-      // move welcome overlay above editor content but below nothing else
-      var wel = document.getElementById("welcome");
-      document.getElementById("editor-host").appendChild(wel);
+    var theme0 = "dracula", font0 = 14;
+    try {
+      theme0 = localStorage.getItem(CM_THEME_KEY) || "dracula";
+      font0 = parseInt(localStorage.getItem(CM_FONT_KEY) || "14", 10) || 14;
+    } catch (e) {}
+    function wireEditor() {
       editor.addKeyMap({ "Ctrl-Enter": runCode, "Cmd-Enter": runCode });
-      applyFont(font);
-      document.getElementById("theme-select").value = theme;
-      var st = document.getElementById("st-theme");
-      if (st) st.textContent = theme.charAt(0).toUpperCase() + theme.slice(1).replace("-darker", "");
+      // keep the welcome overlay above the editor surface
+      var wel = document.getElementById("welcome");
+      if (wel) document.getElementById("editor-host").appendChild(wel);
+      applyTheme(theme0);
+      applyFont(font0);
       editor.on("cursorActivity", updateStatusBar);
       editor.on("change", function () { updateStatusBar(); markUnsaved(); });
       // auto-save workspace as they type (debounced)
@@ -1327,9 +2501,29 @@
         clearTimeout(saveT);
         saveT = setTimeout(function () { persistActiveFile(); saveWS(); }, 800);
       });
-    } else {
-      // P1-7: CodeMirror CDN failed — say so LOUDLY and fall back to a
+      // live problems: re-run the syntax check shortly after typing
+      // stops (only once the runtime exists — checkProblems without
+      // it would just report "still loading").
+      var liveT = null;
+      editor.on("change", function () {
+        clearTimeout(liveT);
+        liveT = setTimeout(function () {
+          if (pyodide && ws.active) { persistActiveFile(); checkProblems(true); }
+        }, 900);
+      });
+      // outline: refresh shortly after typing stops; track the
+      // symbol containing the cursor on every cursor move.
+      var olT = null;
+      editor.on("change", function () {
+        clearTimeout(olT);
+        olT = setTimeout(function () { try { renderOutline(); } catch (e) {} }, 450);
+      });
+      editor.on("cursorActivity", function () { updateOutlineCursor(); });
+    }
+    function useFallback() {
+      // P1-7: the editor CDN failed — say so LOUDLY and fall back to a
       // plain <textarea> editor so code can still be typed and run.
+      if (editor) return; // Monaco arrived after all — never double-mount
       editor = makeFallbackEditor(document.getElementById("editor-host"), ws.active ? ws.files[ws.active] : "");
       editor.on("cursorActivity", updateStatusBar);
       editor.on("change", function () { updateStatusBar(); markUnsaved(); });
@@ -1338,18 +2532,24 @@
         clearTimeout(saveT);
         saveT = setTimeout(function () { persistActiveFile(); saveWS(); }, 800);
       });
-      printLine("⚠ Code editor failed to load (CodeMirror CDN unreachable) — plain-text editor active. Code still runs.", "err");
+      printLine("⚠ Code editor failed to load (Monaco CDN unreachable) — plain-text editor active. Code still runs.", "err");
       try { toast("Code editor failed to load — using plain-text editor", "error"); } catch (e) {}
       // P2-59: the stored theme / font size apply to the fallback
       // textarea too, via its setOption (theme/fontSize).
       try { applyTheme(localStorage.getItem(CM_THEME_KEY) || "dracula"); } catch (e) {}
       try { applyFont(parseInt(localStorage.getItem(CM_FONT_KEY) || "14", 10) || 14); } catch (e) {}
     }
+    if (window.SKZ_MONACO_VS && typeof window.require === "function") {
+      initMonacoEditor(theme0, font0, wireEditor, useFallback);
+    } else {
+      useFallback();
+    }
     });
 
     guard("render", function () {
     renderExplorer(); renderTabs(); renderHistory(); updateStatusBar();
     initSnippets();
+    initSideSections();
     });
 
     guard("activity-bar", function () {
@@ -1362,6 +2562,9 @@
     if (scb) scb.addEventListener("click", function () { setSidebarOpen(false); });
     var sbd = document.getElementById("sidebar-backdrop");
     if (sbd) sbd.addEventListener("click", function () { setSidebarOpen(false); });
+    /* problems badge button: jumps to the panel's Problems tab */
+    var apb = document.getElementById("activity-problems");
+    if (apb) apb.addEventListener("click", function () { switchPtab("problems"); });
     });
 
     guard("panel-tabs", function () {
@@ -1392,8 +2595,9 @@
     document.getElementById("share-btn").addEventListener("click", shareCode);
     document.getElementById("download-btn").addEventListener("click", downloadCode);
     document.getElementById("upload-btn").addEventListener("click", function () { document.getElementById("upload-input").click(); });
-    document.getElementById("upload-input").addEventListener("change", function () {
-      var f = this.files[0]; if (!f) return;
+    /* One import path for the file picker AND drag-and-drop. */
+    function importFile(f) {
+      if (!f) return;
       var r = new FileReader();
       r.onload = function () {
         var name = validName(f.name.replace(/\.[^.]+$/, "")) || "uploaded.py";
@@ -1410,8 +2614,34 @@
         toast("Imported " + base + " 📂", "success");
       };
       r.readAsText(f);
+    }
+    document.getElementById("upload-input").addEventListener("change", function () {
+      importFile(this.files[0]);
       this.value = "";
     });
+    /* Drag .py files onto the IDE to import them into the workspace. */
+    var ideEl = document.getElementById("ide");
+    var sbEl = document.getElementById("sidebar");
+    if (ideEl) {
+      ideEl.addEventListener("dragover", function (e) {
+        e.preventDefault();
+        if (sbEl) sbEl.classList.add("drag-over");
+      });
+      ideEl.addEventListener("dragleave", function (e) {
+        if (e.relatedTarget && ideEl.contains(e.relatedTarget)) return;
+        if (sbEl) sbEl.classList.remove("drag-over");
+      });
+      ideEl.addEventListener("drop", function (e) {
+        e.preventDefault();
+        if (sbEl) sbEl.classList.remove("drag-over");
+        var files = (e.dataTransfer && e.dataTransfer.files) || [];
+        var n = 0;
+        for (var i = 0; i < files.length; i++) {
+          if (/\.py$/i.test(files[i].name)) { importFile(files[i]); n++; }
+        }
+        if (!n && files.length) toast("Only .py files can be imported", "error");
+      });
+    }
     document.getElementById("reset-ws-btn").addEventListener("click", function () {
       if (!confirm("Reset workspace? All files will be replaced with a fresh main.py.")) return;
       backupWorkspace();
@@ -1428,8 +2658,16 @@
     });
 
     guard("find", function () {
-    /* find */
-    document.getElementById("find-btn").addEventListener("click", function () { openFind(false); });
+    /* find — Monaco has VS Code's own find widget; the page findbar
+       remains the fallback editor's find/replace. */
+    document.getElementById("find-btn").addEventListener("click", function () {
+      if (monacoEd) {
+        monacoEd.focus();
+        var a = monacoEd.getAction("actions.find");
+        if (a) { a.run(); return; }
+      }
+      openFind(false);
+    });
     document.getElementById("find-close").addEventListener("click", closeFind);
     document.getElementById("find-next").addEventListener("click", function () { doFind(1); });
     document.getElementById("find-prev").addEventListener("click", function () { doFind(-1); });
@@ -1444,6 +2682,8 @@
 
     guard("terminal", function () {
     /* terminal panel */
+    var rkBtn = document.getElementById("restart-kernel-btn");
+    if (rkBtn) rkBtn.addEventListener("click", restartKernel);
     document.getElementById("copy-out-btn").addEventListener("click", copyOutput);
     document.getElementById("clear-out-btn").addEventListener("click", function () { clearTerminal(); printLine("Terminal cleared.", "dim"); });
     document.getElementById("panel-toggle").addEventListener("click", function () {
@@ -1460,6 +2700,10 @@
 
     guard("ai", function () {
     /* AI */
+    try { restoreChat(); } catch (e) {}
+    refreshAiChips();
+    var clearBtn = document.getElementById("ai-clear-btn");
+    if (clearBtn) clearBtn.addEventListener("click", function () { clearChat(); toast("Chat cleared", "success"); });
     document.getElementById("ai-generate-btn").addEventListener("click", function () {
       var d = prompt("Describe what you want the code to do:", "a function that checks if a number is prime");
       if (d == null || !d.trim()) return;
@@ -1558,20 +2802,71 @@
       });
     })();
     try { document.getElementById("ai-key").value = memAiKey || window.Skillzify.storeGet(AI_KEY, ""); } catch (e) {}
+    /* AI chat composer: free-form questions about the open file. The
+       "explain" mode takes its instruction in `context` (the server
+       composes context + CODE), so the question rides there. */
+    function chatSend() {
+      var inp = document.getElementById("ai-chat-input");
+      var q = ((inp && inp.value) || "").trim();
+      if (!q) return;
+      inp.value = "";
+      appendAiUser(q);
+      if (!ws.active) { renderAi("<p>Open a file first so the AI can see your code.</p>"); return; }
+      persistActiveFile();
+      aiCall({
+        mode: "explain", code: ws.files[ws.active],
+        context: "The student asks: " + q + "\nAnswer about the code in the CODE block in plain, beginner-friendly words. If they ask for code, put it in a single ```python fenced block."
+      }, "answer", null);
+    }
+    var csb = document.getElementById("ai-chat-send");
+    if (csb) csb.addEventListener("click", chatSend);
+    var csi = document.getElementById("ai-chat-input");
+    if (csi) csi.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); chatSend(); }
+    });
     });
 
     guard("settings", function () {
     /* settings */
     document.getElementById("theme-select").addEventListener("change", function () { applyTheme(this.value); });
+    document.querySelectorAll(".swatch").forEach(function (s) {
+      s.addEventListener("click", function () { applyTheme(s.getAttribute("data-theme-val")); });
+    });
     document.getElementById("st-theme").addEventListener("click", function () { switchView("settings"); });
     document.getElementById("fs-up").addEventListener("click", function () { applyFont(curFont() + 1); });
     document.getElementById("fs-down").addEventListener("click", function () { applyFont(curFont() - 1); });
+    var fsRange = document.getElementById("fs-range");
+    if (fsRange) {
+      fsRange.value = curFont();
+      fsRange.addEventListener("input", function () { applyFont(+fsRange.value); });
+    }
+    var tsSel = document.getElementById("tabsize-select");
+    if (tsSel) {
+      tsSel.value = String(curTabSize());
+      tsSel.addEventListener("change", function () { applyTabSize(+tsSel.value); });
+    }
+    var stTab = document.getElementById("st-tabsize");
+    if (stTab) stTab.textContent = "Spaces: " + curTabSize();
     document.getElementById("wrap-btn").addEventListener("click", function () {
       if (!editor) return;
       var on = !editor.getOption("lineWrapping");
       editor.setOption("lineWrapping", on);
       this.textContent = "Wrap: " + (on ? "on" : "off");
+      this.classList.toggle("on", on);
     });
+    var mmBtn = document.getElementById("minimap-btn");
+    if (mmBtn) {
+      mmBtn.textContent = "Minimap: " + (minimapOn() ? "on" : "off");
+      mmBtn.classList.toggle("on", minimapOn());
+      mmBtn.addEventListener("click", function () {
+        var on = !minimapOn();
+        try { localStorage.setItem("skillzify_minimap", on ? "1" : "0"); } catch (e) {}
+        this.textContent = "Minimap: " + (on ? "on" : "off");
+        this.classList.toggle("on", on);
+        if (editor) { try { editor.setOption("minimap", on); } catch (e) {} }
+      });
+    }
+    renderPackages();
     });
 
     guard("resize", function () {
@@ -1592,9 +2887,47 @@
         var rect = panel.parentElement.getBoundingClientRect();
         panel.style.height = clampPanelHeight(rect.bottom - e.clientY, rect.height) + "px";
       });
-      function endDrag() { dragging = false; }
+      function endDrag() {
+        if (dragging && /px$/.test(panel.style.height || "")) {
+          try { localStorage.setItem("skillzify_panel_h", String(parseInt(panel.style.height, 10))); } catch (e) {}
+        }
+        dragging = false;
+      }
       handle.addEventListener("pointerup", endDrag);
       handle.addEventListener("pointercancel", endDrag);
+    })();
+    /* sidebar resize + persisted pane sizes (Code Studio 2.0) */
+    (function () {
+      var sb = document.getElementById("sidebar");
+      var panel = document.getElementById("panel");
+      try {
+        var sw = parseInt(localStorage.getItem("skillzify_side_w") || "", 10);
+        if (sb && sw >= 180 && sw <= 520) sb.style.width = sw + "px";
+        var ph = parseInt(localStorage.getItem("skillzify_panel_h") || "", 10);
+        if (panel && ph >= 120) {
+          var colH = panel.parentElement.getBoundingClientRect().height || (ph + 320);
+          panel.style.height = clampPanelHeight(ph, colH) + "px";
+        }
+      } catch (e) {}
+      var handle = document.getElementById("sidebar-resize");
+      if (!handle || !sb) return;
+      var dragging = false;
+      handle.addEventListener("pointerdown", function (e) {
+        dragging = true;
+        try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+        e.preventDefault();
+      });
+      handle.addEventListener("pointermove", function (e) {
+        if (!dragging) return;
+        var ide = document.getElementById("ide");
+        var rect = ide.getBoundingClientRect();
+        var w = Math.max(180, Math.min(520, e.clientX - rect.left - 53));
+        sb.style.width = w + "px";
+        try { localStorage.setItem("skillzify_side_w", String(Math.round(w))); } catch (err) {}
+      });
+      function end() { dragging = false; }
+      handle.addEventListener("pointerup", end);
+      handle.addEventListener("pointercancel", end);
     })();
     });
 
@@ -1602,8 +2935,29 @@
     /* keyboard */
     document.addEventListener("keydown", function (e) {
       var mod = e.ctrlKey || e.metaKey;
-      if (mod && e.key.toLowerCase() === "f" && !e.shiftKey) { e.preventDefault(); openFind(false); }
-      else if (mod && e.key.toLowerCase() === "h") { e.preventDefault(); openFind(true); }
+      // Inside Monaco, Ctrl+F / Ctrl+H belong to Monaco's own find
+      // widget — don't fight it with the page findbar.
+      var inMonaco = !!(monacoEd && e.target && e.target.closest && e.target.closest(".monaco-editor"));
+      if (mod && e.key.toLowerCase() === "f" && !e.shiftKey) {
+        if (inMonaco) return;
+        e.preventDefault();
+        if (monacoEd) {
+          monacoEd.focus();
+          var fa = monacoEd.getAction("actions.find");
+          if (fa) { fa.run(); return; }
+        }
+        openFind(false);
+      }
+      else if (mod && e.key.toLowerCase() === "h") {
+        if (inMonaco) return;
+        e.preventDefault();
+        if (monacoEd) {
+          monacoEd.focus();
+          var ra = monacoEd.getAction("editor.action.startFindReplaceAction") || monacoEd.getAction("actions.find");
+          if (ra) { ra.run(); return; }
+        }
+        openFind(true);
+      }
       else if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); persistActiveFile(); if (saveWS()) toast("Workspace saved 💾", "success"); }
       else if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); var sb = document.getElementById("sidebar"); setSidebarOpen(!sb.classList.contains("open")); }
       else if (e.key === "Escape") { closeFind(); setSidebarOpen(false); }

@@ -15,23 +15,27 @@
   <title>Code Studio — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
   <link rel="stylesheet" href="assets/css/style.css?v=37">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/nord.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/monokai.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/eclipse.min.css">
+  <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.css">
+  <script>
+    /* Monaco (the VS Code editor engine), pinned 0.45.0 on jsDelivr.
+       SKZ_MONACO_VS is the single place the base lives — compiler.js
+       reads it for the AMD paths + the worker bootstrap. */
+    window.SKZ_MONACO_VS = "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs";
+    var require = { paths: { vs: window.SKZ_MONACO_VS } };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
   <style>
     /* ============ VS Code-like IDE shell (always dark, like the real thing) ============ */
+    /* Code Studio 2.0: VS Code "Dark Modern" palette — editor #1f1f1f,
+       side/activity/panel #181818, borders #2b2b2b, status bar #0078d4. */
     :root {
-      --ide-bg: #1e1e1e; --ide-side: #252526; --ide-activity: #333333;
-      --ide-border: #2d2d2d; --ide-text: #cccccc; --ide-muted: #858585;
-      --ide-accent: #007acc; --ide-tab: #2d2d2d; --ide-hover: #2a2d2e;
-      --ide-input: #3c3c3c;
+      --ide-bg: #1f1f1f; --ide-side: #181818; --ide-activity: #181818;
+      --ide-border: #2b2b2b; --ide-text: #cccccc; --ide-muted: #8b8b8b;
+      --ide-accent: #0078d4; --ide-tab: #181818; --ide-hover: #2a2d2e;
+      --ide-input: #313131;
     }
     /* Page scroll appears only when needed: on normal screens the shell
        still fills exactly the viewport (no scrollbar); on short windows
@@ -46,7 +50,7 @@
 
     /* activity bar */
     .activity-bar { width: 48px; background: var(--ide-activity); display: flex; flex-direction: column;
-      align-items: center; padding: 8px 0; gap: 4px; flex-shrink: 0; }
+      align-items: center; padding: 8px 0; gap: 4px; flex-shrink: 0; border-right: 1px solid var(--ide-border); }
     .activity-bar button { width: 48px; height: 48px; background: none; border: 0; color: var(--ide-muted);
       font-size: 20px; cursor: pointer; border-left: 2px solid transparent; position: relative; }
     .activity-bar button:hover { color: var(--ide-text); }
@@ -60,55 +64,161 @@
     /* sidebar */
     .sidebar { width: 264px; background: var(--ide-side); border-right: 1px solid var(--ide-border);
       display: flex; flex-direction: column; flex-shrink: 0; min-height: 0; }
-    .side-view { display: none; flex-direction: column; min-height: 0; flex: 1; }
+    .sidebar ::-webkit-scrollbar { width: 9px; height: 9px; }
+    .sidebar ::-webkit-scrollbar-thumb { background: #424242; border-radius: 5px; border: 2px solid var(--ide-side); }
+    .sidebar ::-webkit-scrollbar-thumb:hover { background: #545454; }
+    .sidebar ::-webkit-scrollbar-track { background: transparent; }
+    .sidebar.drag-over { box-shadow: inset 0 0 0 2px var(--ide-accent); }
+    .side-view { display: none; flex-direction: column; min-height: 0; flex: 1;
+      scrollbar-width: thin; scrollbar-color: #424242 transparent; }
     .side-view.active { display: flex; }
     .side-title { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--ide-muted);
-      padding: 12px 16px 8px; display: flex; align-items: center; justify-content: space-between; }
-    .side-title button { background: none; border: 0; color: var(--ide-muted); cursor: pointer; font-size: 13px; }
-    .side-title button:hover { color: #fff; }
-    .file-list { overflow-y: auto; padding: 0 8px 12px; }
-    .file-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 5px;
-      cursor: pointer; font-size: 13px; font-family: "JetBrains Mono", monospace; }
+      padding: 12px 16px 8px; display: flex; align-items: center; justify-content: space-between;
+      text-transform: uppercase; }
+    .side-title button { background: none; border: 0; color: var(--ide-muted); cursor: pointer;
+      font-size: 11px; padding: 2px 7px; border-radius: 4px; font-family: inherit; }
+    .side-title button:hover { color: #fff; background: var(--ide-hover); }
+
+    /* accordion sections (Explorer view) */
+    .side-sec { display: flex; flex-direction: column; border-top: 1px solid var(--ide-border); min-height: 0; }
+    .side-sec:first-child { border-top: 0; }
+    #sec-files { flex: 1 1 auto; }
+    .side-sec-head { display: flex; align-items: center; gap: 3px; padding: 4px 8px 4px 3px; cursor: pointer;
+      user-select: none; min-height: 24px; }
+    .side-sec-head:hover { background: rgba(255,255,255,.03); }
+    .side-sec-head .chev { font-size: 10px; color: var(--ide-muted); width: 16px; text-align: center;
+      transition: transform .13s ease; flex-shrink: 0; }
+    .side-sec:not(.collapsed) .side-sec-head .chev { transform: rotate(90deg); }
+    .side-sec-head .sec-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--ide-text);
+      text-transform: uppercase; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sec-acts { display: flex; gap: 1px; align-items: center; }
+    .sec-act { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
+      background: none; border: 0; color: var(--ide-muted); cursor: pointer; font-size: 13px; border-radius: 4px;
+      opacity: 0; transition: opacity .13s ease, background-color .13s ease, color .13s ease; }
+    .side-sec-head:hover .sec-act, .side-sec-head:focus-within .sec-act { opacity: 1; }
+    .sec-act:hover { color: #fff; background: var(--ide-hover); }
+    .side-sec-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .15s ease; min-height: 0; }
+    .side-sec.collapsed .side-sec-body { grid-template-rows: 0fr; }
+    .sec-inner { overflow: hidden; min-height: 0; display: flex; flex-direction: column; }
+
+    /* file rows — compact 22px VS Code tree rows */
+    .file-list { overflow-y: auto; padding: 0 0 6px; flex: 1; min-height: 0; position: relative; }
+    .file-list::before { content: ""; position: absolute; left: 15px; top: 0; bottom: 0; width: 1px;
+      background: rgba(255,255,255,.05); pointer-events: none; }
+    .file-item { display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 6px 0 8px;
+      cursor: pointer; font-size: 13px; font-family: "JetBrains Mono", monospace; position: relative;
+      transition: background-color .12s ease; }
     .file-item:hover { background: var(--ide-hover); }
     .file-item.active { background: #37373d; color: #fff; }
+    .file-item .fglyph { font-size: 11px; flex-shrink: 0; }
     .file-item .fname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .file-item .fdel { opacity: 0; background: none; border: 0; color: var(--ide-muted); cursor: pointer; font-size: 12px; }
-    .file-item:hover .fdel { opacity: 1; }
-    .file-item .fdel:hover { color: #f87171; }
+    .file-item .fdirty { width: 7px; height: 7px; border-radius: 50%; background: #fbbf24; display: none; flex-shrink: 0; }
+    .file-item .fdirty.on { display: inline-block; }
+    .frow-acts, .srow-acts { display: none; gap: 1px; align-items: center; }
+    .file-item:hover .frow-acts, .snip-item:hover .srow-acts { display: inline-flex; }
+    .fact { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center;
+      background: none; border: 0; color: var(--ide-muted); cursor: pointer; font-size: 11px;
+      border-radius: 4px; padding: 0; }
+    .fact:hover { color: #fff; background: #4a4a4a; }
+    .fact.fdel:hover { color: #f87171; }
+    .fname-edit { flex: 1; min-width: 0; background: var(--ide-input); border: 1px solid var(--ide-accent);
+      color: #fff; font-family: "JetBrains Mono", monospace; font-size: 13px; height: 20px;
+      padding: 0 4px; border-radius: 3px; outline: none; }
+    .side-foot { font-size: 11px; color: var(--ide-muted); padding: 5px 12px 7px;
+      border-top: 1px solid var(--ide-border); flex-shrink: 0; }
+
+    /* samples / snippets / outline rows */
+    .sample-list, .snip-list, .ol-list { overflow-y: auto; max-height: 232px; padding: 0 0 6px; }
+    .sample-item, .snip-item, .ol-item { display: flex; align-items: center; gap: 6px; min-height: 22px;
+      padding: 1px 6px 1px 22px; cursor: pointer; font-size: 13px; transition: background-color .12s ease; }
+    .sample-item:hover, .snip-item:hover, .ol-item:hover { background: var(--ide-hover); }
+    .sample-item .sname, .snip-item .sname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .side-filter { margin: 2px 8px 6px; width: calc(100% - 16px); padding: 4px 8px; font-size: 12px; flex-shrink: 0; }
+    .ol-item { font-family: "JetBrains Mono", monospace; font-size: 12.5px; }
+    .ol-item .olg { flex-shrink: 0; width: 14px; text-align: center; font-style: normal; font-family: "Inter", sans-serif; font-weight: 700; font-size: 11px; }
+    .ol-k-def { color: #c792ea; } .ol-k-class { color: #ffcb6b; } .ol-k-var { color: #82aaff; }
+    .ol-item.cur { background: #094771; color: #fff; }
+    .ol-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .side-empty { font-size: 12px; color: var(--ide-muted); padding: 4px 12px 8px 22px; }
+
     .side-section { padding: 0 16px 16px; }
     .side-section label { font-size: 11px; color: var(--ide-muted); display: block; margin: 10px 0 4px;
       text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
     .ide-input, .ide-select {
       width: 100%; background: var(--ide-input); border: 1px solid transparent; color: var(--ide-text);
-      border-radius: 4px; padding: 7px 10px; font-size: 13px; font-family: inherit; box-sizing: border-box;
+      border-radius: 4px; padding: 6px 9px; font-size: 12.5px; font-family: inherit; box-sizing: border-box;
     }
     .ide-input:focus, .ide-select:focus { outline: none; border-color: var(--ide-accent); }
     textarea.ide-input { font-family: "JetBrains Mono", monospace; resize: vertical; }
     .ide-btn { background: var(--ide-accent); border: 0; color: #fff; border-radius: 4px; padding: 8px 12px;
-      font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 8px; }
+      font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 8px;
+      transition: background-color .13s ease; }
     .ide-btn:hover { background: #0098ff; }
-    .ide-btn.ghost { background: #3c3c3c; }
-    .ide-btn.ghost:hover { background: #4a4a4a; }
+    .ide-btn.ghost { background: transparent; border: 1px solid var(--ide-border); color: var(--ide-text); font-weight: 400; }
+    .ide-btn.ghost:hover { background: var(--ide-hover); color: #fff; }
     .ide-btn:disabled { opacity: .5; cursor: not-allowed; }
     .side-scroll { overflow-y: auto; flex: 1; min-height: 0; }
-    .search-hit { padding: 8px 16px; font-size: 12px; cursor: pointer; border-bottom: 1px solid var(--ide-border); }
+
+    /* search view — grouped results with highlighted matches */
+    .search-count { font-size: 11px; color: var(--ide-muted); padding: 0 16px 6px; }
+    .search-file-head { display: flex; align-items: center; gap: 6px; padding: 9px 12px 2px; font-size: 12px;
+      font-family: "JetBrains Mono", monospace; color: var(--ide-text); }
+    .search-file-head .cnt { margin-left: auto; font-size: 10px; color: var(--ide-muted);
+      background: #3c3c3c; border-radius: 8px; padding: 0 6px; line-height: 15px; }
+    .search-hit { padding: 2px 12px 2px 20px; font-size: 12px; cursor: pointer; display: flex;
+      gap: 8px; align-items: baseline; transition: background-color .12s ease; }
     .search-hit:hover { background: var(--ide-hover); }
-    .search-hit .sf { font-family: "JetBrains Mono", monospace; color: #9d6bff; }
-    .search-hit .sl { color: var(--ide-muted); font-size: 11px; }
+    .search-hit .sl-no { color: var(--ide-muted); font-size: 11px; font-family: "JetBrains Mono", monospace;
+      flex-shrink: 0; min-width: 26px; text-align: right; }
+    .search-hit .sl { color: var(--ide-text); font-family: "JetBrains Mono", monospace;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .search-hit mark { background: rgba(234,179,8,.45); color: #fff; border-radius: 2px; padding: 0 1px; }
+
     .ai-box-ide { margin: 0 16px 16px; background: #1e1e1e; border: 1px solid var(--ide-border);
       border-radius: 8px; padding: 12px; font-size: 13px; max-height: 300px; overflow-y: auto; }
     .ai-box-ide h4 { margin: 0 0 8px; font-size: 13px; color: #9d6bff; }
     .ai-box-ide p, .ai-box-ide li { line-height: 1.6; }
     .ai-box-ide ul { padding-left: 18px; margin: 6px 0; }
-    .hist-item-ide { border: 1px solid var(--ide-border); border-radius: 8px; padding: 10px 12px; margin: 0 16px 10px; }
-    .hist-item-ide .meta { font-size: 11px; color: var(--ide-muted); margin-bottom: 6px; }
-    .hist-item-ide pre { font-size: 11px; max-height: 90px; overflow: hidden; margin: 0 0 8px;
+    /* AI view: quick actions are chips; the chat thread runs full-bleed */
+    .ai-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 12px; }
+    .chip { background: #2d2d2d; border: 1px solid var(--ide-border); color: var(--ide-text);
+      border-radius: 999px; padding: 5px 11px; font-size: 12px; cursor: pointer; font-family: "Inter", sans-serif;
+      transition: background-color .13s ease, color .13s ease; }
+    .chip:hover { background: var(--ide-hover); color: #fff; }
+    .chip:disabled { opacity: .5; cursor: not-allowed; }
+    .chip.primary { background: var(--ide-accent); border-color: var(--ide-accent); color: #fff; }
+    .chip.primary:hover { background: #0098ff; }
+    .chip-off { display: none !important; }
+    #view-ai .ai-box-ide { flex: 1; max-height: none; margin: 0; border: 0; border-top: 1px solid var(--ide-border);
+      border-radius: 0; background: transparent; padding: 12px 16px; }
+
+    .hist-item-ide { border-bottom: 1px solid var(--ide-border); padding: 9px 16px; }
+    .hist-item-ide:hover { background: rgba(255,255,255,.02); }
+    .hist-item-ide .meta { font-size: 11px; color: var(--ide-muted); margin-bottom: 5px;
+      font-family: "JetBrains Mono", monospace; }
+    .hist-item-ide pre { font-size: 11px; max-height: 76px; overflow: hidden; margin: 0 0 7px;
       font-family: "JetBrains Mono", monospace; white-space: pre-wrap; color: var(--ide-muted); }
     .hist-item-ide .row { display: flex; gap: 6px; }
     .mini-btn { background: #3c3c3c; border: 0; color: #fff; border-radius: 4px; padding: 5px 10px;
-      font-size: 12px; cursor: pointer; }
+      font-size: 12px; cursor: pointer; transition: background-color .13s ease; }
     .mini-btn:hover { background: #4a4a4a; }
     .mini-btn.primary { background: var(--ide-accent); }
+    .mini-btn.toggle.on { background: var(--ide-accent); }
+
+    /* settings view */
+    .swatches { display: flex; gap: 8px; margin: 2px 0 9px; }
+    .swatch { width: 26px; height: 26px; border-radius: 6px; border: 2px solid transparent; cursor: pointer;
+      padding: 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); transition: transform .12s ease, border-color .12s ease; }
+    .swatch:hover { transform: scale(1.08); }
+    .swatch.on { border-color: var(--ide-accent); }
+    .font-row { display: flex; gap: 8px; align-items: center; }
+    .font-row input[type="range"] { flex: 1; accent-color: var(--ide-accent); height: 20px; min-width: 0; }
+    .set-row { display: flex; align-items: center; justify-content: space-between; padding: 3px 0; font-size: 13px; }
+
+    /* activity-bar problems badge */
+    .activity-bar button .ab-badge { position: absolute; top: 5px; right: 5px; background: #eab308; color: #1f1f1f;
+      font-size: 9px; font-weight: 700; border-radius: 8px; padding: 0 5px; line-height: 14px;
+      font-family: "Inter", sans-serif; pointer-events: none; }
 
     /* main column */
     .main-col { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -117,7 +227,7 @@
     .tab { display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 13px;
       font-family: "JetBrains Mono", monospace; background: var(--ide-tab); color: var(--ide-muted);
       border-right: 1px solid var(--ide-border); cursor: pointer; white-space: nowrap; user-select: none; }
-    .tab.active { background: var(--ide-bg); color: #fff; border-top: 2px solid var(--ide-accent); }
+    .tab.active { background: var(--ide-bg); color: #fff; box-shadow: inset 0 1px 0 var(--ide-accent); }
     .tab .dot { width: 7px; height: 7px; border-radius: 50%; background: #fbbf24; display: none; }
     .tab.dirty .dot { display: inline-block; }
     .tab.dirty .x { display: none; }
@@ -138,7 +248,52 @@
     .breadcrumbs .sep { margin: 0 6px; }
 
     #editor-host { flex: 1; min-height: 200px; position: relative; overflow: hidden; }
-    #editor-host .CodeMirror { height: 100%; font-family: "JetBrains Mono", monospace; }
+    /* Monaco mounts here (Code Studio 2.0) */
+    #monaco-host { position: absolute; inset: 0; }
+    /* sidebar drag handle (width persists) */
+    .sidebar-resize { width: 5px; background: transparent; cursor: ew-resize; flex-shrink: 0; touch-action: none; z-index: 6; }
+    .sidebar-resize:hover { background: var(--ide-accent); }
+    /* Ctrl+I inline AI prompt, floated over the editor near the cursor */
+    #inline-ai { position: absolute; z-index: 30; width: min(480px, calc(100% - 24px));
+      background: #252526; border: 1px solid var(--ide-accent); border-radius: 6px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.55); padding: 8px; display: none; }
+    #inline-ai.on { display: block; }
+    #inline-ai input { width: 100%; box-sizing: border-box; background: var(--ide-input);
+      border: 1px solid transparent; color: #fff; border-radius: 4px; padding: 8px 10px;
+      font-size: 13px; font-family: "Inter", sans-serif; }
+    #inline-ai input:focus { outline: none; border-color: var(--ide-accent); }
+    #inline-ai .ia-hint { font-size: 11px; color: var(--ide-muted); padding: 6px 2px 0; }
+    /* AI diff overlay: proposed edit shown as a Monaco diff editor */
+    #diff-overlay { position: absolute; inset: 0; z-index: 25; display: none;
+      flex-direction: column; background: var(--ide-bg); }
+    #diff-overlay.on { display: flex; }
+    #diff-overlay .diff-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+      background: #252526; border-bottom: 1px solid var(--ide-border); font-size: 12px; }
+    #diff-overlay .diff-bar .t { font-weight: 700; color: #fff; }
+    #diff-overlay .diff-bar .sp { flex: 1; }
+    #diff-host { flex: 1; min-height: 0; position: relative; }
+    /* clickable traceback frames in the terminal */
+    #console .tb-link { color: #7dd3fc; text-decoration: underline; cursor: pointer; white-space: nowrap; }
+    #console .tb-link:hover { color: #bae6fd; }
+    /* AI Fix row appended under a failed run */
+    .ai-fix-row { padding: 6px 0 2px; }
+    .ai-fix-btn { background: #3c3c3c; border: 1px solid var(--ide-border); color: #fff; border-radius: 4px;
+      font-size: 12px; padding: 5px 12px; cursor: pointer; font-family: "Inter", sans-serif; }
+    .ai-fix-btn:hover { background: var(--ide-accent); }
+    /* AI chat thread (sidebar) */
+    .ai-msg { margin-bottom: 10px; }
+    .ai-msg.user .ai-bubble { background: #094771; color: #fff; border-radius: 8px; padding: 8px 10px; }
+    .ai-msg .who { font-size: 10px; font-weight: 700; letter-spacing: .06em; color: var(--ide-muted); margin-bottom: 3px; }
+    #ai-chat-bar { display: flex; gap: 6px; margin: 0 16px 12px; }
+    #ai-chat-input { flex: 1; }
+    #ai-chat-send { width: auto; margin-top: 0; padding: 8px 14px; }
+    /* packages (Settings) */
+    .pkg-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; }
+    .pkg-row .pkg-name { flex: 1; font-family: "JetBrains Mono", monospace; }
+    .pkg-row .pkg-state { font-size: 11px; color: var(--ide-muted); }
+    .pkg-row .pkg-state .pkg-ver { color: #34d399; }
+    .pkg-spin { display: inline-block; animation: pkgspin 1s linear infinite; }
+    @keyframes pkgspin { to { transform: rotate(360deg); } }
     /* P2-58: plain-text fallback editor (when the CodeMirror CDN fails)
        — fill the editor pane like the real editor, same mono font. */
     #editor-fallback { width: 100%; height: calc(100% - 34px); min-height: 160px; box-sizing: border-box;
@@ -175,7 +330,7 @@
     .panel-resize { height: 5px; background: transparent; cursor: ns-resize; flex-shrink: 0; touch-action: none; }
     .panel-resize:hover { background: var(--ide-accent); }
     .panel { height: 230px; min-height: 120px; max-height: calc(100% - 320px); display: flex; flex-direction: column;
-      background: var(--ide-bg); border-top: 1px solid var(--ide-border); flex-shrink: 0; }
+      background: var(--ide-side); border-top: 1px solid var(--ide-border); flex-shrink: 0; }
     .panel-tabs { display: flex; align-items: center; gap: 2px; padding: 0 12px; flex-shrink: 0;
       border-bottom: 1px solid var(--ide-border); }
     .panel-tabs button.ptab { background: none; border: 0; color: var(--ide-muted); font-size: 11px;
@@ -233,6 +388,9 @@
       .sidebar { position: absolute; z-index: 40; height: 100%; box-shadow: 8px 0 24px rgba(0,0,0,.5);
         transform: translateX(-100%); transition: transform .2s; }
       .sidebar.open { transform: none; }
+      /* touch has no hover: keep section + row actions visible */
+      .sec-act { opacity: 1; }
+      .frow-acts, .srow-acts { display: inline-flex; }
       .activity-bar { width: 44px; } .activity-bar button { width: 44px; }
       .welcome-keys { grid-template-columns: 1fr; }
       /* status bar (P2-29): hide low-value items, scroll the rest */
@@ -258,6 +416,7 @@
       <button data-view="ai" title="AI Assistant">✨<span class="tip">AI Assistant</span></button>
       <button data-view="history" title="History">🕘<span class="tip">Code history</span></button>
       <div class="spacer"></div>
+      <button id="activity-problems" title="Problems" style="display:none">⚠️<span class="ab-badge" id="activity-problems-badge">0</span><span class="tip">Problems</span></button>
       <button data-view="settings" title="Settings">⚙️<span class="tip">Editor settings</span></button>
     </div>
 
@@ -265,38 +424,75 @@
     <div class="sidebar" id="sidebar">
       <button class="sidebar-close" id="sidebar-close-btn" title="Close panel" aria-label="Close panel">✕</button>
       <div class="side-view active" id="view-explorer">
-        <div class="side-title">EXPLORER <span><button id="new-file-btn" title="New file">＋</button></span></div>
-        <div class="file-list" id="file-list"></div>
-        <div class="side-title">SNIPPETS</div>
-        <div class="side-section">
-          <select class="ide-select" id="snippet-select" aria-label="Sample snippets"></select>
-          <button class="ide-btn ghost" id="save-snippet-btn">💾 Save current as snippet</button>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button class="ide-btn ghost" id="share-btn" style="margin-top:0">🔗 Share</button>
-            <button class="ide-btn ghost" id="download-btn" style="margin-top:0">⬇ .py</button>
+        <div class="side-sec" id="sec-files">
+          <div class="side-sec-head" data-sec="files" role="button" tabindex="0" aria-expanded="true">
+            <span class="chev">▸</span><span class="sec-label">Explorer</span>
+            <span class="sec-acts">
+              <button class="sec-act" id="new-file-btn" title="New file">＋</button>
+              <button class="sec-act" id="share-btn" title="Share workspace link">🔗</button>
+              <button class="sec-act" id="download-btn" title="Download current file (.py)">⬇️</button>
+            </span>
           </div>
+          <div class="side-sec-body"><div class="sec-inner">
+            <div class="file-list" id="file-list"></div>
+            <div class="side-foot" id="explorer-foot"></div>
+          </div></div>
+        </div>
+        <div class="side-sec" id="sec-samples">
+          <div class="side-sec-head" data-sec="samples" role="button" tabindex="0" aria-expanded="true">
+            <span class="chev">▸</span><span class="sec-label">Samples</span>
+          </div>
+          <div class="side-sec-body"><div class="sec-inner">
+            <div class="sample-list" id="sample-list"></div>
+          </div></div>
+        </div>
+        <div class="side-sec" id="sec-snippets">
+          <div class="side-sec-head" data-sec="snippets" role="button" tabindex="0" aria-expanded="true">
+            <span class="chev">▸</span><span class="sec-label">Snippets</span>
+            <span class="sec-acts">
+              <button class="sec-act" id="save-snippet-btn" title="Save current file as a snippet">＋</button>
+            </span>
+          </div>
+          <div class="side-sec-body"><div class="sec-inner">
+            <input class="ide-input side-filter" id="snippet-filter" placeholder="Filter snippets…" aria-label="Filter snippets">
+            <div class="snip-list" id="snip-list"></div>
+          </div></div>
+        </div>
+        <div class="side-sec" id="sec-outline">
+          <div class="side-sec-head" data-sec="outline" role="button" tabindex="0" aria-expanded="true">
+            <span class="chev">▸</span><span class="sec-label">Outline</span>
+          </div>
+          <div class="side-sec-body"><div class="sec-inner">
+            <input class="ide-input side-filter" id="outline-filter" placeholder="Filter symbols…" aria-label="Filter outline symbols">
+            <div class="ol-list" id="outline-list"></div>
+          </div></div>
         </div>
       </div>
 
       <div class="side-view" id="view-search">
         <div class="side-title">SEARCH</div>
-        <div class="side-section">
+        <div class="side-section" style="padding-bottom:6px">
           <input class="ide-input" id="search-input" placeholder="Search in all files…">
         </div>
+        <div class="search-count" id="search-count"></div>
         <div class="side-scroll" id="search-results"></div>
       </div>
 
       <div class="side-view" id="view-ai">
-        <div class="side-title">AI ASSISTANT</div>
-        <div class="side-section">
-          <button class="ide-btn" id="ai-generate-btn">✨ Generate code</button>
-          <button class="ide-btn ghost" id="explain-code-btn">💡 Explain this file</button>
-          <button class="ide-btn ghost" id="explain-error-btn">❓ Explain last error</button>
-          <button class="ide-btn ghost" id="fix-code-btn">🔧 Fix this file</button>
-          <button class="ide-btn ghost" id="trace-code-btn">🔍 Trace this code</button>
+        <div class="side-title">AI ASSISTANT <span><button id="ai-clear-btn" title="Clear the chat thread">Clear</button></span></div>
+        <div class="ai-chips">
+          <button class="chip primary" id="ai-generate-btn">✨ Generate code</button>
+          <button class="chip" id="explain-code-btn">💡 Explain file</button>
+          <button class="chip chip-off" id="explain-error-btn">❓ Explain error</button>
+          <button class="chip chip-off" id="fix-code-btn">🔧 Fix last error</button>
+          <button class="chip" id="trace-code-btn">🔍 Trace code</button>
         </div>
         <div class="ai-box-ide" id="ai-output">
           <p style="color:var(--ide-muted)">Ask the AI to write code, explain your file, or fix an error. Runs on the site backend — no setup needed.</p>
+        </div>
+        <div id="ai-chat-bar">
+          <input class="ide-input" id="ai-chat-input" placeholder="Ask about your code…" aria-label="Ask the AI about your code">
+          <button class="ide-btn" id="ai-chat-send">Ask</button>
         </div>
         <div class="side-title">AI SETTINGS</div>
         <div class="side-section">
@@ -318,6 +514,13 @@
         <div class="side-title">EDITOR SETTINGS</div>
         <div class="side-section">
           <label for="theme-select">Color theme</label>
+          <div class="swatches" id="theme-swatches">
+            <button class="swatch" data-theme-val="dracula" title="Dracula" style="background:linear-gradient(135deg,#282a36 55%,#ff79c6 55%)"></button>
+            <button class="swatch" data-theme-val="material-darker" title="Material Darker" style="background:linear-gradient(135deg,#212121 55%,#c792ea 55%)"></button>
+            <button class="swatch" data-theme-val="nord" title="Nord" style="background:linear-gradient(135deg,#2e3440 55%,#88c0d0 55%)"></button>
+            <button class="swatch" data-theme-val="monokai" title="Monokai" style="background:linear-gradient(135deg,#272822 55%,#a6e22e 55%)"></button>
+            <button class="swatch" data-theme-val="eclipse" title="Eclipse (light)" style="background:linear-gradient(135deg,#ffffff 55%,#7a3e9d 55%)"></button>
+          </div>
           <select class="ide-select" id="theme-select">
             <option value="dracula">Dracula</option>
             <option value="material-darker">Material Darker</option>
@@ -326,15 +529,24 @@
             <option value="eclipse">Eclipse (light)</option>
           </select>
           <label>Font size</label>
-          <div style="display:flex;gap:8px;align-items:center">
+          <div class="font-row">
             <button class="mini-btn" id="fs-down">A−</button>
+            <input type="range" id="fs-range" min="10" max="24" step="1" value="14" aria-label="Font size">
             <span id="fs-val" style="font-size:12px;color:var(--ide-muted)">14px</span>
             <button class="mini-btn" id="fs-up">A＋</button>
           </div>
+          <label for="tabsize-select">Indentation</label>
+          <select class="ide-select" id="tabsize-select">
+            <option value="2">2 spaces</option>
+            <option value="4" selected>4 spaces</option>
+            <option value="8">8 spaces</option>
+          </select>
           <label>Options</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="mini-btn" id="wrap-btn">Wrap: off</button>
-          </div>
+          <div class="set-row"><span>Word wrap</span><button class="mini-btn toggle" id="wrap-btn">Wrap: off</button></div>
+          <div class="set-row"><span>Minimap</span><button class="mini-btn toggle" id="minimap-btn">Minimap: on</button></div>
+          <label style="margin-top:16px">Packages</label>
+          <p style="font-size:11px;color:var(--ide-muted);margin:0 0 4px">Install Python libraries into this browser session (they reset when the kernel restarts).</p>
+          <div id="pkg-list"></div>
           <label style="margin-top:16px">Workspace</label>
           <button class="ide-btn ghost" id="upload-btn">⬆ Import .py file</button>
           <button class="ide-btn ghost" id="reset-ws-btn">🗑 Reset workspace</button>
@@ -342,6 +554,7 @@
         </div>
       </div>
     </div>
+    <div class="sidebar-resize" id="sidebar-resize" title="Drag to resize the sidebar"></div>
     <div id="sidebar-backdrop"></div>
 
     <!-- main column -->
@@ -376,6 +589,8 @@
               <div><kbd>Ctrl+S</kbd> &nbsp;Save workspace</div>
               <div><kbd>Ctrl+F</kbd> &nbsp;Find &nbsp;·&nbsp; <kbd>Ctrl+H</kbd> replace</div>
               <div><kbd>Ctrl+B</kbd> &nbsp;Toggle sidebar</div>
+              <div><kbd>Ctrl+I</kbd> &nbsp;AI inline edit at the cursor</div>
+              <div><kbd>Right-click</kbd> &nbsp;AI: explain / improve selection</div>
             </div>
             <p style="margin-top:16px"><button class="ide-btn" id="welcome-new" style="width:auto;padding:10px 28px">＋ New Python file</button></p>
           </div>
@@ -388,6 +603,7 @@
           <button class="ptab" data-ptab="problems">PROBLEMS <span class="badge" id="prob-badge" style="display:none">0</span></button>
           <button class="ptab" data-ptab="outhist">OUTPUT HISTORY</button>
           <div class="panel-actions">
+            <button id="restart-kernel-btn" title="Restart the Python kernel (fresh runtime, files kept)">🔄</button>
             <button id="copy-out-btn" title="Copy terminal output">📋</button>
             <button id="clear-out-btn" title="Clear terminal">🗑</button>
             <button id="panel-toggle" title="Maximize / restore panel">⛶</button>
@@ -409,7 +625,7 @@
         <div class="right">
           <span class="st-item" id="st-save" title="Workspace save status">Saved ✓</span>
           <span class="st-item st-hide-sm" id="st-pos">Ln 1, Col 1</span>
-          <span class="st-item st-hide-sm">Spaces: 4</span>
+          <span class="st-item st-hide-sm" id="st-tabsize">Spaces: 4</span>
           <span class="st-item st-hide-sm">UTF-8</span>
           <button class="st-item" id="st-theme" title="Editor theme">Dracula</button>
         </div>
@@ -433,12 +649,6 @@
 <script src="assets/js/auth.js?v=8"></script>
 <script src="assets/js/sync.js?v=20"></script>
 <script src="assets/js/ai.js?v=23"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
-<script src="assets/js/compiler.js?v=21"></script>
+<script src="assets/js/compiler.js?v=23"></script>
 </body>
 </html>
