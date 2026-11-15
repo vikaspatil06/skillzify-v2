@@ -910,19 +910,7 @@
     if (pyodide || pyodideLoading) return;
     pyodideLoading = true;
     printLine("⏳ Loading Python 3.11 runtime…", "dim");
-    var s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js";
-    // AMD guard (15 Nov 2026): Monaco's loader installs a global
-    // define, and Pyodide's UMD build registers as an AMD module
-    // instead of setting window.loadPyodide when it sees one — the
-    // script downloaded fine yet the runtime "could not load". Hide
-    // define/require while the script evaluates; restore them the
-    // moment it has run (the saved references keep Monaco's config).
-    var savedDefine = window.define, savedRequire = window.require;
-    window.define = undefined; window.require = undefined;
-    function restoreAMD() { window.define = savedDefine; window.require = savedRequire; }
-    s.onload = function () {
-      restoreAMD();
+    function startPyodide() {
       // P2-57: a script that loads but doesn't define loadPyodide used
       // to throw here, leaving pyodideLoading true forever and Run
       // wedged on "still loading…". Guard it so a retry is possible.
@@ -948,9 +936,28 @@
         pyodideLoading = false;
         printLine("❌ Could not load the Python runtime. Check your connection and reload.", "err");
       }
-    };
-    s.onerror = function () { restoreAMD(); pyodideLoading = false; printLine("❌ Could not download Pyodide — internet required.", "err"); };
-    document.head.appendChild(s);
+    }
+    // AMD-safe load (15 Nov 2026, second iteration): fetch the script
+    // and evaluate it with define/require/module/exports SHADOWED as
+    // undefined parameters, so Pyodide's UMD wrapper takes its global
+    // branch and sets window.loadPyodide — while the page's real AMD
+    // globals are never touched. The first iteration hid the globals
+    // during a <script> injection; that window raced Monaco's own
+    // module loading (its modules call the global define as they
+    // arrive over the network) and knocked the editor into its
+    // fallback. Shadowing has no window and no race.
+    fetch("https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js").then(function (r) {
+      if (!r.ok) throw new Error("http " + r.status);
+      return r.text();
+    }).then(function (code) {
+      new Function("define", "require", "module", "exports", code)(undefined, undefined, undefined, undefined);
+      // If the evaluated script did not define loadPyodide, the
+      // guarded call inside startPyodide reports it (P2-57).
+      startPyodide();
+    }).catch(function (e) {
+      pyodideLoading = false;
+      printLine("❌ Could not download Pyodide — internet required.", "err");
+    });
   }
 
   /* ================= interactive stdin bridge =================
