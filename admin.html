@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify admin — system status, AI usage, configuration and community at a glance. Admins only.">
   <title>Admin — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=40">
+  <link rel="stylesheet" href="assets/css/style.css?v=41">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -64,6 +64,32 @@
     .admin-col { display:grid; gap:16px; align-content:start; min-width:0; }
     .admin-pairs .admin-card { margin-bottom:0; }
     @media (max-width:900px) { .admin-pairs { grid-template-columns:1fr; } }
+    /* Site Controls (Page controls panel): switch toggles + per-page
+       message editors. The switch is a checkbox under a pill track —
+       checked means the page/site is LIVE. */
+    .sc-switch { position:relative; display:inline-block; width:44px; height:24px; flex:none; }
+    .sc-switch input { position:absolute; opacity:0; width:0; height:0; }
+    .sc-switch .track { position:absolute; inset:0; border-radius:999px; background:var(--bg-soft); border:1px solid var(--card-border); transition:background .2s, border-color .2s; cursor:pointer; }
+    .sc-switch .track:before { content:""; position:absolute; width:18px; height:18px; border-radius:50%; top:2px; left:2px; background:var(--muted); transition:transform .2s, background .2s; }
+    .sc-switch input:checked + .track { background:rgba(52,211,153,.16); border-color:var(--success); }
+    .sc-switch input:checked + .track:before { transform:translateX(20px); background:var(--success); }
+    .sc-switch input:disabled + .track { opacity:.45; cursor:not-allowed; }
+    .sc-input { background:var(--bg-soft); border:1px solid var(--card-border); border-radius:8px; color:var(--text); padding:8px 11px; font:inherit; font-size:.9rem; }
+    .sc-input:focus { outline:none; border-color:var(--primary); }
+    .sc-input:disabled { opacity:.5; }
+    .sc-master { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px dashed var(--card-border); }
+    .sc-master .grow { flex:1; min-width:0; }
+    .sc-msgedit { display:flex; gap:8px; margin-top:6px; }
+    .sc-msgedit .sc-input { flex:1; min-width:0; }
+    .sc-page { padding:10px 0; border-bottom:1px dashed var(--card-border); }
+    .sc-page:last-child { border-bottom:none; }
+    .sc-page-top { display:flex; align-items:center; gap:10px; }
+    .sc-page-top b { flex:1; min-width:0; }
+    .sc-h3 { margin:16px 0 4px; font-size:1rem; }
+    .sc-log { font-size:.88rem; }
+    .sc-log .row { display:flex; justify-content:space-between; gap:12px; padding:5px 0; border-bottom:1px dashed var(--card-border); }
+    .sc-log .row:last-child { border-bottom:none; }
+    .sc-log .when { color:var(--muted); white-space:nowrap; }
   </style>
 </head>
 <body>
@@ -164,6 +190,30 @@
           </div>
           <p class="hint" id="admin-tools-msg" style="margin-top:10px"></p>
         </div>
+
+        <div class="card admin-card" id="site-controls-card">
+          <h2>🚦 Page controls</h2>
+          <p class="sub">Turn any page off while you update it. Learners see an offline screen; you always see the real page.</p>
+          <p class="hint" id="sc-status">Loading controls…</p>
+          <div id="sc-main" style="display:none">
+            <div class="sc-master">
+              <div class="grow"><b>Whole site</b><div class="hint">The master switch — overrides every page below.</div></div>
+              <span class="chip ok" id="sc-master-pill">Live</span>
+              <label class="sc-switch"><input type="checkbox" id="sc-master-toggle"><span class="track"></span></label>
+            </div>
+            <div style="padding:12px 0;border-bottom:1px dashed var(--card-border)">
+              <b>Site-wide / default message</b>
+              <div class="hint">Shown on the whole-site offline screen, and on any page without its own message.</div>
+              <div class="sc-msgedit">
+                <input class="sc-input" type="text" id="sc-message" maxlength="300">
+                <button class="btn btn-sm" id="sc-message-save" type="button">Save</button>
+              </div>
+            </div>
+            <div id="sc-pages"></div>
+            <h3 class="sc-h3">Recent changes</h3>
+            <div class="sc-log" id="sc-log"></div>
+          </div>
+        </div>
         </div>
       </div>
     </div>
@@ -181,9 +231,9 @@
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
-<script src="assets/js/auth.js?v=8"></script>
+<script src="assets/js/auth.js?v=9"></script>
 <script src="assets/js/sync.js?v=20"></script>
 <script src="assets/js/ai.js?v=23"></script>
-<script src="assets/js/admin.js?v=2"></script>
+<script src="assets/js/admin.js?v=3"></script>
 </body>
 </html>

@@ -14,23 +14,25 @@
   <meta name="description" content="Skillzify Practice — topic-wise Python exercises with automated tests, hints, and AI tutor.">
   <title>Practice — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=40">
+  <link rel="stylesheet" href="assets/css/style.css?v=41">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+  <script src="assets/js/site-gate.js?v=1"></script>
   <style>
-    /* Practice shell (redesign v2 rollout): the Problem of the Day stays
-       full width; below it the exercise browser (topics, filters, grid)
-       takes the wide column and the adaptive drill + review queue move
-       into a slim right rail. */
-    .prac-shell { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
-    .prac-main, .prac-rail { display: grid; gap: 16px; align-content: start; min-width: 0; }
-    .prac-rail #revision-row { grid-template-columns: 1fr; }
+    /* Practice shell: the Problem of the Day stays full width; below it
+       everything flows in ONE column (topics, drill, filters, grid,
+       review queue). The drill + review queue used to sit in a slim
+       right rail that ended far above the exercise grid, leaving a big
+       blank side — Vikas asked for them in the main flow instead
+       (16 Nov 2026). */
+    .prac-shell { display: grid; gap: 16px; }
+    .prac-main { display: grid; gap: 16px; align-content: start; min-width: 0; }
     /* Exercise cards hug their content (card-stretch rule): the shared
        .grid-3 stretches every card to the tallest in its row, which left
        a dead band under the shorter cards' status line. */
     #ex-grid { align-items: start; }
-    @media (max-width: 1024px) { .prac-shell { grid-template-columns: 1fr; } }
+
   </style>
 </head>
 <body>
@@ -62,6 +64,9 @@
           <div id="topic-progress"></div>
         </div>
 
+        <div class="card" id="drill-card"></div>
+        <p class="hint" id="challenge-note" style="display:none"></p>
+
         <div class="filter-bar">
           <select id="filter-diff" aria-label="Filter by difficulty">
             <option value="all">All levels</option>
@@ -74,16 +79,13 @@
         </div>
         <p class="hint" id="ex-count"></p>
         <div class="grid-3" id="ex-grid"></div>
+
+        <div class="card" id="revision-sec">
+          <h2 class="section-title" style="font-size:1.3rem">🔁 Review queue</h2>
+          <p class="hint">Exercises you attempted but haven't cracked yet — spaced repetition in action.</p>
+          <div class="grid-3" id="revision-row" style="margin-top:12px"></div>
         </div>
-        <aside class="prac-rail">
-          <div class="card" id="drill-card"></div>
-          <p class="hint" id="challenge-note" style="display:none"></p>
-          <div class="card" id="revision-sec">
-            <h2 class="section-title" style="font-size:1.3rem">🔁 Review queue</h2>
-            <p class="hint">Exercises you attempted but haven't cracked yet — spaced repetition in action.</p>
-            <div class="grid-3" id="revision-row" style="margin-top:12px"></div>
-          </div>
-        </aside>
+        </div>
         </div>
       </div>
 
@@ -103,7 +105,7 @@
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
-<script src="assets/js/auth.js?v=8"></script>
+<script src="assets/js/auth.js?v=9"></script>
 <script src="assets/js/sync.js?v=20"></script>
 <script src="assets/js/ai.js?v=23"></script>
 <script src="assets/js/practice-data.js?v=4"></script>

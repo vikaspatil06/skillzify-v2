@@ -1327,3 +1327,70 @@ p.fail { color: #e74c3c; font-weight: 600; }
 .lb-empty { color: var(--muted); font-size: 0.88rem; padding: 10px 2px; }
 .rank-card-num { font-size: 1.6rem; font-weight: 800; line-height: 1.1; }
 .rank-card-num .grad { background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* ---------- Site Controls offline screen (site-gate.js) ----------
+   The takeover shown when the admin switches a page (or the whole
+   site) OFF. It is a standalone screen, so it keeps the dark brand
+   look in every theme: deep-navy backdrop with soft indigo /
+   purple / cyan glows, one centred card, an amber OFFLINE pill,
+   the page's own alert message, links to pages still ON, and the
+   auto-return note. The .so-banner is the admin's bypass strip. */
+.so-overlay {
+  position: fixed; inset: 0; z-index: 99990; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 22px; padding: 28px 18px;
+  background:
+    radial-gradient(620px 420px at 16% 8%, rgba(108, 123, 255, 0.20), transparent 62%),
+    radial-gradient(720px 480px at 86% 94%, rgba(34, 211, 238, 0.13), transparent 62%),
+    radial-gradient(520px 340px at 84% 10%, rgba(157, 107, 255, 0.13), transparent 60%),
+    #070b1a;
+}
+.so-card {
+  width: 100%; max-width: 540px; text-align: center;
+  background: #121a3a; border: 1px solid rgba(139, 152, 255, 0.22);
+  border-radius: 18px; padding: 38px 34px 30px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+.so-logo { display: block; width: 74px; height: 74px; margin: 0 auto; }
+.so-pill {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 18px;
+  padding: 6px 14px; border-radius: 999px;
+  border: 1px solid rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.10);
+  color: #fbbf24; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.22em;
+}
+.so-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #fbbf24; flex: none;
+  animation: so-pulse 1.8s ease-in-out infinite;
+}
+@keyframes so-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.45); }
+  50% { box-shadow: 0 0 0 6px rgba(251, 191, 36, 0); }
+}
+.so-title { margin: 20px 0 0; font-size: 1.66rem; font-weight: 800; line-height: 1.25; color: #eef1ff; }
+.so-grad { background: linear-gradient(92deg, #6c7bff, #9d6bff 55%, #22d3ee); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.so-msg { margin: 14px auto 0; max-width: 430px; font-size: 1.05rem; font-weight: 600; line-height: 1.5; color: #dbe1ff; }
+.so-sub { margin: 10px auto 0; max-width: 430px; font-size: 0.9rem; line-height: 1.55; color: #98a1c4; }
+.so-links { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 24px; }
+.so-foot {
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  margin-top: 26px; padding-top: 18px; border-top: 1px solid rgba(139, 152, 255, 0.16);
+  font-size: 0.83rem; line-height: 1.5; color: #98a1c4;
+}
+.so-spinner {
+  flex: none; width: 13px; height: 13px; border-radius: 50%;
+  border: 2px solid rgba(139, 152, 255, 0.3); border-top-color: #22d3ee;
+  animation: so-spin 1s linear infinite;
+}
+@keyframes so-spin { to { transform: rotate(360deg); } }
+.so-brand { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.28em; color: #7984ad; }
+.so-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 99991;
+  display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap;
+  padding: 8px 14px; text-align: center;
+  background: rgba(30, 24, 6, 0.92); border-bottom: 1px solid rgba(251, 191, 36, 0.45);
+  color: #fcd34d; font-size: 0.85rem; font-weight: 600;
+}
+.so-banner a { color: #fde68a; font-weight: 700; text-decoration: underline; }
+@media (prefers-reduced-motion: reduce) {
+  .so-dot, .so-spinner { animation: none; }
+}

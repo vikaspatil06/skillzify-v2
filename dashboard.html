@@ -14,10 +14,11 @@
   <meta name="description" content="Your Skillzify learning dashboard — progress, streaks and run history.">
   <title>Dashboard — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=40">
+  <link rel="stylesheet" href="assets/css/style.css?v=41">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+  <script src="assets/js/site-gate.js?v=1"></script>
   <style>
     /* Dashboard shell (redesign v2 rollout): the Continue card stays the
        one primary block; below it a wide work column + a slim rail of
@@ -25,7 +26,14 @@
        secondary blocks. Grid gaps replace the old per-card margins. */
     .dash-shell { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; margin-top: 14px; }
     .dash-main, .dash-rail { display: grid; gap: 14px; align-content: start; min-width: 0; }
-    .dash-main .dash-grid-2 { margin-top: 0; }
+    .dash-main .dash-grid-2 { margin-top: 0; align-items: stretch; }
+    /* Progress by section FILLS its row (Vikas, 16 Nov 2026): paired with
+       Weak spots, the shorter card used to hug its content and leave a
+       blank under it. Now the card stretches to the row height and its
+       seven section rows spread evenly through the full height. */
+    #dash-tracks-card { display: flex; flex-direction: column; }
+    #dash-tracks { flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; }
+    #dash-tracks .track-row { margin-top: 0; flex: 1; align-items: center; }
     .dash-rail .dash-grid { grid-template-columns: 1fr; margin-top: 0; }
     @media (max-width: 1024px) { .dash-shell { grid-template-columns: 1fr; } }
   </style>
@@ -82,7 +90,7 @@
               <p class="muted small">Exercise accuracy by topic — low scores need a revisit.</p>
               <div id="dash-topic-acc" style="margin-top:8px"></div>
             </div>
-            <div class="dash-card">
+            <div class="dash-card" id="dash-tracks-card">
               <h2>Progress by section</h2>
               <div id="dash-tracks" style="margin-top:8px"></div>
             </div>
@@ -176,7 +184,7 @@
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
-<script src="assets/js/auth.js?v=8"></script>
+<script src="assets/js/auth.js?v=9"></script>
 <script src="assets/js/sync.js?v=20"></script>
 <script src="assets/js/ai.js?v=23"></script>
 <script src="assets/js/lessons-index.js?v=1"></script>

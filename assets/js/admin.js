@@ -103,6 +103,8 @@
             render(d);
             show("root");
             loadCommunity();
+            wireSiteControls();
+            scLoad();
           })
           .catch(function () { loading = false; show("unavailable"); });
       });
@@ -247,6 +249,163 @@
         toolsMsg("Production backend answered in " + secs + "s — AI " + (h && h.ai ? "on" : "off") +
           (h && h.capStore ? ", cap store: " + h.capStore : ", still the old backend") + ".");
       }).catch(function () { toolsMsg("Production backend didn't answer — it may still be waking up. Try again in 30 seconds."); });
+    });
+  }
+
+  /* ---------------- Site Controls (Page controls panel) ----------------
+     Data: GET /api/admin/site-config (full state incl. the change
+     log); writes: POST /api/admin/site-config — both behind the
+     same verified admin token as the overview. A switch flip POSTs
+     at once (no Save button); a failed POST re-renders from the
+     last known state, so the switch visibly reverts. The master
+     switch asks for confirmation before taking the site offline. */
+  var SC_PAGES = [
+    ["index.html", "Home"], ["learn.html", "Learn"], ["lesson.html", "Lesson"],
+    ["practice.html", "Practice"], ["paths.html", "Learning Paths"], ["projects.html", "Projects"],
+    ["community.html", "Community"], ["compiler.html", "Code Studio"], ["flowchart.html", "Flowchart Lab"],
+    ["reference.html", "Reference"], ["dashboard.html", "Dashboard"], ["profile.html", "Profile"],
+    ["passport.html", "Skill Passport"], ["map.html", "Journey Map"], ["placement.html", "Placement Test"],
+    ["interview.html", "AI Interview"], ["about.html", "About"], ["contact.html", "Contact"]
+  ];
+  var SC_NAMES = {};
+  SC_PAGES.forEach(function (p) { SC_NAMES[p[0]] = p[1]; });
+  var scState = null;
+  var scBusy = false;
+  var scWired = false;
+
+  function scStatus(t, isErr) {
+    var s = el("sc-status");
+    if (!s) return;
+    s.textContent = t || "";
+    s.style.color = isErr ? "var(--danger)" : "";
+  }
+  function scWhen(iso) {
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return "";
+      return d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+    } catch (e) { return ""; }
+  }
+  function scSetEnabled() {
+    var card = el("site-controls-card");
+    if (!card) return;
+    card.querySelectorAll("input, button").forEach(function (n) { n.disabled = scBusy; });
+  }
+  function scRender() {
+    if (!scState) return;
+    el("sc-main").style.display = "";
+    var masterOn = scState.master !== false;
+    el("sc-master-toggle").checked = masterOn;
+    var mp = el("sc-master-pill");
+    mp.textContent = masterOn ? "Live" : "Offline";
+    mp.className = "chip " + (masterOn ? "ok" : "bad");
+    var msgInput = el("sc-message");
+    if (document.activeElement !== msgInput) msgInput.value = scState.message || "";
+    el("sc-pages").innerHTML = SC_PAGES.map(function (p) {
+      var f = p[0];
+      var on = !(scState.pages && scState.pages[f] === false);
+      var msg = (scState.pageMessages && scState.pageMessages[f]) || "";
+      return '<div class="sc-page">' +
+        '<div class="sc-page-top"><b>' + esc(p[1]) + "</b>" +
+        '<span class="chip ' + (on ? "ok" : "bad") + '">' + (on ? "Live" : "Offline") + "</span>" +
+        '<label class="sc-switch"><input type="checkbox" class="sc-page-toggle" data-page="' + f + '"' + (on ? " checked" : "") + '><span class="track"></span></label></div>' +
+        '<div class="sc-msgedit"><input class="sc-input sc-page-msg" type="text" data-page="' + f + '" maxlength="300" placeholder="Default message" value="' + esc(msg) + '">' +
+        '<button class="btn btn-sm btn-ghost sc-page-msg-save" type="button" data-page="' + f + '">Save</button></div>' +
+        "</div>";
+    }).join("");
+    var log = scState.log || [];
+    el("sc-log").innerHTML = log.length ? log.slice(0, 8).map(function (e) {
+      var detail = String(e.detail || "").replace(/^(\S+\.html)/, function (m) { return SC_NAMES[m] || m; });
+      return '<div class="row"><span>' + esc(detail) + '</span><span class="when">' + esc(scWhen(e.at)) + "</span></div>";
+    }).join("") : '<p class="hint" style="margin:4px 0">No changes yet.</p>';
+    scSetEnabled();
+  }
+  function scLoad() {
+    return idToken().then(function (tok) {
+      return fetch(BASE + "/api/admin/site-config?token=" + encodeURIComponent(tok || ""))
+        .then(function (r) {
+          if (!r.ok) throw new Error("http " + r.status);
+          return r.json();
+        })
+        .then(function (d) {
+          if (!d || !d.ok) throw new Error("bad state");
+          scState = d;
+          scStatus("");
+          scRender();
+        });
+    }).catch(function () {
+      scState = null;
+      var main = el("sc-main");
+      if (main) main.style.display = "none";
+      scStatus("Couldn't reach the server — controls unavailable. (On a backend without Site Controls, this panel wakes up with that deploy.)", true);
+    });
+  }
+  function scPost(patch, okMsg) {
+    if (scBusy) return;
+    scBusy = true;
+    scSetEnabled();
+    idToken().then(function (tok) {
+      var body = {};
+      Object.keys(patch).forEach(function (k) { body[k] = patch[k]; });
+      body.token = tok || "";
+      return fetch(BASE + "/api/admin/site-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      }).then(function (r) {
+        return r.json().then(function (d) { return { status: r.status, d: d }; }, function () { return { status: r.status, d: null }; });
+      });
+    }).then(function (res) {
+      scBusy = false;
+      if (res.status === 200 && res.d && res.d.ok) {
+        scState = res.d;
+        scStatus(okMsg || "Saved.");
+        scRender();
+        return;
+      }
+      scStatus("Couldn't save that change" + (res.d && res.d.error ? " — " + res.d.error : "") + ". The controls were put back as they were.", true);
+      scRender();
+      scLoad();
+    }).catch(function () {
+      scBusy = false;
+      scStatus("Couldn't reach the server — change not saved.", true);
+      scRender();
+      scLoad();
+    });
+  }
+  function wireSiteControls() {
+    var card = el("site-controls-card");
+    if (!card || scWired) return;
+    scWired = true;
+    el("sc-master-toggle").addEventListener("change", function (ev) {
+      var on = ev.target.checked;
+      if (!on && !window.confirm("Take the WHOLE site offline for learners? Every content page will show the offline screen until you turn it back on.")) {
+        ev.target.checked = true;
+        return;
+      }
+      scPost({ master: on }, on ? "Site is live." : "Whole site is OFFLINE for learners.");
+    });
+    el("sc-message-save").addEventListener("click", function () {
+      scPost({ message: el("sc-message").value }, "Default message saved.");
+    });
+    card.addEventListener("change", function (ev) {
+      var t = ev.target;
+      if (t && t.classList && t.classList.contains("sc-page-toggle")) {
+        var f = t.getAttribute("data-page");
+        var patch = { pages: {} };
+        patch.pages[f] = t.checked;
+        scPost(patch, (SC_NAMES[f] || f) + (t.checked ? " is live." : " is OFFLINE for learners."));
+      }
+    });
+    card.addEventListener("click", function (ev) {
+      var t = ev.target;
+      if (t && t.classList && t.classList.contains("sc-page-msg-save")) {
+        var f = t.getAttribute("data-page");
+        var input = card.querySelector('.sc-page-msg[data-page="' + f + '"]');
+        var patch = { pageMessages: {} };
+        patch.pageMessages[f] = input ? input.value : "";
+        scPost(patch, (SC_NAMES[f] || f) + " message saved.");
+      }
     });
   }
 

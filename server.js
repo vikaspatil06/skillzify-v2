@@ -650,6 +650,179 @@ app.get("/api/admin/overview", async (req, res) => {
     days: days
   });
 });
+/* ---------------- Site Controls (page on/off switches) ----------------
+   Vikas's feature (16 Nov 2026; spec: site-controls-spec-2026-11-16.md):
+   from the admin page he can turn any content page OFF — learners get
+   a branded offline screen (assets/js/site-gate.js) instead — and
+   flip one master switch that takes the whole site offline. State
+   lives in ONE Firestore doc, siteConfig/state, through the same
+   lazy firebase-admin connection as the daily-cap store (initCapStore
+   / capDb); with no credential configured it lives in memory only and
+   resets on restart, exactly like the caps. Writes happen ONLY here,
+   behind the verified admin identity (resolveIdentity + ADMIN_EMAIL,
+   the same check as /api/admin/overview); the public read exists
+   because the state is not a secret — it only says which pages are
+   off. admin.html, auth.html and reset-password.html are NOT in
+   SITE_PAGES: the control room and the sign-in door can never be
+   switched off. */
+var SITE_PAGES = [
+  "index.html", "learn.html", "lesson.html", "practice.html", "paths.html",
+  "projects.html", "community.html", "compiler.html", "flowchart.html",
+  "reference.html", "dashboard.html", "profile.html", "passport.html",
+  "map.html", "placement.html", "interview.html", "about.html", "contact.html"
+];
+var SITE_DEFAULT_MESSAGE = "An update is on the way — we'll be back soon.";
+var SITE_COLLECTION = "siteConfig";
+var SITE_DOC = "state";
+var siteMem = null;   // last known state when Firestore is off/unavailable
+var siteCache = null; // { at, pub } — 10 s read cache for /api/site-status
+
+function siteDefaultState() {
+  return { master: true, pages: {}, pageMessages: {}, message: SITE_DEFAULT_MESSAGE, log: [], updatedAt: "", updatedBy: "" };
+}
+// Only well-formed, known-page state ever leaves this function: the
+// doc is admin-written, but the gate trusts whatever it reads, so
+// anything unexpected is dropped here rather than at every reader.
+function siteSanitize(raw) {
+  var d = siteDefaultState();
+  if (!raw || typeof raw !== "object") return d;
+  if (typeof raw.master === "boolean") d.master = raw.master;
+  if (raw.pages && typeof raw.pages === "object") {
+    Object.keys(raw.pages).forEach(function (k) {
+      if (SITE_PAGES.indexOf(k) !== -1 && raw.pages[k] === false) d.pages[k] = false;
+    });
+  }
+  if (raw.pageMessages && typeof raw.pageMessages === "object") {
+    Object.keys(raw.pageMessages).forEach(function (k) {
+      var v = raw.pageMessages[k];
+      if (SITE_PAGES.indexOf(k) !== -1 && typeof v === "string" && v.trim()) d.pageMessages[k] = v.slice(0, 300);
+    });
+  }
+  if (typeof raw.message === "string" && raw.message.trim()) d.message = raw.message.slice(0, 300);
+  if (Array.isArray(raw.log)) {
+    d.log = raw.log.filter(function (e) {
+      return e && typeof e === "object" && typeof e.at === "string" && typeof e.detail === "string";
+    }).slice(0, 20).map(function (e) {
+      return { at: e.at, what: String(e.what || ""), detail: e.detail.slice(0, 160), by: String(e.by || "") };
+    });
+  }
+  if (typeof raw.updatedAt === "string") d.updatedAt = raw.updatedAt;
+  if (typeof raw.updatedBy === "string") d.updatedBy = raw.updatedBy;
+  return d;
+}
+async function siteLoadState() {
+  initCapStore();
+  if (capStore === "firestore" && capDb) {
+    try {
+      var snap = await capDb.collection(SITE_COLLECTION).doc(SITE_DOC).get();
+      if (snap.exists) { siteMem = siteSanitize(snap.data()); return siteMem; }
+      return siteDefaultState();
+    } catch (e) {
+      console.log("[site] Firestore read failed, using in-memory state for this request: " + (e && e.message ? e.message : e));
+    }
+  }
+  return siteMem ? siteSanitize(siteMem) : siteDefaultState();
+}
+async function siteSaveState(state) {
+  siteMem = state;
+  siteCache = null; // the next public read must see the change at once
+  initCapStore();
+  if (capStore === "firestore" && capDb) {
+    try {
+      await capDb.collection(SITE_COLLECTION).doc(SITE_DOC).set(state);
+    } catch (e) {
+      console.log("[site] Firestore write failed, state kept in memory only: " + (e && e.message ? e.message : e));
+    }
+  }
+}
+function sitePublic(state) {
+  return { master: state.master, pages: state.pages, pageMessages: state.pageMessages, message: state.message, updatedAt: state.updatedAt };
+}
+// GET /api/site-status — public read for site-gate.js (its fallback
+// when the Firestore REST read is unavailable). Never returns the
+// change log or who flipped a switch.
+app.get("/api/site-status", async (req, res) => {
+  var now = Date.now();
+  if (siteCache && now - siteCache.at < 10000) return res.json(Object.assign({ ok: true }, siteCache.pub));
+  var pub = sitePublic(await siteLoadState());
+  siteCache = { at: now, pub: pub };
+  res.json(Object.assign({ ok: true }, pub));
+});
+async function requireSiteAdmin(req, res) {
+  // GETs carry identity in the query (like /api/admin/overview);
+  // POSTs in the body. Passing an empty {} body for a GET would
+  // shadow the query in resolveIdentity's legacy fallback.
+  var ident = await resolveIdentity(req, req.method === "POST" ? (req.body || null) : null, req.query || {});
+  if (!ident.uid || ident.email !== ADMIN_EMAIL) {
+    res.status(403).json({ ok: false, error: "Admins only.", code: "NOT_ADMIN" });
+    return null;
+  }
+  return ident;
+}
+// GET /api/admin/site-config — the admin panel's read: full state,
+// change log included.
+app.get("/api/admin/site-config", async (req, res) => {
+  var ident = await requireSiteAdmin(req, res);
+  if (!ident) return;
+  res.json(Object.assign({ ok: true }, await siteLoadState()));
+});
+// POST /api/admin/site-config — merge a change into the state:
+// { master?: boolean, message?: string, pages?: { file: bool },
+//   pageMessages?: { file: string } }. A page set back ON is REMOVED
+// from the pages map (missing = ON, so the doc only ever lists OFF
+// pages); an empty page message clears that page's custom message.
+// Unknown page keys are a 400 — a typo must never silently no-op.
+app.post("/api/admin/site-config", async (req, res) => {
+  var ident = await requireSiteAdmin(req, res);
+  if (!ident) return;
+  var body = req.body || {};
+  var bad = null;
+  ["pages", "pageMessages"].forEach(function (field) {
+    if (body[field] && typeof body[field] === "object") {
+      Object.keys(body[field]).forEach(function (k) { if (SITE_PAGES.indexOf(k) === -1) bad = k; });
+    }
+  });
+  if (bad) return res.status(400).json({ ok: false, error: "Unknown page: " + bad, code: "BAD_PAGE" });
+  if (body.master !== undefined && typeof body.master !== "boolean") {
+    return res.status(400).json({ ok: false, error: "master must be true or false.", code: "BAD_MASTER" });
+  }
+  if (body.message !== undefined && typeof body.message !== "string") {
+    return res.status(400).json({ ok: false, error: "message must be text.", code: "BAD_MESSAGE" });
+  }
+  var state = await siteLoadState();
+  var at = new Date().toISOString();
+  function logChange(what, detail) {
+    state.log.unshift({ at: at, what: what, detail: detail, by: ident.email });
+    if (state.log.length > 20) state.log.length = 20;
+  }
+  if (typeof body.master === "boolean" && body.master !== state.master) {
+    state.master = body.master;
+    logChange("master", "Whole site → " + (body.master ? "ON" : "OFF"));
+  }
+  if (typeof body.message === "string" && body.message.trim() && body.message.trim() !== state.message) {
+    state.message = body.message.trim().slice(0, 300);
+    logChange("message", "Default message updated");
+  }
+  if (body.pages && typeof body.pages === "object") {
+    Object.keys(body.pages).forEach(function (k) {
+      var on = body.pages[k] !== false;
+      var wasOff = state.pages[k] === false;
+      if (on && wasOff) { delete state.pages[k]; logChange("page", k + " → ON"); }
+      else if (!on && !wasOff) { state.pages[k] = false; logChange("page", k + " → OFF"); }
+    });
+  }
+  if (body.pageMessages && typeof body.pageMessages === "object") {
+    Object.keys(body.pageMessages).forEach(function (k) {
+      var v = typeof body.pageMessages[k] === "string" ? body.pageMessages[k].trim().slice(0, 300) : "";
+      if (v && state.pageMessages[k] !== v) { state.pageMessages[k] = v; logChange("pageMessage", k + " message set"); }
+      else if (!v && state.pageMessages[k]) { delete state.pageMessages[k]; logChange("pageMessage", k + " message cleared"); }
+    });
+  }
+  state.updatedAt = at;
+  state.updatedBy = ident.email;
+  await siteSaveState(state);
+  res.json(Object.assign({ ok: true }, state));
+});
 /* ---------------- mode definitions ---------------- */
 const tutorStyle =
   "You are a friendly Python tutor for a beginner student. " +

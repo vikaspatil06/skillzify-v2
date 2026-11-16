@@ -58,6 +58,16 @@
       auth = firebase.auth();
       auth.onAuthStateChanged(function (u) {
         fbUser = u || null;
+        // Site Controls (site-gate.js): the gate runs in <head>,
+        // before Firebase resolves, so it cannot know yet whether
+        // the visitor is the admin. This flag is how it finds out:
+        // set while the admin is signed in, removed on sign-out or
+        // any other sign-in. The gate only uses it to swap the
+        // offline screen for an admin banner — never for access.
+        try {
+          if (fbUser && String(fbUser.email || "").trim().toLowerCase() === "patil.vikas6306@gmail.com") localStorage.setItem("skillzify_is_admin", "1");
+          else localStorage.removeItem("skillzify_is_admin");
+        } catch (e) {}
         if (!ready) {
           ready = true;
           var cbs = readyCbs; readyCbs = [];
