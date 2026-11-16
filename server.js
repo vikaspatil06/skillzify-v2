@@ -678,7 +678,7 @@ var siteMem = null;   // last known state when Firestore is off/unavailable
 var siteCache = null; // { at, pub } — 10 s read cache for /api/site-status
 
 function siteDefaultState() {
-  return { master: true, pages: {}, pageMessages: {}, message: SITE_DEFAULT_MESSAGE, log: [], updatedAt: "", updatedBy: "" };
+  return { master: true, pages: {}, pageMessages: {}, message: SITE_DEFAULT_MESSAGE, updatedAt: "", updatedBy: "" };
 }
 // Only well-formed, known-page state ever leaves this function: the
 // doc is admin-written, but the gate trusts whatever it reads, so
@@ -740,7 +740,7 @@ function sitePublic(state) {
 }
 // GET /api/site-status — public read for site-gate.js (its fallback
 // when the Firestore REST read is unavailable). Never returns the
-// change log or who flipped a switch.
+// or who flipped a switch.
 app.get("/api/site-status", async (req, res) => {
   var now = Date.now();
   if (siteCache && now - siteCache.at < 10000) return res.json(Object.assign({ ok: true }, siteCache.pub));
@@ -759,8 +759,7 @@ async function requireSiteAdmin(req, res) {
   }
   return ident;
 }
-// GET /api/admin/site-config — the admin panel's read: full state,
-// change log included.
+// GET /api/admin/site-config — the admin panel's read: full state.
 app.get("/api/admin/site-config", async (req, res) => {
   var ident = await requireSiteAdmin(req, res);
   if (!ident) return;
@@ -791,31 +790,25 @@ app.post("/api/admin/site-config", async (req, res) => {
   }
   var state = await siteLoadState();
   var at = new Date().toISOString();
-  function logChange(what, detail) {
-    state.log.unshift({ at: at, what: what, detail: detail, by: ident.email });
-    if (state.log.length > 20) state.log.length = 20;
-  }
   if (typeof body.master === "boolean" && body.master !== state.master) {
     state.master = body.master;
-    logChange("master", "Whole site → " + (body.master ? "ON" : "OFF"));
   }
   if (typeof body.message === "string" && body.message.trim() && body.message.trim() !== state.message) {
     state.message = body.message.trim().slice(0, 300);
-    logChange("message", "Default message updated");
   }
   if (body.pages && typeof body.pages === "object") {
     Object.keys(body.pages).forEach(function (k) {
       var on = body.pages[k] !== false;
       var wasOff = state.pages[k] === false;
-      if (on && wasOff) { delete state.pages[k]; logChange("page", k + " → ON"); }
-      else if (!on && !wasOff) { state.pages[k] = false; logChange("page", k + " → OFF"); }
+      if (on && wasOff) { delete state.pages[k]; }
+      else if (!on && !wasOff) { state.pages[k] = false; }
     });
   }
   if (body.pageMessages && typeof body.pageMessages === "object") {
     Object.keys(body.pageMessages).forEach(function (k) {
       var v = typeof body.pageMessages[k] === "string" ? body.pageMessages[k].trim().slice(0, 300) : "";
-      if (v && state.pageMessages[k] !== v) { state.pageMessages[k] = v; logChange("pageMessage", k + " message set"); }
-      else if (!v && state.pageMessages[k]) { delete state.pageMessages[k]; logChange("pageMessage", k + " message cleared"); }
+      if (v && state.pageMessages[k] !== v) { state.pageMessages[k] = v; }
+      else if (!v && state.pageMessages[k]) { delete state.pageMessages[k]; }
     });
   }
   state.updatedAt = at;

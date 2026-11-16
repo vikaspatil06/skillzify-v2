@@ -279,13 +279,6 @@
     s.textContent = t || "";
     s.style.color = isErr ? "var(--danger)" : "";
   }
-  function scWhen(iso) {
-    try {
-      var d = new Date(iso);
-      if (isNaN(d.getTime())) return "";
-      return d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-    } catch (e) { return ""; }
-  }
   function scSetEnabled() {
     var card = el("site-controls-card");
     if (!card) return;
@@ -313,11 +306,6 @@
         '<button class="btn btn-sm btn-ghost sc-page-msg-save" type="button" data-page="' + f + '">Save</button></div>' +
         "</div>";
     }).join("");
-    var log = scState.log || [];
-    el("sc-log").innerHTML = log.length ? log.slice(0, 8).map(function (e) {
-      var detail = String(e.detail || "").replace(/^(\S+\.html)/, function (m) { return SC_NAMES[m] || m; });
-      return '<div class="row"><span>' + esc(detail) + '</span><span class="when">' + esc(scWhen(e.at)) + "</span></div>";
-    }).join("") : '<p class="hint" style="margin:4px 0">No changes yet.</p>';
     scSetEnabled();
   }
   function scLoad() {

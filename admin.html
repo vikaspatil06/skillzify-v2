@@ -53,9 +53,9 @@
     .links-grid a { display:block; padding:11px 13px; border:1px solid var(--card-border); border-radius:var(--radius); background:var(--bg-soft); text-decoration:none; color:var(--text); font-weight:600; font-size:.92rem; }
     .links-grid a span { display:block; color:var(--muted); font-weight:400; font-size:.8rem; margin-top:2px; }
     .comm-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; }
-    /* Admin shell (redesign v2 rollout): the six data cards pair up in a
-       two-column panel grid — usage with history, configuration with
-       community, links with tools — instead of one long stack. */
+    /* Admin shell: two balanced column stacks (usage/configuration/
+       tools | history/community/links), then Page controls full width
+       underneath — no column ever towers over the other. */
     .admin-pairs { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
     /* Two independent column stacks, not grid rows: in a single grid each
        row was as tall as its taller card, so the shorter card ended in a
@@ -81,15 +81,18 @@
     .sc-master .grow { flex:1; min-width:0; }
     .sc-msgedit { display:flex; gap:8px; margin-top:6px; }
     .sc-msgedit .sc-input { flex:1; min-width:0; }
-    .sc-page { padding:10px 0; border-bottom:1px dashed var(--card-border); }
-    .sc-page:last-child { border-bottom:none; }
+    /* Page controls spans the FULL width under the two columns, and its
+       18 page rows lay out as a grid of compact sub-cards — as a single
+       half-width column the panel stretched the page tall with a blank
+       side (Vikas, 16 Nov 2026). Recent changes was removed the same
+       day, also on his call — the panel stays one fixed size. */
+    #site-controls-card { margin-top:16px; }
+    #sc-pages { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:12px; }
+    .sc-page { border:1px solid var(--card-border); background:var(--bg-soft); border-radius:10px; padding:12px; }
     .sc-page-top { display:flex; align-items:center; gap:10px; }
     .sc-page-top b { flex:1; min-width:0; }
-    .sc-h3 { margin:16px 0 4px; font-size:1rem; }
-    .sc-log { font-size:.88rem; }
-    .sc-log .row { display:flex; justify-content:space-between; gap:12px; padding:5px 0; border-bottom:1px dashed var(--card-border); }
-    .sc-log .row:last-child { border-bottom:none; }
-    .sc-log .when { color:var(--muted); white-space:nowrap; }
+    @media (max-width:1200px) { #sc-pages { grid-template-columns:repeat(2,1fr); } }
+    @media (max-width:720px) { #sc-pages { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
@@ -150,6 +153,33 @@
         </div>
 
         <div class="card admin-card">
+          <h2>👥 Community snapshot</h2>
+          <p class="sub">Live counts from Skillzify Circle (Firestore).</p>
+          <div class="comm-grid" id="admin-community"></div>
+          <div class="btn-row" style="margin-top:12px">
+            <a class="btn btn-ghost" href="community.html">Open community</a>
+          </div>
+        </div>
+        </div>
+        <div class="admin-col">
+        <div class="card admin-card">
+          <h2>📅 Last 7 days</h2>
+          <p class="sub">AI answers per day (IST). Counts live in the cap store, so they survive backend restarts.</p>
+          <div id="admin-days"></div>
+        </div>
+
+        <div class="card admin-card">
+          <h2>🧰 Tools</h2>
+          <p class="sub">Small jobs, no terminal needed.</p>
+          <div class="btn-row">
+            <button class="btn" id="admin-refresh" type="button">↻ Refresh data</button>
+            <button class="btn btn-ghost" id="admin-copy" type="button">📋 Copy today's summary</button>
+            <button class="btn btn-ghost" id="admin-warm" type="button">🔥 Wake the production backend</button>
+          </div>
+          <p class="hint" id="admin-tools-msg" style="margin-top:10px"></p>
+        </div>
+
+        <div class="card admin-card">
           <h2>🔗 Quick links</h2>
           <p class="sub">Everything you operate, one tap away.</p>
           <div class="links-grid">
@@ -164,32 +194,7 @@
           </div>
         </div>
         </div>
-        <div class="admin-col">
-        <div class="card admin-card">
-          <h2>📅 Last 7 days</h2>
-          <p class="sub">AI answers per day (IST). Counts live in the cap store, so they survive backend restarts.</p>
-          <div id="admin-days"></div>
-        </div>
-
-        <div class="card admin-card">
-          <h2>👥 Community snapshot</h2>
-          <p class="sub">Live counts from Skillzify Circle (Firestore).</p>
-          <div class="comm-grid" id="admin-community"></div>
-          <div class="btn-row" style="margin-top:12px">
-            <a class="btn btn-ghost" href="community.html">Open community</a>
-          </div>
-        </div>
-
-        <div class="card admin-card">
-          <h2>🧰 Tools</h2>
-          <p class="sub">Small jobs, no terminal needed.</p>
-          <div class="btn-row">
-            <button class="btn" id="admin-refresh" type="button">↻ Refresh data</button>
-            <button class="btn btn-ghost" id="admin-copy" type="button">📋 Copy today's summary</button>
-            <button class="btn btn-ghost" id="admin-warm" type="button">🔥 Wake the production backend</button>
-          </div>
-          <p class="hint" id="admin-tools-msg" style="margin-top:10px"></p>
-        </div>
+      </div>
 
         <div class="card admin-card" id="site-controls-card">
           <h2>🚦 Page controls</h2>
@@ -210,12 +215,8 @@
               </div>
             </div>
             <div id="sc-pages"></div>
-            <h3 class="sc-h3">Recent changes</h3>
-            <div class="sc-log" id="sc-log"></div>
           </div>
         </div>
-        </div>
-      </div>
     </div>
     </div>
   </section>
@@ -234,6 +235,6 @@
 <script src="assets/js/auth.js?v=9"></script>
 <script src="assets/js/sync.js?v=20"></script>
 <script src="assets/js/ai.js?v=23"></script>
-<script src="assets/js/admin.js?v=3"></script>
+<script src="assets/js/admin.js?v=4"></script>
 </body>
 </html>
