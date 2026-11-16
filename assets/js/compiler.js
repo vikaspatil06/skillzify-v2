@@ -945,6 +945,7 @@
         printLine("✅ Python 3.11 ready (Pyodide). Press ▶ Run.", "dim");
         setRunUI(false);
         checkProblems(true);
+        restorePackages();
       }).catch(function (e) {
         pyodideLoading = false;
         printLine("❌ Could not load the Python runtime. Check your connection and reload.", "err");
@@ -1835,9 +1836,16 @@
 
   /* ================= packages (stretch, Code Studio 2.0) =================
      A small curated shelf: Pyodide-bundled wheels install via
-     loadPackage; pure-Python wheels via micropip. Installs live in
-     the current kernel only — a restart clears them, like a real
-     ephemeral environment. Status is reported in the terminal. */
+     loadPackage; pure-Python wheels via micropip. Installs PERSIST
+     on this device (Vikas, 16 Nov 2026: "once installed no need to
+     install again"): the installed set is remembered in localStorage,
+     pip installs are snapshotted (the site-packages files they added)
+     into IndexedDB, and everything is restored automatically when
+     the kernel boots — refresh and Restart kernel included. Bundle
+     packages are re-loaded from the Pyodide distribution instead of
+     snapshotted (they are megabytes; the snapshot is for pip wheels).
+     Persistence is fail-open: if storage is unavailable, installs
+     simply behave session-only, exactly as before. */
   var PKGS = [
     { name: "numpy", how: "bundle" },
     { name: "pandas", how: "bundle" },
@@ -1846,6 +1854,167 @@
     { name: "emoji", how: "pip" }
   ];
   var pkgState = {}; // name -> "installing" | "installed"
+  var PKG_LS_KEY = "skillzify_pkg_installed_v1";
+  function pkgLoadRemembered() {
+    try {
+      var raw = window.localStorage.getItem(PKG_LS_KEY);
+      var obj = raw ? JSON.parse(raw) : {};
+      return (obj && typeof obj === "object") ? obj : {};
+    } catch (e) { return {}; }
+  }
+  function pkgRemember(name, version, how) {
+    try {
+      var obj = pkgLoadRemembered();
+      obj[name] = { v: version || "", how: how || "" };
+      window.localStorage.setItem(PKG_LS_KEY, JSON.stringify(obj));
+    } catch (e) {}
+  }
+  function pkgForget(name) {
+    try {
+      var obj = pkgLoadRemembered();
+      delete obj[name];
+      window.localStorage.setItem(PKG_LS_KEY, JSON.stringify(obj));
+    } catch (e) {}
+    pkgIdbDel(name);
+  }
+  // Seed the shelf from the remembered set so a refresh shows
+  // "✓ Installed" immediately, before the kernel even boots.
+  (function seedPkgState() {
+    var obj = pkgLoadRemembered();
+    Object.keys(obj).forEach(function (name) {
+      pkgState[name] = "installed";
+      if (obj[name] && obj[name].v) pkgVersion[name] = String(obj[name].v);
+    });
+  })();
+  /* --- IndexedDB snapshots of pip-installed files --- */
+  function pkgIdbOpen() {
+    return new Promise(function (resolve, reject) {
+      try {
+        var req = window.indexedDB.open("skillzify-pkg-fs", 1);
+        req.onupgradeneeded = function () {
+          try { req.result.createObjectStore("files"); } catch (e) {}
+        };
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror = function () { reject(req.error); };
+      } catch (e) { reject(e); }
+    });
+  }
+  function pkgIdbPut(name, files) {
+    return pkgIdbOpen().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction("files", "readwrite");
+        tx.objectStore("files").put({ files: files }, name);
+        tx.oncomplete = function () { try { db.close(); } catch (e) {} resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+  function pkgIdbGet(name) {
+    return pkgIdbOpen().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var req = db.transaction("files", "readonly").objectStore("files").get(name);
+        req.onsuccess = function () { try { db.close(); } catch (e) {} resolve(req.result || null); };
+        req.onerror = function () { reject(req.error); };
+      });
+    });
+  }
+  function pkgIdbDel(name) {
+    try {
+      pkgIdbOpen().then(function (db) {
+        var tx = db.transaction("files", "readwrite");
+        tx.objectStore("files").delete(name);
+        tx.oncomplete = function () { try { db.close(); } catch (e) {} };
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  /* --- site-packages file walking (for pip snapshots) --- */
+  function pkgPurelib() {
+    try { return String(pyodide.runPython("import sysconfig\nsysconfig.get_paths()['purelib']")); }
+    catch (e) { return ""; }
+  }
+  function pkgWalkFiles(root) {
+    // Map of path-relative-to-root -> "size:mtime" for every file.
+    var out = {};
+    try {
+      var FS = pyodide.FS;
+      (function walk(dir, rel) {
+        var entries = [];
+        try { entries = FS.readdir(dir); } catch (e) { return; }
+        entries.forEach(function (ent) {
+          if (ent === "." || ent === "..") return;
+          var full = dir + "/" + ent, r = rel ? rel + "/" + ent : ent;
+          try {
+            var st = FS.stat(full);
+            if (FS.isDir(st.mode)) walk(full, r);
+            else out[r] = st.size + ":" + Math.floor(st.mtime || 0);
+          } catch (e) {}
+        });
+      })(root, "");
+    } catch (e) {}
+    return out;
+  }
+  function pkgSnapshotDiff(name, root, before) {
+    try {
+      var FS = pyodide.FS;
+      var after = pkgWalkFiles(root);
+      var files = [];
+      Object.keys(after).forEach(function (rel) {
+        if (before[rel] !== after[rel]) {
+          try { files.push({ path: rel, data: FS.readFile(root + "/" + rel) }); } catch (e) {}
+        }
+      });
+      if (files.length) pkgIdbPut(name, files).catch(function () {});
+    } catch (e) {}
+  }
+  /* Restore every remembered package into a freshly booted kernel.
+     Called from the Pyodide-ready path, so it covers first boot and
+     Restart kernel alike. A package whose restore fails is forgotten
+     (its shelf row becomes installable again) rather than lying. */
+  var pkgRestoring = false;
+  function restorePackages() {
+    if (!pyodide || pkgRestoring) return;
+    var obj = pkgLoadRemembered();
+    var names = Object.keys(obj);
+    if (!names.length) return;
+    pkgRestoring = true;
+    var root = pkgPurelib();
+    var chain = Promise.resolve();
+    names.forEach(function (name) {
+      chain = chain.then(function () {
+        var meta = null;
+        PKGS.forEach(function (x) { if (x.name === name) meta = x; });
+        if (!meta) { pkgForget(name); delete pkgState[name]; renderPackages(); return null; }
+        if (meta.how === "bundle") {
+          return pyodide.loadPackage(name).then(function () {
+            pkgState[name] = "installed"; renderPackages();
+          }, function () {
+            pkgForget(name); delete pkgState[name]; renderPackages();
+          });
+        }
+        return pkgIdbGet(name).then(function (rec) {
+          if (!rec || !rec.files || !rec.files.length || !root) throw new Error("no snapshot");
+          var FS = pyodide.FS;
+          rec.files.forEach(function (f) {
+            var full = root + "/" + f.path;
+            var dir = full.slice(0, full.lastIndexOf("/"));
+            try { FS.mkdirTree(dir); } catch (e) {}
+            FS.writeFile(full, f.data);
+          });
+          pyodide.runPython("import importlib\nimportlib.invalidate_caches()");
+          var v = pyodide.runPython("import " + name + "\ngetattr(" + name + ", '__version__', '')");
+          if (v) pkgVersion[name] = String(v);
+          pkgState[name] = "installed";
+          renderPackages();
+          printLine("📦 " + name + " restored from your saved installs.", "dim");
+        }).catch(function () {
+          pkgForget(name);
+          delete pkgState[name];
+          renderPackages();
+        });
+      });
+    });
+    chain.then(function () { pkgRestoring = false; }, function () { pkgRestoring = false; });
+  }
   function renderPackages() {
     var host = document.getElementById("pkg-list");
     if (!host) return;
@@ -1873,6 +2042,13 @@
     renderPackages();
     switchPtab("terminal");
     printLine("📦 Installing " + name + "…", "dim");
+    // For pip installs, fingerprint site-packages first so the files
+    // the install adds can be snapshotted for persistence.
+    var snapRoot = "", snapBefore = null;
+    if (p.how === "pip") {
+      snapRoot = pkgPurelib();
+      if (snapRoot) snapBefore = pkgWalkFiles(snapRoot);
+    }
     function done(ok, msg) {
       if (ok) {
         pkgState[name] = "installed";
@@ -1881,6 +2057,8 @@
           var v = pyodide.runPython("import " + name + "\ngetattr(" + name + ", '__version__', '')");
           if (v) pkgVersion[name] = String(v);
         } catch (e) {}
+        pkgRemember(name, pkgVersion[name] || "", p.how);
+        if (p.how === "pip" && snapRoot && snapBefore) pkgSnapshotDiff(name, snapRoot, snapBefore);
       } else delete pkgState[name];
       renderPackages();
       printLine(ok ? "✅ " + name + " installed — `import " + name + "` works now."
