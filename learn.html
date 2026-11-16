@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify Python learning path — 250 interactive lessons across 7 journey sections with quizzes, coding challenges and XP.">
   <title>Learn Python — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=41">
+  <link rel="stylesheet" href="assets/css/style.css?v=42">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -37,12 +37,16 @@
        rule), and the search row's height was set by the review card.
        As independent stacks every block hugs its own content. */
     .learn-rail, .learn-main { display: grid; gap: 16px; align-content: start; min-width: 0; }
+    /* Sticky rail (Vikas, 16 Nov): Your progress + Review travel along
+       while the lessons scroll, so the left side never sits empty
+       beside the long sections list. Same pattern as .ref-sidebar. */
+    .learn-rail { position: sticky; top: 80px; max-height: calc(100vh - 96px); overflow-y: auto; scrollbar-width: thin; }
     .learn-rail .progress-wrap { margin-bottom: 0; }
     .learn-main .continue-card { margin-bottom: 0; }
     .learn-main #plc-banner:empty { display: none; }
     @media (max-width: 1024px) {
       .learn-grid { grid-template-columns: 1fr; }
-      .learn-rail { order: 1; }
+      .learn-rail { order: 1; position: static; max-height: none; overflow: visible; }
       .learn-grid > .card:first-child { order: 2; }
     }
   </style>

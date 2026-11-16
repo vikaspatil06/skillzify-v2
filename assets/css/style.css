@@ -358,7 +358,14 @@ svg.ic { display: inline-block; vertical-align: -3px; flex: none; }
 .tok-k { color: #9d6bff; } .tok-s { color: #7ee0a3; } .tok-c { color: #5b648c; font-style: italic; } .tok-f { color: #22d3ee; }
 
 /* ---------- Features ---------- */
-.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 26px; align-items: start; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 26px; grid-auto-rows: 1fr; }
+/* Equal-size rule (Vikas, 16 Nov 2026): within a section every card is
+   the SAME size — grid rows are equal height (grid-auto-rows: 1fr),
+   each card fills its row as a flex column and its footer link pins
+   to the bottom, so no card ends higher or lower than its neighbours
+   and no stretched card shows an empty bottom. */
+.grid-4 > .card { display: flex; flex-direction: column; }
+.grid-4 > .card > .card-link { margin-top: auto; padding-top: 10px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 26px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 18px; }
 /* Card-stretch rule (Vikas, 16 Nov 2026): a card stretched by its row
@@ -691,6 +698,7 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.88rem
 }
 @media (max-width: 720px) {
   .grid-4, .grid-3, .grid-2, .dash-grid { grid-template-columns: 1fr; }
+  .grid-4 { grid-auto-rows: auto; }
   /* P1-5: on phones hide only the "👋 Name" greeting inside #account-link
      so the bar still fits — the Login link / Logout button stay visible. */
   #account-link > span { display: none; }

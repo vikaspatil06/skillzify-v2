@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify — Learn. Build. Shine. An advanced, browser-first Python learning platform for students with an AI-powered compiler.">
   <title>Skillzify — Learn. Build. Shine.</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=41">
+  <link rel="stylesheet" href="assets/css/style.css?v=42">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -31,9 +31,11 @@
     .hero .container { position: relative; }
     @media (min-width: 1101px) { .stats { grid-template-columns: repeat(8, 1fr); } }
     @media (max-width: 1100px) and (min-width: 641px) { .stats { grid-template-columns: repeat(4, 1fr); } }
-    .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 26px; }
-    /* Card-stretch rule (16 Nov): home-grid cards fill their row height
-       with their link pinned to the card's foot — never an empty bottom. */
+    .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 26px; grid-auto-rows: 1fr; }
+    /* Equal-size rule (Vikas, 16 Nov): every card in the section is the
+       same size — equal-height rows, cards fill their row with their
+       link pinned to the card's foot — never an empty bottom. */
+    @media (max-width: 640px) { .home-grid { grid-auto-rows: auto; } }
     .home-grid .card { display: flex; flex-direction: column; }
     .home-grid .card .card-link { margin-top: auto; padding-top: 10px; }
     /* Learning Paths (gap-fix pass): auto-fit put 5 cards in the first
