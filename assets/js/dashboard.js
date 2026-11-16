@@ -829,6 +829,6 @@
     // P2-17: note real sync completions (detail.at) so getDailyPlan
     // can tell a plan built before the sync from one built after it.
     try { if (ev && ev.detail && ev.detail.at) noteSyncAt(ev.detail.at); } catch (e) {}
-    try { renderNextUp(); renderDailyPlan(); } catch (e) {}
+    try { renderNextUp(); renderDailyPlan(); renderHeatmap(); } catch (e) {}
   });
 })();

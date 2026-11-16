@@ -548,6 +548,28 @@
     }
     return out;
   }
+  /* Activity days (the dashboard heatmap's data, {"2026-11-01": 7}):
+     UNION of days with a per-day MAX, the counters rule. Before this
+     the day map lived only in one browser's localStorage and was wiped
+     on sign-out without ever being backed up, so the heatmap showed
+     182 empty days on any new browser/origin while XP and streaks —
+     which DO sync — restored fine. MAX (not sum) because the same
+     day's events can reach the cloud from two origins; a day once
+     active can never become inactive again. Malformed keys/values
+     are dropped, never fabricated. */
+  function mergeActivityDays(localDoc, cloudDoc) {
+    var out = {};
+    [localDoc, cloudDoc].forEach(function (doc) {
+      if (doc && typeof doc === "object" && !Array.isArray(doc)) {
+        Object.keys(doc).forEach(function (k) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) return;
+          var v = Math.max(0, parseInt(doc[k], 10) || 0);
+          if (v > 0 && v > (out[k] || 0)) out[k] = v;
+        });
+      }
+    });
+    return out;
+  }
   function reviewsTooBig(doc) {
     try { return unescape(encodeURIComponent(JSON.stringify((doc && doc.items) || {}))).length > 100 * 1024; }
     catch (e) { return false; }
@@ -883,6 +905,24 @@
     }
     return out;
   }
+  function readLocalActivityDays() {
+    var raw = storeGet(LS.ACTIVITY_DAYS, null);
+    var out = {};
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      Object.keys(raw).forEach(function (k) {
+        var v = Math.max(0, parseInt(raw[k], 10) || 0);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(k) && v > 0) out[k] = v;
+      });
+    }
+    return out;
+  }
+  function writeLocalActivityDays(doc) {
+    // Never wipe a local day map with "no information" (mirrors
+    // writeLocalPlacement): an empty merge means neither side had
+    // any days, so the local map is already empty anyway.
+    if (!doc || !Object.keys(doc).length) return;
+    storeSet(LS.ACTIVITY_DAYS, doc);
+  }
   function writeLocalAchievements(doc) {
     var out = {};
     doc = doc || {};
@@ -968,6 +1008,24 @@
     // whenever the union is non-empty (an empty union is omitted,
     // never pushed as an empty map, mirroring placement).
     var mergedAchievements = mergeAchievements(readLocalAchievements(), data.achievements || null);
+    // Activity days: union + per-day MAX (see mergeActivityDays) —
+    // grow-only like achievements, omitted from the payload when empty.
+    // History floor: lesson completion dates (progress.doneAt) have
+    // always synced, so derive the days they prove — a learner whose
+    // day map was wiped before day-sync existed gets their real
+    // history back on the heatmap instead of 182 empty cells. MAX
+    // keeps recorded counts wherever they are higher.
+    var derivedDays = {};
+    var doneAtMap = (mergedProgress && mergedProgress.doneAt) || {};
+    Object.keys(doneAtMap).forEach(function (id) {
+      var ms = num(doneAtMap[id]);
+      if (ms > 0) {
+        var d = new Date(ms);
+        var k = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+        derivedDays[k] = (derivedDays[k] || 0) + 1;
+      }
+    });
+    var mergedActivityDays = mergeActivityDays(mergeActivityDays(readLocalActivityDays(), data.activityDays || null), derivedDays);
     // Profile and customPaths are whole-document last-write-wins by
     // updatedAt, so ONLY stamp them when this device actually contributed
     // a change — re-stamping an unchanged doc let an idle device's old
@@ -1032,6 +1090,7 @@
     var achPayload = {};
     Object.keys(mergedAchievements).forEach(function (k) { achPayload[k] = true; });
     if (Object.keys(achPayload).length) payload.achievements = achPayload;
+    if (Object.keys(mergedActivityDays).length) payload.activityDays = mergedActivityDays;
     var wsSkipped = false;
     if (wsHasFiles && !workspaceTooBig(mergedWorkspace)) {
       payload.workspace = mergedWorkspace;
@@ -1042,7 +1101,7 @@
     return {
       profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises,
       paths: mergedPaths, customPaths: mergedCustomPaths, workspace: mergedWorkspace,
-      reviews: mergedReviews, projects: mergedProjects, placement: mergedPlacement, counters: mergedCounters, achievements: mergedAchievements, payload: payload, wsSkipped: wsSkipped
+      reviews: mergedReviews, projects: mergedProjects, placement: mergedPlacement, counters: mergedCounters, achievements: mergedAchievements, activityDays: mergedActivityDays, payload: payload, wsSkipped: wsSkipped
     };
   }
   // Write a merged result locally + report success. Runs only after the
@@ -1059,6 +1118,7 @@
     writeLocalPlacement(m.placement);
     writeLocalCounters(m.counters);
     writeLocalAchievements(m.achievements);
+    writeLocalActivityDays(m.activityDays);
     if (m.wsSkipped) setStatus("Workspace too large to sync (700 KB limit)");
     else setStatus("Synced \u2713 " + fmtTime(Date.now()));
     try {

@@ -80,6 +80,14 @@
        in normal conditions the files section flexes and lists scroll
        internally instead. */
     #view-explorer { overflow-y: auto; }
+    /* Settings view: its single .side-section is the scroll box —
+       flex:1 + min-height:0 sizes it to exactly the sidebar space
+       under the pinned title, and it scrolls internally (the same
+       .side-scroll pattern as Search/History). Without this the
+       settings were clipped by the locked shell on shorter windows
+       with no way to reach the Workspace buttons (Vikas, 16 Nov). */
+    #view-settings .side-section { flex: 1; min-height: 0; overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: #232c52 transparent; }
     .side-title { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--ide-muted);
       padding: 10px 14px 6px; display: flex; align-items: center; justify-content: space-between;
       text-transform: uppercase; }
@@ -693,7 +701,7 @@
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js?v=9"></script>
-<script src="assets/js/sync.js?v=20"></script>
+<script src="assets/js/sync.js?v=21"></script>
 <script src="assets/js/ai.js?v=23"></script>
 <script>
   /* Monaco (the VS Code editor engine), pinned 0.45.0 on jsDelivr.

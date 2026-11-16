@@ -4,6 +4,9 @@ rules_version = '2';
 //
 // Community collections (Phase 1): questions, answers, showcase,
 // publicProfiles, xpGrants. Reads are public; writes need a signed-in user.
+// interviews (16 Nov 2026): owner-only interview reports.
+// siteConfig (16 Nov 2026): publicly readable on/off state for every
+// page; written only through the server (Admin SDK), never by clients.
 // Deploy from the Firebase console: Firestore Database > Rules > paste > Publish.
 // Publishing REPLACES the console rules — this file is the complete set.
 // Server-side collections (aiDailyCaps) are written by the Admin SDK, which
@@ -153,6 +156,26 @@ service cloud.firestore {
         && questionMarkedBest(request.resource.data.questionId, request.resource.data.answerId, request.auth.uid);
       allow update: if request.auth != null && resource.data.toUid == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['claimed']);
+    }
+
+    // Interview reports (AI Interview Intelligence, 16 Nov 2026):
+    // owner-only — a signed-in user creates, reads, updates and
+    // deletes only their own interview history.
+    match /interviews/{docId} {
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.uid;
+      allow read, update, delete: if request.auth != null
+        && request.auth.uid == resource.data.uid;
+    }
+
+    // Site Controls state (16 Nov 2026): one doc, siteConfig/state,
+    // holding the master switch, per-page on/off flags and messages.
+    // Publicly readable so every page's site-gate can check it
+    // without sign-in; writes happen ONLY through the server (the
+    // Admin SDK bypasses rules), so client writes are denied.
+    match /siteConfig/{docId} {
+      allow get: if true;
+      allow write: if false;
     }
   }
 }
