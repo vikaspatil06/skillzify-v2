@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify — Learn. Build. Shine. An advanced, browser-first Python learning platform for students with an AI-powered compiler.">
   <title>Skillzify — Learn. Build. Shine.</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=39">
+  <link rel="stylesheet" href="assets/css/style.css?v=40">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -31,6 +31,16 @@
     @media (min-width: 1101px) { .stats { grid-template-columns: repeat(8, 1fr); } }
     @media (max-width: 1100px) and (min-width: 641px) { .stats { grid-template-columns: repeat(4, 1fr); } }
     .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 26px; }
+    /* Card-stretch rule (16 Nov): home-grid cards fill their row height
+       with their link pinned to the card's foot — never an empty bottom. */
+    .home-grid .card { display: flex; flex-direction: column; }
+    .home-grid .card .card-link { margin-top: auto; padding-top: 10px; }
+    /* Learning Paths (gap-fix pass): auto-fit put 5 cards in the first
+       row and 1 orphan in the second at desktop widths. A fixed 3×2
+       fills the section evenly; 2 and 1 columns on smaller screens. */
+    .home-grid.paths-grid { grid-template-columns: repeat(3, 1fr); }
+    @media (max-width: 1024px) { .home-grid.paths-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 640px) { .home-grid.paths-grid { grid-template-columns: 1fr; } }
     .meta-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 9px; }
     .chip { display: inline-block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em;
       padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--muted); }
@@ -115,7 +125,7 @@
         <div class="stat" role="listitem"><div class="num" data-count="250">0</div><div class="lbl">Interactive lessons</div></div>
         <div class="stat" role="listitem"><div class="num" data-count="150">0</div><div class="lbl">Coding exercises</div></div>
         <div class="stat" role="listitem"><div class="num" data-count="127">0</div><div class="lbl">Reference entries</div></div>
-        <div class="stat" role="listitem"><div class="num" data-count="14">0</div><div class="lbl">Guided projects</div></div>
+        <div class="stat" role="listitem"><div class="num" data-count="15">0</div><div class="lbl">Guided projects</div></div>
         <div class="stat" role="listitem"><div class="num" data-count="6">0</div><div class="lbl">Learning paths · 370 steps</div></div>
         <div class="stat" role="listitem"><div class="num" data-count="32">0</div><div class="lbl">Achievements to unlock</div></div>
         <div class="stat" role="listitem"><div class="num" data-count="11">0</div><div class="lbl">Levels, Novice → Grandmaster</div></div>
@@ -138,7 +148,7 @@
         <p style="color:var(--muted);max-width:640px">A 10-question adaptive diagnostic places you at the right section of the journey and unlocks everything before it. Placement is a pointer, never progress — no XP, no lessons marked done, just the right starting line.</p>
         <div class="btn-row"><a href="placement.html" class="btn">Take the placement test →</a></div>
       </div>
-      <div class="home-grid">
+      <div class="home-grid paths-grid">
         <div class="card">
           <div class="meta-row"><span class="chip">Beginner</span><span class="chip"><strong>95</strong>&nbsp;steps</span></div>
           <h3>🐍 Python Fundamentals</h3>
@@ -422,14 +432,14 @@ top = scores.sort_values(<span class="tok-s">"xp"</span>, ascending=<span class=
         <div class="card">
           <span class="potd-eyebrow"><svg class="ic" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4.2 4.2 0 0 0-5.9 5.3L4 16.4V20h3.6l4.8-4.8a4.2 4.2 0 0 0 5.3-5.9l-2.8 2.8-2.3-.7-.7-2.3z"/></svg> Guided projects</span>
           <h3 style="font-size:1.3rem;margin:8px 0">Build things you'd actually keep</h3>
-          <p style="color:var(--muted)">Fourteen guided builds with milestones and starter code — here are a few favourites:</p>
+          <p style="color:var(--muted)">Fifteen guided builds with milestones and starter code — here are a few favourites:</p>
           <ul class="feat-list">
             <li><strong>File Organizer</strong> — sort a messy Downloads folder by file type <span class="hint">(os, pathlib)</span></li>
             <li><strong>Weather API Client</strong> — your first program that talks to the internet <span class="hint">(requests, JSON)</span></li>
             <li><strong>CSV Data Analyzer</strong> — real answers from a real dataset <span class="hint">(csv, Counter, statistics)</span></li>
             <li><strong>Notes App with SQLite</strong> — a notes app with real persistent storage <span class="hint">(sqlite3, CRUD)</span></li>
           </ul>
-          <div class="btn-row"><a href="projects.html" class="card-link">View all 14 projects →</a></div>
+          <div class="btn-row"><a href="projects.html" class="card-link">View all 15 projects →</a></div>
         </div>
       </div>
     </div>

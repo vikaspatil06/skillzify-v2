@@ -14,7 +14,7 @@
   <meta name="description" content="Contact the Skillzify team.">
   <title>Contact — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=39">
+  <link rel="stylesheet" href="assets/css/style.css?v=40">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -25,7 +25,10 @@
     .two-col.contact-grid { grid-template-columns: 5fr 7fr; align-items: start; }
     .contact-grid > .form-card { order: 2; }
     .contact-grid > div:last-child { order: 1; }
-    .faq { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; align-items: start; }
+    /* Gap-fix pass (16 Nov): the accordion rows sat flush (row-gap 0) —
+       Vikas asked for clear separation between the FAQ items. 10px is
+       the v2 card-grid rhythm; the 22px column gutter stays. */
+    .faq { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 22px; align-items: start; }
     @media (max-width: 820px) { .faq { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -87,7 +90,7 @@
     </div>
   </section>
 
-  <section class="section" style="padding-top:0">
+  <section class="section" style="padding-top:0;padding-bottom:16px">
     <div class="container">
       <h2 class="section-title" style="font-size:1.6rem">Frequently asked questions</h2>
       <p class="hint" style="margin-bottom:8px">Quick answers — no email needed.</p>

@@ -358,9 +358,16 @@ svg.ic { display: inline-block; vertical-align: -3px; flex: none; }
 .tok-k { color: #9d6bff; } .tok-s { color: #7ee0a3; } .tok-c { color: #5b648c; font-style: italic; } .tok-f { color: #22d3ee; }
 
 /* ---------- Features ---------- */
-.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 26px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 26px; align-items: start; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 26px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 18px; }
+/* Card-stretch rule (Vikas, 16 Nov 2026): a card stretched by its row
+   must not end in a big empty bottom — it either sizes to its content
+   (align-items:start grids) or fills the height with real content, its
+   footer action pinned to the bottom. Two-up cards take the fill:
+   the action row sits at the card's foot, never floating mid-card. */
+.grid-2 > .card { display: flex; flex-direction: column; }
+.grid-2 > .card > .btn-row, .grid-2 > .card > .card-link { margin-top: auto; padding-top: 10px; }
 .card {
   background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius);
   padding: 16px; position: relative;
@@ -473,9 +480,11 @@ details.settings { margin-top: 12px; border: 1px solid var(--card-border); borde
 details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.88rem; }
 
 /* ---------- Dashboard ---------- */
-.dash-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
-/* Two-column dashboard rows — collapses to one column on mobile (no inline styles!) */
-.dash-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.dash-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; align-items: start; }
+/* Two-column dashboard rows — collapses to one column on mobile (no inline styles!).
+   align-items:start — paired cards hug their content instead of stretching
+   to the taller card and ending in an empty bottom (card-stretch rule). */
+.dash-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; align-items: start; }
 .dash-card { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); padding: 16px; }
 .dash-card .big { font-size: 1.85rem; font-weight: 800; line-height: 1.15; }
 .ring-wrap { display: flex; align-items: center; gap: 14px; }
@@ -778,7 +787,7 @@ details.settings summary { cursor: pointer; font-weight: 700; font-size: 0.88rem
 .pill .pill-n { font-size: 0.74rem; opacity: 0.8; font-variant-numeric: tabular-nums; }
 .pill.active .tp-dot { box-shadow: 0 0 0 2px rgba(255,255,255,.35); }
 .tp-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
-.tp-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+.tp-row { display: flex; align-items: center; gap: 10px; padding: 3px 0; line-height: 1.4; }
 .tp-row .tp-label { min-width: 118px; font-weight: 600; font-size: 0.87rem; display: flex; align-items: center; gap: 6px; }
 .tp-row .bar { flex: 1; margin: 0; }
 .tp-row .pct { min-width: 52px; text-align: right; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -877,7 +886,7 @@ button.track-head:hover { background: var(--card); }
 /* ---------- Lesson modal ---------- */
 .lm-kicker { font-size: 0.76rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin: 4px 0 8px; }
 .lesson-page {
-  max-width: 780px; margin: 0 auto; padding: 26px 30px 30px;
+  max-width: 780px; margin: 0 auto; padding: 24px 30px 22px;
   background: var(--card); border: 1px solid var(--card-border);
   border-radius: 12px; box-shadow: var(--shadow);
 }
@@ -895,13 +904,13 @@ button.track-head:hover { background: var(--card); }
 .lesson-done-note { background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.35); color: var(--text); border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; }
 a.node, a.node:hover { text-decoration: none; }
 .lm-explain { color: var(--muted); font-size: 0.94rem; }
-.lm-points { margin: 12px 0 6px; }
-.lm-sec { margin: 22px 0 4px; font-size: 1.05rem; }
+.lm-points { margin: 10px 0 4px; }
+.lm-sec { margin: 17px 0 4px; font-size: 1.05rem; }
 .cw-title { margin-left: auto; font-size: 0.72rem; color: #5b648c; font-family: monospace; }
 .tok-n { color: #fbbf24; }
 
 /* ---------- Quiz ---------- */
-.quiz-q { background: var(--card); border: 1px solid var(--card-border); border-radius: 8px; padding: 13px; margin: 10px 0; }
+.quiz-q { background: var(--card); border: 1px solid var(--card-border); border-radius: 8px; padding: 12px 13px; margin: 8px 0; }
 .quiz-q h4 { margin-bottom: 8px; font-size: 0.92rem; }
 .quiz-opt {
   display: block; width: 100%; text-align: left; background: var(--bg-soft);
@@ -917,7 +926,7 @@ a.node, a.node:hover { text-decoration: none; }
 .quiz-why.show { display: block; }
 
 /* ---------- Challenge ---------- */
-.challenge { background: var(--card); border: 1px solid var(--card-border); border-radius: 8px; padding: 13px; margin: 10px 0; transition: border-color 0.3s ease; }
+.challenge { background: var(--card); border: 1px solid var(--card-border); border-radius: 8px; padding: 12px 13px; margin: 8px 0; transition: border-color 0.3s ease; }
 .challenge.done { border-color: var(--success); }
 .ch-prompt { font-weight: 600; margin: 6px 0 10px; }
 .blank-row { display: flex; gap: 8px; margin-top: 10px; }
@@ -1082,7 +1091,7 @@ button, a, .quiz-opt, .quiz-opt *, .node, .auth-tabs button {
 .try-row { display: flex; gap: 7px; margin-top: 7px; }
 @media (max-width: 820px) { .ref-layout { grid-template-columns: 1fr; } .ref-sidebar { position: static; max-height: 220px; } }
 /* ---- Reference v2: overview, detail depth, runner ---- */
-.ref-overview { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.ref-overview { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; align-items: start; }
 .ref-ov-card { background: var(--bg-soft); border: 1px solid var(--card-border); border-radius: 8px; padding: 12px; }
 .ref-ov-card h3 { margin: 0 0 5px; font-size: 0.95rem; display: flex; align-items: center; gap: 7px; }
 .ref-ov-card .pill-n { font-size: .7rem; opacity: .75; }
@@ -1171,7 +1180,7 @@ p.fail { color: #e74c3c; font-weight: 600; }
 #map-root .cmap-dot.cmap-state-rusty { background: #a16207; border-color: #854d0e; }
 #map-root .cmap-edge-sample { display: inline-block; width: 20px; border-top: 2px dashed #8ea2ff; vertical-align: middle; }
 #map-root .cmap-crumb { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; color: var(--muted); }
-#map-root .cmap-secpath { position: relative; display: flex; gap: 16px; align-items: stretch; padding: 14px 4px 26px; overflow: visible; }
+#map-root .cmap-secpath { position: relative; display: flex; gap: 16px; align-items: flex-start; padding: 14px 4px 26px; overflow: visible; }
 #map-root .cmap-lessonpath { position: relative; display: flex; flex-direction: column; align-items: center; padding: 12px 0; overflow: visible; }
 #map-root .cmap-edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; overflow: visible; }
 #map-root .cmap-edge-seq { fill: none; stroke: #7c8cff; stroke-opacity: 0.45; stroke-width: 2.5; stroke-linecap: round; }

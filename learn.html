@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify Python learning path — 250 interactive lessons across 7 journey sections with quizzes, coding challenges and XP.">
   <title>Learn Python — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=39">
+  <link rel="stylesheet" href="assets/css/style.css?v=40">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -29,20 +29,20 @@
        first and the rail blocks after. */
     .learn-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); column-gap: 16px; align-items: start; }
     .learn-grid > .card:first-child { grid-column: 1 / -1; }
-    .learn-grid #plc-banner, .learn-grid .continue-card, .learn-grid .search-row,
-    .learn-grid #no-results, .learn-grid #tracks { grid-column: 2; min-width: 0; }
-    .learn-grid .progress-wrap, .learn-grid #review { grid-column: 1; min-width: 0; }
+    /* Gap-fix pass (16 Nov): the rail and the main column are real
+       wrapper stacks, not implicit grid rows. Before, the Continue card
+       shared a row with the tall progress box, so its box stretched to
+       the row's height and ended in a big empty bottom (card-stretch
+       rule), and the search row's height was set by the review card.
+       As independent stacks every block hugs its own content. */
+    .learn-rail, .learn-main { display: grid; gap: 16px; align-content: start; min-width: 0; }
+    .learn-rail .progress-wrap { margin-bottom: 0; }
+    .learn-main .continue-card { margin-bottom: 0; }
+    .learn-main #plc-banner:empty { display: none; }
     @media (max-width: 1024px) {
       .learn-grid { grid-template-columns: 1fr; }
-      .learn-grid > * { grid-column: 1; }
-      .learn-grid #plc-banner { order: 0; }
-      .learn-grid .continue-card { order: 1; }
-      .learn-grid .search-row { order: 2; }
-      .learn-grid #no-results { order: 3; }
-      .learn-grid #tracks { order: 4; }
-      .learn-grid .progress-wrap { order: 5; }
-      .learn-grid #review { order: 6; }
-      .learn-grid > .card:first-child { order: 7; }
+      .learn-rail { order: 1; }
+      .learn-grid > .card:first-child { order: 2; }
     }
   </style>
 </head>
@@ -80,22 +80,26 @@
           </div>
         </div>
       </div>
-      <div id="plc-banner" aria-live="polite"></div>
+      <div class="learn-rail">
       <div class="progress-wrap">
         <h2 style="margin-bottom:4px">Your progress</h2>
         <p class="hint" style="margin-top:0">Saved in your browser — no account needed.</p>
         <div id="progress-box"></div>
       </div>
-      <div class="continue-card" id="continue-card" aria-live="polite"></div>
-      <div class="card" id="review" style="margin-bottom:18px">
+      <div class="card" id="review">
         <div id="review-section"><p class="hint">Loading your review queue…</p></div>
       </div>
+      </div>
+      <div class="learn-main">
+      <div id="plc-banner" aria-live="polite"></div>
+      <div class="continue-card" id="continue-card" aria-live="polite"></div>
       <div class="search-row">
         <span class="search-ico" aria-hidden="true">🔍</span>
         <input id="lesson-search" type="search" placeholder="Search 250 lessons… try &quot;decorators&quot;, &quot;files&quot;, &quot;loops&quot;" aria-label="Search lessons" autocomplete="off">
       </div>
       <p class="hint" id="no-results" hidden style="text-align:center">No lessons match your search.</p>
       <div id="tracks"><p class="hint" id="tracks-fallback" style="padding:24px 4px">Loading your lessons… if they don't appear, hard-refresh with Ctrl+Shift+R (or Cmd+Shift+R on Mac).</p></div>
+      </div>
     </div>
   </section>
 </main>

@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify admin — system status, AI usage, configuration and community at a glance. Admins only.">
   <title>Admin — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=39">
+  <link rel="stylesheet" href="assets/css/style.css?v=40">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -57,6 +57,11 @@
        two-column panel grid — usage with history, configuration with
        community, links with tools — instead of one long stack. */
     .admin-pairs { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+    /* Two independent column stacks, not grid rows: in a single grid each
+       row was as tall as its taller card, so the shorter card ended in a
+       big empty bottom (AI usage beside the model chain). Stacked, every
+       card hugs its own content. */
+    .admin-col { display:grid; gap:16px; align-content:start; min-width:0; }
     .admin-pairs .admin-card { margin-bottom:0; }
     @media (max-width:900px) { .admin-pairs { grid-template-columns:1fr; } }
   </style>
@@ -104,7 +109,7 @@
       <div id="admin-root" style="display:none">
         <div class="admin-stats" id="admin-stats"></div>
         <div class="admin-pairs">
-
+        <div class="admin-col">
         <div class="card admin-card">
           <h2>🤖 AI usage — today</h2>
           <p class="sub" id="admin-today-sub">Loading…</p>
@@ -113,24 +118,9 @@
         </div>
 
         <div class="card admin-card">
-          <h2>📅 Last 7 days</h2>
-          <p class="sub">AI answers per day (IST). Counts live in the cap store, so they survive backend restarts.</p>
-          <div id="admin-days"></div>
-        </div>
-
-        <div class="card admin-card">
           <h2>⚙️ Configuration</h2>
           <p class="sub">Live from the server. Caps, keys and models change via the server's environment variables + a redeploy — never from this page.</p>
           <div id="admin-config"></div>
-        </div>
-
-        <div class="card admin-card">
-          <h2>👥 Community snapshot</h2>
-          <p class="sub">Live counts from Skillzify Circle (Firestore).</p>
-          <div class="comm-grid" id="admin-community"></div>
-          <div class="btn-row" style="margin-top:12px">
-            <a class="btn btn-ghost" href="community.html">Open community</a>
-          </div>
         </div>
 
         <div class="card admin-card">
@@ -147,6 +137,22 @@
             <a href="https://console.groq.com/" target="_blank" rel="noopener">⚡ Groq console<span>Spillover provider keys + limits</span></a>
           </div>
         </div>
+        </div>
+        <div class="admin-col">
+        <div class="card admin-card">
+          <h2>📅 Last 7 days</h2>
+          <p class="sub">AI answers per day (IST). Counts live in the cap store, so they survive backend restarts.</p>
+          <div id="admin-days"></div>
+        </div>
+
+        <div class="card admin-card">
+          <h2>👥 Community snapshot</h2>
+          <p class="sub">Live counts from Skillzify Circle (Firestore).</p>
+          <div class="comm-grid" id="admin-community"></div>
+          <div class="btn-row" style="margin-top:12px">
+            <a class="btn btn-ghost" href="community.html">Open community</a>
+          </div>
+        </div>
 
         <div class="card admin-card">
           <h2>🧰 Tools</h2>
@@ -160,7 +166,7 @@
         </div>
         </div>
       </div>
-
+    </div>
     </div>
   </section>
 </main>

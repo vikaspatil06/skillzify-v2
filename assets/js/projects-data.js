@@ -656,5 +656,77 @@ if __name__ == "__main__":
 `,
     tryIt: false,
     note: "⚠️ Sockets don't work in the in-browser compiler — run this on your machine. Only scan hosts you own."
+  },
+  {
+    id: "flashcard-study", icon: "📇", title: "Flashcard Study App",
+    level: "Intermediate", color: "#22d3ee",
+    skills: "json, dicts, functions, random",
+    desc: "Build a Leitner-box flashcard trainer: a deck stored as JSON, review rounds that promote the cards you know and recycle the ones you don't.",
+    steps: [
+      "Model a card as a dict with <code>front</code>, <code>back</code>, a Leitner <code>box</code> (1–3) and a <code>reviews</code> counter.",
+      "Store the whole deck as JSON text and load it with <code>json.loads()</code>; <code>setdefault()</code> fills in the progress fields on new cards.",
+      "Write <code>review()</code>: a correct recall moves a card up one box (capped at 3); a miss sends it straight back to box 1.",
+      "Summarise the deck by counting cards per box — your study progress at a glance.",
+      "Save progress with <code>json.dumps(indent=2)</code> so the deck survives between sessions. <strong>Stretch:</strong> swap the scripted answers for <code>input()</code> self-grading."
+    ],
+    code: `import json
+import random
+
+DECK_JSON = """[
+  {"front": "What does len() do?", "back": "Returns the number of items in a sequence or collection."},
+  {"front": "Which keyword defines a function?", "back": "def"},
+  {"front": "What is a mutable type?", "back": "A type whose value can change after creation - e.g. list, dict, set."},
+  {"front": "How do you open a file safely?", "back": "With a context manager: with open(path) as f: ..."}
+]"""
+
+def load_deck(text):
+    """Parse the deck from JSON text into a list of card dicts."""
+    cards = json.loads(text)
+    for card in cards:
+        card.setdefault("box", 1)      # Leitner box: 1 = new, higher = better known
+        card.setdefault("reviews", 0)
+    return cards
+
+def save_deck(cards):
+    """Serialise the deck back to JSON text (indent for readability)."""
+    return json.dumps(cards, indent=2)
+
+def review(cards, answers):
+    """One review round. answers maps front -> True if recalled.
+    Correct: the card moves up a box. Wrong: back to box 1."""
+    for card in cards:
+        card["reviews"] += 1
+        if answers.get(card["front"]):
+            card["box"] = min(card["box"] + 1, 3)
+        else:
+            card["box"] = 1
+    return cards
+
+def summary(cards):
+    boxes = {1: 0, 2: 0, 3: 0}
+    for card in cards:
+        boxes[card["box"]] += 1
+    total_reviews = sum(c["reviews"] for c in cards)
+    return boxes, total_reviews
+
+deck = load_deck(DECK_JSON)
+print(f"Loaded {len(deck)} flashcards.")
+
+# A scripted study round (in Code Studio, replace this with input() answers)
+random.seed(7)
+round_answers = {c["front"]: random.random() > 0.35 for c in deck}
+review(deck, round_answers)
+
+for card in deck:
+    mark = "knew it" if round_answers[card["front"]] else "review again"
+    print(f"[box {card['box']}] {card['front']} - {mark}")
+
+boxes, total = summary(deck)
+print(f"\\nBoxes: learning {boxes[1]} - familiar {boxes[2]} - mastered {boxes[3]}")
+print(f"Total reviews so far: {total}")
+print("\\nSaved deck (JSON):")
+print(save_deck(deck)[:200] + "...")`,
+    tryIt: true,
+    note: "The demo grades itself with seeded random answers so it runs start-to-finish here — step 5 shows how to make it ask you instead."
   }
 ];

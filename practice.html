@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify Practice — topic-wise Python exercises with automated tests, hints, and AI tutor.">
   <title>Practice — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=39">
+  <link rel="stylesheet" href="assets/css/style.css?v=40">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -26,6 +26,10 @@
     .prac-shell { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
     .prac-main, .prac-rail { display: grid; gap: 16px; align-content: start; min-width: 0; }
     .prac-rail #revision-row { grid-template-columns: 1fr; }
+    /* Exercise cards hug their content (card-stretch rule): the shared
+       .grid-3 stretches every card to the tallest in its row, which left
+       a dead band under the shorter cards' status line. */
+    #ex-grid { align-items: start; }
     @media (max-width: 1024px) { .prac-shell { grid-template-columns: 1fr; } }
   </style>
 </head>
