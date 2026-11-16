@@ -6,32 +6,33 @@ An advanced, browser-first Python learning platform for students — a modern mu
 
 ## ✨ Features
 
-- **Landing page** (`index.html`) — hero, feature cards, animated stats, testimonials, dark/light theme toggle
+- **Landing page** (`index.html`) — a full front door in the unified design system: hero with a live code window and an animated stats bar (250 lessons · 150 exercises · 127 reference entries · 14 projects · 6 paths / 370 steps · 32 achievements · 11 levels · 7 sections), the W3Schools-style subject strip, placement-test + learning-paths overview, the 7-section journey, a 12-card feature grid, a Learn → Practice → Build → Prove loop, a Code Studio showcase, a Problem of the Day teaser, community + leaderboard cards, the full 11-level XP ladder, an FAQ, and dark/light theme + accent switching
 - **Python learning journey** (`learn.html`) — **250 lessons** across **7 journey sections** (🌱 Base Camp, 🧱 Tool Shed, 🏯 Object Castle, 🧠 Algorithm Arena, ⚡ Power Lab, 📊 Data Lab, 🚀 Launch Pad) rendered as a Duolingo-style visual journey: lesson nodes on a winding animated SVG path (locked 🔒 / current ✨ / completed ✓), sequential unlocking. Each lesson opens on its own page (`lesson.html?id=`) with a rich explanation, key takeaways, syntax-highlighted code (Copy + "Try in compiler" handoff), a quiz with instant feedback (3 questions picked at random from the lesson's question pool), and a mini coding challenge (predict-the-output or fill-the-blank). Completing both triggers confetti, XP gain popup, and streak update. **XP & levels** (Novice → Grandmaster, 11 levels up to 11,000 XP, plus once-only bonuses for section/path completion, reviews, and streak milestones) persist to `localStorage` and sync across devices via Firebase. Keyboard: `Esc` closes, `←/→` navigate lessons. Respects `prefers-reduced-motion`.
 - **Spaced repetition** (`assets/js/review.js`) — SM-2-lite review scheduling (intervals 1 → 3 → 7 → 14 → 30 → 60 days, reset on a miss). A review section on the Learn page, a due-count nudge on the Dashboard, and review state that syncs across devices.
 - **Mastery Engine** (`assets/js/mastery.js`) — a 0–100 mastery score per topic and per section, derived from your solves and reviews (quality frozen at solve time, so practising more never lowers it). Powers the **Next Up** card on Learn and Dashboard, a **~15-minute daily plan** (due reviews + weakest-topic exercise + one new lesson, +10 XP once a day for finishing it), mastery bars and 🍂 rusty badges on Dashboard/Profile, and an AI daily challenge led by your weakest topic.
 - **Placement test** (`placement.html`) — a 3-minute, 10-question adaptive diagnostic that places you at the right section of the 7-section journey and unlocks everything before it, so you skip what you already know. Placement is a pointer, never progress: no XP, no lessons marked done. A wrong answer in the review gets an "✨ Explain why" AI explanation.
-- **Practice Mode** (`practice.html` + `assets/js/practice.js` + `assets/js/practice-data.js`) — **150 exercises** across 17 topics (variables, strings, collections, loops, functions, OOP, exceptions, DSA, recursion, sorting, trees & graphs, dynamic programming, data science, web, files, testing, async) in 3 formats: ✍️ write-code (hidden tests executed in Pyodide), 🔮 predict-output, 🐞 fix-the-bug. Features: per-test pass/fail results, **3-level progressive hints**, ⏱ timed mode with personal bests, 📅 daily challenge (deterministic by date), 🔁 spaced-repetition review queue, solution walkthroughs, 🐍 pythonic-coach notes, your-code-vs-model **solution comparison**, and a **Socratic AI Tutor** (guides without revealing the answer). Solved exercises award XP into the shared system.
+- **Practice Mode** (`practice.html` + `assets/js/practice.js` + `assets/js/practice-data.js`) — **150 exercises** across 17 topics (variables, strings, collections, loops, functions, OOP, exceptions, DSA, recursion, sorting, trees & graphs, dynamic programming, data science, web, files, testing, async) in 3 formats: ✍️ write-code (hidden tests executed in Pyodide), 🔮 predict-output, 🐞 fix-the-bug. Features: per-test pass/fail results, **3-level progressive hints**, ⏱ timed mode with personal bests, 📅 daily challenge (deterministic by date) presented as a GeeksforGeeks-style **Problem of the Day** card, LeetCode-style difficulty pills on every exercise, 🔁 spaced-repetition review queue, solution walkthroughs, 🐍 pythonic-coach notes, your-code-vs-model **solution comparison**, and a **Socratic AI Tutor** (guides without revealing the answer). Solved exercises award XP into the shared system.
 - **Learning Paths** (`paths.html`) — 6 guided sequences (Python Fundamentals, DSA with Python, Automation & Scripting, Data Analysis Basics, Interview Prep, Web Development with Python) mixing lessons and exercises with per-path progress bars. Enrolling in a path unlocks all of its lessons.
 - **Projects** (`projects.html`) — 14 guided real-world builds (File Organizer, Weather API Client, Web Scraper, CSV Data Analyzer, and more) — each with milestones and starter code.
-- **AI Compiler** (`compiler.html`) — real Python 3.11 via Pyodide (CDN), CodeMirror editor, run timing, console output, `input()` support, an interactive terminal, a multi-file workspace (saved locally and synced), sample snippets, snippet library (save/star/pin), and an **AI Explain** panel:
+- **Code Studio** (`compiler.html`) — a VS Code-class IDE in the browser: **Monaco editor** (multi-file workspace saved locally and synced, Explorer/Samples/Snippets/Outline sidebar, live search, share links), real Python 3.11 via Pyodide (fetched and evaluated AMD-safely so it can never clash with Monaco's loader), an interactive terminal with `input()` support, clickable tracebacks and a Problems panel, packages (NumPy/pandas/matplotlib built in, more via micropip), a persistent AI chat sidebar, and **inline AI (Ctrl+I)** that proposes changes as an accept/reject diff — plus an **AI Fix** diff for errors. Editor themes include the new default **Midnight** (navy, matched to the site) alongside Dracula, Material, Nord, Monokai and Eclipse; the console panel hides/unhides (header ✕, status-bar toggle, Ctrl+`) and remembers your choice. Also:
   - Offline heuristic explainer covering 12 common Python error patterns
   - Backend AI via the Render API (developer's Gemini key) → visitor's own optional key → offline fallback
   - A "🆘 Stuck?" button that drafts your code and error into a community question
 - **Flowchart Lab** (`flowchart.html`) — paste Python and get a precise AST-drawn flowchart (functions as sub-charts, static warnings), watch it play back with a living trace (steps, variables, branch highlighting), export it for lab records (PNG/SVG/lab sheet), and ask AI to explain it or check its logic
-- **Skillzify Circle** (`community.html`) — the learner community: public profiles (verified progress), anchored Q&A (ask from a lesson, exercise, or error, with code attached; best answers earn XP), and a project showcase (share a build, star others, fork into the compiler). An "✨ Ask AI" button gives a Socratic hint on any question.
-- **Dashboard** (`dashboard.html`) — overall % ring, per-section progress bars, day streak 🔥, recent run history, **Next Up** card (mastery-ranked), **~15-minute daily plan**, **exercise accuracy by topic with weak-spot flags**, today's challenge, review queue, and downloadable **section-completion certificates** (canvas-rendered PNG)
+- **Skillzify Circle** (`community.html`) — the learner community: public profiles (verified progress), anchored Q&A (ask from a lesson, exercise, or error, with code attached; best answers earn XP), and a project showcase (share a build, star others, fork into the compiler). An "✨ Ask AI" button gives a Socratic hint on any question. A **Leaderboard** (`assets/js/leaderboard.js`) ranks the top 50 public profiles by XP — real Firestore `publicProfiles` data only, no placeholder people; your own row is highlighted (or pinned with your exact rank if you're outside the top 50).
+- **Dashboard** (`dashboard.html`) — overall % ring, per-section progress bars, day streak 🔥, a LeetCode-style **activity heatmap (your last 182 days)**, HackerRank-style track rows for section progress, a personal **Your Rank** card (your leaderboard rank, XP, and the gap to the learner one rank above), recent run history, **Next Up** card (mastery-ranked), **~15-minute daily plan**, **exercise accuracy by topic with weak-spot flags**, today's challenge, review queue, and downloadable **section-completion certificates** (canvas-rendered PNG)
 - **Profile** (`profile.html`) — GitHub-style identity: identicon avatar, editable name/bio (syncs to Firebase), pinned items, **32 achievements** (with progress bars on locked badges), activity feed, and a shareable public profile (`profile.html?uid=`)
 - **Python Reference** (`reference.html`) — W3Schools-style reference with **127 entries**, each with parameters, return values, common pitfalls, a verified example output, and a link to the lesson that teaches it — plus an overview page, an inline "▶ Run here" runner, search, favourites, and recently viewed
 - **Firebase Authentication** (`auth.html` + `assets/js/auth.js`) — real Email/Password auth on Firebase project `skillzify-1d0f2` (same as the Android app); one account works across devices; nav shows your name. Progress, exercises, paths, and workspace sync through one Firestore document per user.
-- **AI system** (`server.js` + `assets/js/ai.js`) — 15 AI modes behind one client: Socratic lesson tutor, adaptive drills, trace & narrate, context-aware error explainer, project review, build-my-path, mock viva, fresh quizzes, daily challenge, and flowchart explain / flowchart → code. Daily caps (50 calls signed-in, 10 anonymous), Gemini model failover across 6 models, and optional key rotation.
-- **Android app** (`android/`) — native Kotlin + Jetpack Compose app (v1.2.3) with 95 lessons, 48 exercises, the reference, projects, paths, cross-device sync, an interactive compiler terminal, Flowchart Lab, and Gemini AI via the same backend
+- **AI system** (`server.js` + `assets/js/ai.js`) — 15 AI modes behind one client: Socratic lesson tutor, adaptive drills, trace & narrate, context-aware error explainer, project review, build-my-path, mock viva, fresh quizzes, daily challenge, flowchart explain / logic-check, and a plain explain mode. Daily caps (**10 answers signed-in, 5 anonymous**, a 10,000/day admin reserve and a shared 50,000/day learner pool, enforced per user in Firestore), a **7-model Gemini/Gemma failover chain** (gemini-3.1-flash-lite → 3.5-flash-lite → 3.6-flash → 3.8-flash → 3-flash-preview → gemma-4-31b-it → gemma-4-26b-a4b-it) with a circuit breaker that benches quota-dead models, **Groq spillover** when the Gemini chain is exhausted, and optional multi-key rotation.
+- **Android app** (`android/`) — native Kotlin + Jetpack Compose app mirroring the website: all 250 lessons, 150 exercises, the reference, projects, paths, cross-device sync, an interactive compiler terminal, Flowchart Lab, the smart systems (mastery, placement, passport, concept map) and AI via the same backend; built by GitHub Actions CI
 - **Command palette** (`Ctrl/⌘+K`) — fuzzy search over pages, lessons, snippets, and actions
 - **About / Contact** — contact form opens the visitor's email app pre-addressed to skillzifyind2024@gmail.com (mailto fallback)
 - **Analytics** — Google Analytics 4 on all pages
 - **Security** — `SECURITY.md` policy + private vulnerability reporting enabled
-- **Quality** — full-site audit (Nov 2026): all 2 P0 and 31 P1 findings fixed and verified, with a 577-check automated harness (`audit-harness.cjs`) plus live browser checks
-- **Theming** — dark mode default, CSS variables, responsive down to phones
+- **Quality** — full-site audit (Nov 2026): all 2 P0 and 31 P1 findings fixed and verified, with a **1,397-check automated audit harness** (`audit-harness.cjs`) plus dedicated suites for the compiler (133), the AI server (155) and client (57), exercise validation (150), flowchart (47 + 75), and live browser checks
+- **Design system (unified redesign, Nov 2026)** — one token system in `style.css` for all 20 pages: midnight-navy base (`#0a0f22` / card `#141b3d`), the indigo → purple → cyan brand gradient rationed to the logo, primary CTAs, progress bars and the activity heatmap, flat 1px borders instead of glow, Inter + JetBrains Mono, and shared components (subject strip, Problem of the Day card, difficulty pills, data tables, heatmap, track rows, leaderboard rows). Borrowed patterns, one identity: W3Schools subject strip, GeeksforGeeks Problem of the Day, LeetCode practice/heatmap treatment, HackerRank tracks/leaderboard
+- **Theming** — dark mode default, light mode derived from the same tokens, 6 accent themes (indigo, ocean, sunset, forest, amethyst, rose) × 2 modes, CSS variables throughout, responsive down to phones
 
 ## 🚀 How to run
 
@@ -58,7 +59,11 @@ python3 -m http.server 8080
 
 > Render's free tier sleeps after ~15 minutes idle; the first visit wakes it in
 > about a minute. Render deploys are triggered manually from the Render
-> dashboard — pushing to GitHub does not auto-deploy.
+> dashboard — pushing to GitHub does not auto-deploy. There are two services:
+> **production** (`skillzify-v2`) and **staging** (`skillzify-v2-staging`);
+> new work is verified on staging first, and production is only deployed
+> deliberately. GitHub Pages serves the same repo's static files
+> automatically on push.
 
 > The compiler downloads the Pyodide runtime (~10 MB) from a CDN on first use, so an internet connection is needed the first time you press **Run**.
 
@@ -67,9 +72,12 @@ python3 -m http.server 8080
 The AI features call the backend on the same origin (`/api/*`). The backend
 lives in `server.js` and uses the **developer's** Gemini key from the
 `GEMINI_API_KEY` environment variable — visitors never need their own key, and
-the key never reaches the browser or the repo. It supports 6 Gemini models
-with automatic failover, and `GEMINI_API_KEYS` (comma-separated) rotates
-across two keys for double the daily budget.
+the key never reaches the browser or the repo. It fails over across a 7-model
+Gemini/Gemma chain (a circuit breaker benches models that hit quota), spills
+over to Groq when the chain is exhausted (`GROQ_API_KEY`), and
+`GEMINI_API_KEYS` (comma-separated) rotates across keys from multiple Google
+Cloud projects for a larger daily budget. Per-user daily caps (10 signed-in /
+5 anonymous) are enforced server-side in Firestore.
 
 ```bash
 cd skillzify-v2
@@ -88,7 +96,7 @@ never commit a real key (the repo is public).
 
 ```
 skillzify-v2/
-├── index.html          # Landing page
+├── index.html          # Landing page (hero, journey, features, FAQ)
 ├── learn.html          # Learning journey: 7 sections, 250 lessons
 ├── lesson.html         # Single-lesson page (?id=)
 ├── placement.html      # 3-minute adaptive placement test
@@ -97,18 +105,22 @@ skillzify-v2/
 ├── projects.html       # Real-world guided projects (14)
 ├── compiler.html       # AI Python compiler + workspace
 ├── flowchart.html          # Flowchart Lab
-├── community.html      # Skillzify Circle (community)
-├── dashboard.html      # Progress dashboard + analytics + certificates
+├── community.html      # Skillzify Circle (community + leaderboard)
+├── dashboard.html      # Progress dashboard + heatmap + Your Rank + certificates
 ├── profile.html        # GitHub-style profile + public view
+├── passport.html       # Skill Passport (certificates + shareable record)
+├── map.html            # Concept map of the whole journey
 ├── reference.html      # Python reference (127 entries)
 ├── auth.html           # Login / Register (Firebase)
+├── admin.html          # Admin overview (owner only)
+├── reset-password.html # Password reset landing
 ├── about.html
 ├── contact.html
 ├── SECURITY.md         # Security policy
-├── server.js           # Express backend: 15 AI modes, caps, failover
+├── server.js           # Express backend: 15 AI modes, caps, 7-model failover + Groq
 ├── render.yaml         # Render one-click deploy
 ├── assets/
-│   ├── css/style.css   # Theme variables, layout, responsive
+│   ├── css/style.css   # Design-system tokens, shared components, layout, responsive
 │   ├── css/flowchart.css # Flowchart Lab styles
 │   ├── js/app.js       # Theme toggle, nav, toast, storage utils
 │   ├── js/auth.js      # Firebase Authentication (Email/Password)
@@ -127,7 +139,8 @@ skillzify-v2/
 │   ├── js/paths-data.js    # Learning path definitions (6 paths, 370 steps)
 │   ├── js/paths.js     # Path rendering + enrollment
 │   ├── js/projects-data.js # 14 guided projects
-│   ├── js/compiler.js  # Pyodide runner + workspace + AI explainer
+│   ├── js/compiler.js  # Code Studio: Monaco IDE, Pyodide runner, workspace, inline AI
+│   ├── js/leaderboard.js # Leaderboard (community table + dashboard Your Rank)
 │   ├── js/flowchart-app.js # Flowchart Lab: rendering, living trace, exports, AI
 │   ├── js/flowchart_ast.py # AST-based Python → flowchart IR converter (runs in Pyodide)
 │   ├── js/dashboard.js # Dashboard rendering + analytics + certificates
@@ -166,8 +179,10 @@ skillzify-v2/
 - [x] Placement test: adaptive diagnostic + unlock-before-placement
 - [x] Achievements upgrade: 32 badges with progress bars
 - [x] Multi-file compiler workspace
+- [x] Code Studio 2.0: Monaco IDE, inline AI diffs, packages, share links
+- [x] Unified redesign: one design system across all 20 pages
+- [x] Leaderboard (community top-50 + dashboard Your Rank)
 - [ ] Phase 2: 250 → 500 lessons (new Data Science, Web, ML/AI, Interview tracks)
-- [ ] Shareable code snippets (URL-encoded)
 - [ ] PWA support for offline lessons
 - [ ] Community Phase 2: reviews, squads, helping economy
 

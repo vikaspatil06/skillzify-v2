@@ -14,15 +14,15 @@
   <meta name="description" content="Skillzify Code Studio — a VS Code-like Python IDE in your browser. Multi-file workspace, terminal, problems panel, AI assistant.">
   <title>Code Studio — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=37">
+  <link rel="stylesheet" href="assets/css/style.css?v=38">
   <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
   <style>
     /* ============ VS Code-like IDE shell (always dark, like the real thing) ============ */
-    /* Code Studio 2.0: VS Code "Dark Modern" palette — editor #1f1f1f,
-       side/activity/panel #181818, borders #2b2b2b, status bar #0078d4.
+    /* Code Studio 2.0: VS Code "Dark Modern" palette — editor #0d1330,
+       side/activity/panel #0a0f22, borders #141b3d, status bar #6c7bff.
        Stylesheet map (rules stay in cascade order — read top to bottom):
        shell/layout → activity bar → sidebar + accordion sections →
        sidebar rows (files/samples/snippets/outline) → sidebar forms →
@@ -30,10 +30,10 @@
        (tabs, breadcrumbs, editor host, inline AI, diff, fallback) →
        find bar → bottom panel/terminal → status bar → mobile. */
     :root {
-      --ide-bg: #1f1f1f; --ide-side: #181818; --ide-activity: #181818;
-      --ide-border: #2b2b2b; --ide-text: #cccccc; --ide-muted: #8b8b8b;
-      --ide-accent: #0078d4; --ide-tab: #181818; --ide-hover: #2a2d2e;
-      --ide-input: #313131;
+      --ide-bg: #0d1330; --ide-side: #0a0f22; --ide-activity: #0a0f22;
+      --ide-border: #232c52; --ide-text: #eef1ff; --ide-muted: #9aa3c7;
+      --ide-accent: #6c7bff; --ide-tab: #0a0f22; --ide-hover: #141b3d;
+      --ide-input: #182040;
     }
     /* No page scroll, ever (Vikas, 15 Nov 2026): the page is a
        viewport-locked app shell — the nav keeps its natural height,
@@ -67,12 +67,12 @@
     .sidebar { width: 264px; background: var(--ide-side); border-right: 1px solid var(--ide-border);
       display: flex; flex-direction: column; flex-shrink: 0; min-height: 0; }
     .sidebar ::-webkit-scrollbar { width: 9px; height: 9px; }
-    .sidebar ::-webkit-scrollbar-thumb { background: #424242; border-radius: 5px; border: 2px solid var(--ide-side); }
-    .sidebar ::-webkit-scrollbar-thumb:hover { background: #545454; }
+    .sidebar ::-webkit-scrollbar-thumb { background: #232c52; border-radius: 5px; border: 2px solid var(--ide-side); }
+    .sidebar ::-webkit-scrollbar-thumb:hover { background: #3a4576; }
     .sidebar ::-webkit-scrollbar-track { background: transparent; }
     .sidebar.drag-over { box-shadow: inset 0 0 0 2px var(--ide-accent); }
     .side-view { display: none; flex-direction: column; min-height: 0; flex: 1;
-      scrollbar-width: thin; scrollbar-color: #424242 transparent; }
+      scrollbar-width: thin; scrollbar-color: #232c52 transparent; }
     .side-view.active { display: flex; }
     /* Explorer's accordion stack scrolls as a whole when the sections
        together outgrow the sidebar (short windows, everything expanded);
@@ -116,7 +116,7 @@
       cursor: pointer; font-size: 13px; font-family: "JetBrains Mono", monospace; position: relative;
       transition: background-color .12s ease; }
     .file-item:hover { background: var(--ide-hover); }
-    .file-item.active { background: #37373d; color: #fff; }
+    .file-item.active { background: #182040; color: #fff; }
     .file-item .fglyph { font-size: 11px; flex-shrink: 0; }
     .file-item .fname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .file-item .fdirty { width: 7px; height: 7px; border-radius: 50%; background: #fbbf24; display: none; flex-shrink: 0; }
@@ -126,7 +126,7 @@
     .fact { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center;
       background: none; border: 0; color: var(--ide-muted); cursor: pointer; font-size: 11px;
       border-radius: 4px; padding: 0; }
-    .fact:hover { color: #fff; background: #4a4a4a; }
+    .fact:hover { color: #fff; background: #2e3866; }
     .fact.fdel:hover { color: #f87171; }
     .fname-edit { flex: 1; min-width: 0; background: var(--ide-input); border: 1px solid var(--ide-accent);
       color: #fff; font-family: "JetBrains Mono", monospace; font-size: 13px; height: 20px;
@@ -144,7 +144,7 @@
     .ol-item { font-family: "JetBrains Mono", monospace; font-size: 12.5px; }
     .ol-item .olg { flex-shrink: 0; width: 14px; text-align: center; font-style: normal; font-family: "Inter", sans-serif; font-weight: 700; font-size: 11px; }
     .ol-k-def { color: #c792ea; } .ol-k-class { color: #ffcb6b; } .ol-k-var { color: #82aaff; }
-    .ol-item.cur { background: #094771; color: #fff; }
+    .ol-item.cur { background: #2e3866; color: #fff; }
     .ol-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .side-empty { font-size: 12px; color: var(--ide-muted); padding: 4px 12px 8px 22px; }
 
@@ -168,7 +168,7 @@
     .ide-btn { background: var(--ide-accent); border: 0; color: #fff; border-radius: 4px; padding: 8px 12px;
       font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 8px;
       transition: background-color .13s ease; }
-    .ide-btn:hover { background: #0098ff; }
+    .ide-btn:hover { background: #22d3ee; }
     .ide-btn.ghost { background: transparent; border: 1px solid var(--ide-border); color: var(--ide-text); font-weight: 400; }
     .ide-btn.ghost:hover { background: var(--ide-hover); color: #fff; }
     .ide-btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -180,7 +180,7 @@
     .search-file-head { display: flex; align-items: center; gap: 6px; padding: 9px 12px 2px; font-size: 12px;
       font-family: "JetBrains Mono", monospace; color: var(--ide-text); }
     .search-file-head .cnt { margin-left: auto; font-size: 10px; color: var(--ide-muted);
-      background: #3c3c3c; border-radius: 8px; padding: 0 6px; line-height: 15px; }
+      background: #1e2752; border-radius: 8px; padding: 0 6px; line-height: 15px; }
     .search-hit { padding: 2px 12px 2px 20px; font-size: 12px; cursor: pointer; display: flex;
       gap: 8px; align-items: baseline; transition: background-color .12s ease; }
     .search-hit:hover { background: var(--ide-hover); }
@@ -197,13 +197,13 @@
     .ai-box-ide ul { padding-left: 18px; margin: 6px 0; }
     /* AI view: quick actions are chips; the chat thread runs full-bleed */
     .ai-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 12px; }
-    .chip { background: #2d2d2d; border: 1px solid var(--ide-border); color: var(--ide-text);
+    .chip { background: #141b3d; border: 1px solid var(--ide-border); color: var(--ide-text);
       border-radius: 999px; padding: 5px 11px; font-size: 12px; cursor: pointer; font-family: "Inter", sans-serif;
       transition: background-color .13s ease, color .13s ease; }
     .chip:hover { background: var(--ide-hover); color: #fff; }
     .chip:disabled { opacity: .5; cursor: not-allowed; }
     .chip.primary { background: var(--ide-accent); border-color: var(--ide-accent); color: #fff; }
-    .chip.primary:hover { background: #0098ff; }
+    .chip.primary:hover { background: #22d3ee; }
     .chip-off { display: none !important; }
     #view-ai .ai-box-ide { flex: 1; max-height: none; margin: 0; border: 0; border-top: 1px solid var(--ide-border);
       border-radius: 0; background: transparent; padding: 12px 16px; }
@@ -213,7 +213,7 @@
        help paragraphs scroll beneath them. */
     #view-ai #ai-output { min-height: 0; }
     #view-ai .ai-settings { max-height: 188px; overflow-y: auto; flex-shrink: 0;
-      scrollbar-width: thin; scrollbar-color: #424242 transparent; }
+      scrollbar-width: thin; scrollbar-color: #232c52 transparent; }
     #ai-output .ai-hint { color: var(--ide-muted); }
 
     .hist-item-ide { border-bottom: 1px solid var(--ide-border); padding: 9px 16px; }
@@ -223,9 +223,9 @@
     .hist-item-ide pre { font-size: 11px; max-height: 76px; overflow: hidden; margin: 0 0 7px;
       font-family: "JetBrains Mono", monospace; white-space: pre-wrap; color: var(--ide-muted); }
     .hist-item-ide .row { display: flex; gap: 6px; }
-    .mini-btn { background: #3c3c3c; border: 0; color: #fff; border-radius: 4px; padding: 5px 10px;
+    .mini-btn { background: #1e2752; border: 0; color: #fff; border-radius: 4px; padding: 5px 10px;
       font-size: 12px; cursor: pointer; transition: background-color .13s ease; }
-    .mini-btn:hover { background: #4a4a4a; }
+    .mini-btn:hover { background: #2e3866; }
     .mini-btn.primary { background: var(--ide-accent); }
     .mini-btn.toggle.on { background: var(--ide-accent); }
 
@@ -241,7 +241,7 @@
     .set-row { display: flex; align-items: center; justify-content: space-between; padding: 3px 0; font-size: 13px; }
 
     /* activity-bar problems badge */
-    .activity-bar button .ab-badge { position: absolute; top: 5px; right: 5px; background: #eab308; color: #1f1f1f;
+    .activity-bar button .ab-badge { position: absolute; top: 5px; right: 5px; background: #eab308; color: #0d1330;
       font-size: 9px; font-weight: 700; border-radius: 8px; padding: 0 5px; line-height: 14px;
       font-family: "Inter", sans-serif; pointer-events: none; }
 
@@ -259,14 +259,14 @@
     .tab.dirty .x { display: none; }
     .tab .x { background: none; border: 0; color: inherit; cursor: pointer; font-size: 13px; padding: 2px 4px;
       border-radius: 4px; }
-    .tab .x:hover { background: #4a4a4a; color: #fff; }
+    .tab .x:hover { background: #2e3866; color: #fff; }
     .tab-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; padding: 0 8px; }
     .tab-actions button { background: none; border: 0; color: var(--ide-muted); cursor: pointer;
       font-size: 14px; padding: 6px 8px; border-radius: 4px; }
     .tab-actions button:hover { color: #fff; background: var(--ide-hover); }
     .tab-actions button.run { color: #fff; background: var(--ide-accent); font-weight: 700; font-size: 12px;
       padding: 6px 14px; font-family: "Inter", sans-serif; }
-    .tab-actions button.run:hover { background: #0098ff; }
+    .tab-actions button.run:hover { background: #22d3ee; }
     .tab-actions button.run:disabled { opacity: .5; }
 
     .breadcrumbs { padding: 5px 16px; font-size: 12px; color: var(--ide-muted); background: var(--ide-bg);
@@ -281,7 +281,7 @@
     .sidebar-resize:hover { background: var(--ide-accent); }
     /* Ctrl+I inline AI prompt, floated over the editor near the cursor */
     #inline-ai { position: absolute; z-index: 30; width: min(480px, calc(100% - 24px));
-      background: #252526; border: 1px solid var(--ide-accent); border-radius: 6px;
+      background: #111831; border: 1px solid var(--ide-accent); border-radius: 6px;
       box-shadow: 0 8px 28px rgba(0,0,0,.55); padding: 8px; display: none; }
     #inline-ai.on { display: block; }
     #inline-ai input { width: 100%; box-sizing: border-box; background: var(--ide-input);
@@ -294,7 +294,7 @@
       flex-direction: column; background: var(--ide-bg); }
     #diff-overlay.on { display: flex; }
     #diff-overlay .diff-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
-      background: #252526; border-bottom: 1px solid var(--ide-border); font-size: 12px; }
+      background: #111831; border-bottom: 1px solid var(--ide-border); font-size: 12px; }
     #diff-overlay .diff-bar .t { font-weight: 700; color: #fff; }
     #diff-overlay .diff-bar .sp { flex: 1; }
     #diff-host { flex: 1; min-height: 0; position: relative; }
@@ -303,12 +303,12 @@
     #console .tb-link:hover { color: #bae6fd; }
     /* AI Fix row appended under a failed run */
     .ai-fix-row { padding: 6px 0 2px; }
-    .ai-fix-btn { background: #3c3c3c; border: 1px solid var(--ide-border); color: #fff; border-radius: 4px;
+    .ai-fix-btn { background: #1e2752; border: 1px solid var(--ide-border); color: #fff; border-radius: 4px;
       font-size: 12px; padding: 5px 12px; cursor: pointer; font-family: "Inter", sans-serif; }
     .ai-fix-btn:hover { background: var(--ide-accent); }
     /* AI chat thread (sidebar) */
     .ai-msg { margin-bottom: 10px; }
-    .ai-msg.user .ai-bubble { background: #094771; color: #fff; border-radius: 8px; padding: 8px 10px; }
+    .ai-msg.user .ai-bubble { background: #2e3866; color: #fff; border-radius: 8px; padding: 8px 10px; }
     .ai-msg .who { font-size: 10px; font-weight: 700; letter-spacing: .06em; color: var(--ide-muted); margin-bottom: 3px; }
     #ai-chat-bar { display: flex; gap: 6px; margin: 0 16px 12px; }
     #ai-chat-input { flex: 1; }
@@ -323,7 +323,7 @@
     /* P2-58: plain-text fallback editor (when the Monaco CDN fails)
        — fill the editor pane like the real editor, same mono font. */
     #editor-fallback { width: 100%; height: calc(100% - 34px); min-height: 160px; box-sizing: border-box;
-      background: #282a36; color: #f8f8f2; border: 0; resize: none; outline: none; padding: 10px 12px;
+      background: #0b1128; color: #eef1ff; border: 0; resize: none; outline: none; padding: 10px 12px;
       font-family: "JetBrains Mono", monospace; font-size: 14px; line-height: 1.6; tab-size: 4; }
     .cm-fallback-note { background: #3d2c00; color: #fbbf24; font-size: 12px; padding: 7px 12px;
       border-bottom: 1px solid var(--ide-border); line-height: 1.5; }
@@ -368,7 +368,7 @@
     #term-jump { position: absolute; right: 12px; bottom: 10px; z-index: 5; background: var(--ide-accent);
       color: #fff; border: 0; border-radius: 999px; padding: 5px 12px; font-size: 11.5px; font-weight: 600;
       cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.45); font-family: "Inter", sans-serif; }
-    #term-jump:hover { background: #0098ff; }
+    #term-jump:hover { background: #22d3ee; }
     .panel-tabs { display: flex; align-items: center; gap: 2px; padding: 0 12px; flex-shrink: 0;
       border-bottom: 1px solid var(--ide-border); }
     .panel-tabs button.ptab { background: none; border: 0; color: var(--ide-muted); font-size: 11px;
@@ -392,9 +392,9 @@
     .stdin-prompt { color: #c4b5fd; white-space: pre-wrap; }
     .stdin-field { flex: 1; background: transparent; border: 0; border-bottom: 1px solid var(--ide-accent);
       color: #fff; font-family: "JetBrains Mono", monospace; font-size: 13px; outline: none; padding: 2px 4px; }
-    .stdin-eof { background: #3c3c3c; border: 0; color: var(--ide-muted); border-radius: 4px;
+    .stdin-eof { background: #1e2752; border: 0; color: var(--ide-muted); border-radius: 4px;
       font-size: 10px; padding: 3px 8px; cursor: pointer; font-family: "Inter", sans-serif; }
-    .stdin-eof:hover { color: #fff; background: #4a4a4a; }
+    .stdin-eof:hover { color: #fff; background: #2e3866; }
     @keyframes blink { 50% { opacity: .35; } }
     #problems-list, #outhist-list { flex: 1; overflow-y: auto; padding: 8px 0; }
     .prob-item { padding: 8px 16px; font-size: 12px; display: flex; gap: 10px; cursor: pointer; }
@@ -554,6 +554,7 @@
         <div class="side-section">
           <label for="theme-select">Color theme</label>
           <div class="swatches" id="theme-swatches">
+            <button class="swatch" data-theme-val="midnight" title="Midnight (Skillzify)" style="background:linear-gradient(135deg,#0b1128 55%,#9d6bff 55%)"></button>
             <button class="swatch" data-theme-val="dracula" title="Dracula" style="background:linear-gradient(135deg,#282a36 55%,#ff79c6 55%)"></button>
             <button class="swatch" data-theme-val="material-darker" title="Material Darker" style="background:linear-gradient(135deg,#212121 55%,#c792ea 55%)"></button>
             <button class="swatch" data-theme-val="nord" title="Nord" style="background:linear-gradient(135deg,#2e3440 55%,#88c0d0 55%)"></button>
@@ -561,6 +562,7 @@
             <button class="swatch" data-theme-val="eclipse" title="Eclipse (light)" style="background:linear-gradient(135deg,#ffffff 55%,#7a3e9d 55%)"></button>
           </div>
           <select class="ide-select" id="theme-select">
+            <option value="midnight">Midnight (Skillzify)</option>
             <option value="dracula">Dracula</option>
             <option value="material-darker">Material Darker</option>
             <option value="nord">Nord</option>
@@ -709,6 +711,6 @@
   var require = { paths: { vs: window.SKZ_MONACO_VS } };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
-<script src="assets/js/compiler.js?v=27"></script>
+<script src="assets/js/compiler.js?v=28"></script>
 </body>
 </html>

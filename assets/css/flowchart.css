@@ -13,7 +13,7 @@
 .fc-title { font-size: clamp(30px, 4.6vw, 44px); line-height: 1.08;
   margin: 0 0 10px; font-weight: 800; letter-spacing: -.01em;
   color: var(--text); }
-.fc-title .grad { background: linear-gradient(92deg, var(--accent), #b18cff);
+.fc-title .grad { background: var(--gradient);
   -webkit-background-clip: text; background-clip: text; color: transparent; }
 .fc-sub { color: var(--muted); max-width: 640px; margin: 0 0 18px;
   font-size: 15.5px; line-height: 1.55; }
@@ -49,8 +49,8 @@
   transition: transform .12s ease, border-color .12s ease, background .12s ease; }
 .btn:hover { border-color: var(--accent); transform: translateY(-1px); }
 .btn:disabled { opacity: .55; cursor: wait; transform: none; }
-.btn.primary { background: var(--accent); border-color: var(--accent);
-  color: #fff; box-shadow: 0 8px 22px -8px var(--accent); }
+.btn.primary { background: var(--gradient); border-color: transparent;
+  color: #fff; }
 .btn.small { padding: 6px 11px; font-size: 12.5px; }
 .btn svg { flex: 0 0 auto; }
 .fc-select, .fc-textinput { background: var(--bg2); color: var(--text);
@@ -150,7 +150,7 @@
 .fc-stage svg g.node.fc-trace-current > circle,
 .fc-stage svg g.node.fc-trace-current > path {
   stroke: #ffd23e; stroke-width: 3.5px;
-  filter: drop-shadow(0 0 9px rgba(255, 210, 62, .85)); }
+  filter: drop-shadow(0 0 4px rgba(255, 210, 62, .55)); }
 .fc-stage svg g.node.fc-trace-done > rect,
 .fc-stage svg g.node.fc-trace-done > polygon,
 .fc-stage svg g.node.fc-trace-done > circle,

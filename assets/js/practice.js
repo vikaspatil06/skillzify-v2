@@ -680,6 +680,13 @@
     return '<span class="badge">New</span>';
   }
   function diffStars(d) { return "★".repeat(d) + "☆".repeat(3 - d); }
+  // LeetCode-style difficulty pill (unified redesign): same 1/2/3
+  // difficulty data the filter + stars already use.
+  function diffPill(d) {
+    var map = { 1: ["diff-easy", "Easy"], 2: ["diff-med", "Medium"], 3: ["diff-hard", "Hard"] };
+    var m = map[d] || map[1];
+    return '<span class="pill-diff ' + m[0] + '">' + m[1] + "</span>";
+  }
 
   function filtered() {
     var q = filters.q.trim().toLowerCase();
@@ -707,6 +714,7 @@
         '<div class="ex-top"><span class="badge" style="color:' + c + ';border-color:' + c + '66">' + esc(TOPIC_LABEL[ex.topic] || ex.topic) + '</span>' +
         '<span class="ex-diff" title="Difficulty">' + diffStars(ex.difficulty) + '</span></div>' +
         '<h3>' + esc(ex.title) + '</h3>' +
+        '<div style="margin:2px 0 6px">' + diffPill(ex.difficulty) + '</div>' +
         '<p class="ex-kind">' + (KIND_LABEL[ex.kind] || ex.kind) + ' · ' + ex.xp + ' XP' +
         (a.bestMs ? ' · ⏱ ' + Math.round(a.bestMs / 1000) + 's best' : '') + '</p>' +
         '<div>' + statusBadge(ex) + '</div>' +
@@ -723,9 +731,10 @@
     if (!ex) { host.style.display = "none"; return; }
     var a = attFor(ex.id);
     host.innerHTML =
-      '<div class="daily-inner"><div><div class="badge">📅 Today\'s exercise</div>' +
+      '<div class="daily-inner"><div><span class="potd-eyebrow">🎯 Problem of the Day</span>' +
       '<h3>' + esc(ex.title) + '</h3>' +
-      '<p class="hint">' + esc(TOPIC_LABEL[ex.topic] || ex.topic) + ' · ' + (KIND_LABEL[ex.kind] || "") + ' · ' + ex.xp + ' XP</p></div>' +
+      '<p class="hint">' + esc(TOPIC_LABEL[ex.topic] || ex.topic) + ' · ' + (KIND_LABEL[ex.kind] || "") + ' · ' + ex.xp + ' XP</p>' +
+      '<div style="margin-top:6px">' + diffPill(ex.difficulty) + '</div></div>' +
       '<div><a class="btn" href="#ex=' + ex.id + '">' + (a.solved ? "Play again →" : "Start →") + '</a></div></div>';
   }
 

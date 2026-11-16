@@ -393,7 +393,7 @@
     try { ta.style.fontSize = curFont() + "px"; } catch (e) {}
     try { ta.style.tabSize = String(curTabSize()); } catch (e) {}
     host.appendChild(ta);
-    var opts = { theme: "dracula", lineWrapping: false };
+    var opts = { theme: "midnight", lineWrapping: false };
     var handlers = {};
     function fire(ev) { (handlers[ev] || []).forEach(function (fn) { try { fn(); } catch (e) {} }); }
     function posToOffset(pos) {
@@ -463,8 +463,8 @@
         if (k === "theme") {
           try {
             var light = /eclipse|light|default/i.test(String(v || ""));
-            ta.style.backgroundColor = light ? "#ffffff" : "#282a36";
-            ta.style.color = light ? "#1e1e1e" : "#f8f8f2";
+            ta.style.backgroundColor = light ? "#ffffff" : "#0b1128";
+            ta.style.color = light ? "#1e1e1e" : "#eef1ff";
           } catch (e) {}
         }
         if (k === "fontSize") { try { ta.style.fontSize = (parseInt(v, 10) || 14) + "px"; } catch (e) {} }
@@ -486,11 +486,28 @@
      undo history and scroll state survive tab switches — like VS
      Code. If the CDN is unreachable the textarea fallback above is
      used instead and the page stays fully functional. */
-  var MONACO_THEME_MAP = { "dracula": "skz-dracula", "material-darker": "skz-material", "nord": "skz-nord", "monokai": "monokai", "eclipse": "vs" };
+  var MONACO_THEME_MAP = { "midnight": "skz-midnight", "dracula": "skz-dracula", "material-darker": "skz-material", "nord": "skz-nord", "monokai": "monokai", "eclipse": "vs" };
   function minimapOn() {
     try { return localStorage.getItem("skillzify_minimap") !== "0"; } catch (e) { return true; }
   }
   function defineMonacoThemes(monaco) {
+    // Unified redesign (16 Nov 2026): "Midnight" is the default
+    // editor theme — the site palette (navy bg, indigo/purple/cyan
+    // tokens matching style.css's code-window colours). The older
+    // themes below stay selectable; saved choices are untouched.
+    monaco.editor.defineTheme("skz-midnight", {
+      base: "vs-dark", inherit: true,
+      rules: [
+        { token: "comment", foreground: "6b76a3", fontStyle: "italic" },
+        { token: "keyword", foreground: "9d6bff" },
+        { token: "string", foreground: "7ee0a3" },
+        { token: "number", foreground: "c4b5fd" },
+        { token: "type", foreground: "22d3ee" },
+        { token: "identifier", foreground: "eef1ff" },
+        { token: "delimiter", foreground: "9aa3c7" }
+      ],
+      colors: { "editor.background": "#0b1128", "editor.lineHighlightBackground": "#141b3d", "editorLineNumber.foreground": "#6b76a3", "editorCursor.foreground": "#eef1ff", "editor.selectionBackground": "#2e3866" }
+    });
     monaco.editor.defineTheme("skz-dracula", {
       base: "vs-dark", inherit: true,
       rules: [
@@ -539,7 +556,7 @@
     mount.id = "monaco-host";
     host.appendChild(mount);
     var theme = "dracula";
-    try { theme = localStorage.getItem(CM_THEME_KEY) || "dracula"; } catch (e) {}
+    try { theme = localStorage.getItem(CM_THEME_KEY) || "midnight"; } catch (e) {}
     var models = {};     // filename -> ITextModel
     var viewStates = {}; // filename -> saved view state
     var curName = ws && ws.active ? ws.active : null;
@@ -550,7 +567,7 @@
     }
     var ed = monaco.editor.create(mount, {
       model: modelFor(curName, initialValue),
-      theme: MONACO_THEME_MAP[theme] || "skz-dracula",
+      theme: MONACO_THEME_MAP[theme] || "skz-midnight",
       fontFamily: "'JetBrains Mono', monospace",
       fontSize: curFont(),
       minimap: { enabled: minimapOn() },
@@ -2526,7 +2543,7 @@
     guard("editor", function () {
     var theme0 = "dracula", font0 = 14;
     try {
-      theme0 = localStorage.getItem(CM_THEME_KEY) || "dracula";
+      theme0 = localStorage.getItem(CM_THEME_KEY) || "midnight";
       font0 = parseInt(localStorage.getItem(CM_FONT_KEY) || "14", 10) || 14;
     } catch (e) {}
     function wireEditor() {
@@ -2579,7 +2596,7 @@
       try { toast("Code editor failed to load — using plain-text editor", "error"); } catch (e) {}
       // P2-59: the stored theme / font size apply to the fallback
       // textarea too, via its setOption (theme/fontSize).
-      try { applyTheme(localStorage.getItem(CM_THEME_KEY) || "dracula"); } catch (e) {}
+      try { applyTheme(localStorage.getItem(CM_THEME_KEY) || "midnight"); } catch (e) {}
       try { applyFont(parseInt(localStorage.getItem(CM_FONT_KEY) || "14", 10) || 14); } catch (e) {}
     }
     if (window.SKZ_MONACO_VS && typeof window.require === "function") {

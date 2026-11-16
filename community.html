@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify Circle — ask questions, get answers, and share what you built with fellow Python learners.">
   <title>Community — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=37">
+  <link rel="stylesheet" href="assets/css/style.css?v=38">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -32,7 +32,7 @@
     .comm-q h3 a { color: var(--text); text-decoration: none; }
     .comm-q h3 a:hover { text-decoration: underline; }
     .comm-meta { font-size: .82rem; color: var(--muted); margin: 0 0 6px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-    .comm-tag { background: rgba(108,123,255,.14); color: #8b98ff; border-radius: 6px; padding: 1px 8px; font-size: .78rem; font-weight: 600; }
+    .comm-tag { background: rgba(108,123,255,.14); color: var(--primary); border-radius: 6px; padding: 1px 8px; font-size: .78rem; font-weight: 600; }
     .comm-status { font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; }
     .comm-status-open { background: rgba(46,204,113,.15); color: #2ecc71; }
     .comm-status-answered { background: rgba(52,152,219,.15); color: #5dade2; }
@@ -44,7 +44,7 @@
     .comm-form-error { color: #e74c3c; font-size: .88rem; margin: 0 0 10px; }
     .comm-ai { margin: 14px 0; border-color: rgba(108,123,255,.4); }
     .comm-ai h3 { margin: 0 0 6px; }
-    .comm-ai-badge { font-size: .78rem; font-weight: 700; color: #8b98ff; margin: 0 0 8px; }
+    .comm-ai-badge { font-size: .78rem; font-weight: 700; color: var(--primary); margin: 0 0 8px; }
     .comm-ai-out { margin-top: 12px; }
     .comm-ai-out p { margin: 0 0 8px; }
     .comm-code { margin-top: 12px; }
@@ -172,6 +172,14 @@
         <div id="comm-featured"></div>
         <div class="comm-grid" id="comm-showcase-grid"></div>
       </div>
+
+      <!-- Leaderboard (unified redesign): top public profiles by XP,
+           from the real publicProfiles collection. -->
+      <div class="card" style="margin-top:22px">
+        <h2 style="margin-bottom:4px">🏆 Leaderboard</h2>
+        <p class="hint" style="margin:0 0 10px">Top learners by XP — from public Skill Passports.</p>
+        <div data-leaderboard="full"><p class="lb-empty">Loading leaderboard…</p></div>
+      </div>
     </div>
   </section>
 </main>
@@ -191,5 +199,6 @@
 <script src="assets/js/ai.js?v=23"></script>
 <script src="assets/js/community.js?v=13"></script>
 <script src="assets/js/community-page.js?v=14"></script>
+<script src="assets/js/leaderboard.js?v=1"></script>
 </body>
 </html>

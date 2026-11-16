@@ -14,7 +14,7 @@
   <meta name="description" content="Your Skillzify learning dashboard — progress, streaks and run history.">
   <title>Dashboard — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=37">
+  <link rel="stylesheet" href="assets/css/style.css?v=38">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -125,6 +125,19 @@
           <div id="dash-runs" style="margin-top:8px"></div>
         </div>
       </div>
+      <div class="dash-grid-2">
+        <div class="dash-card">
+          <h2>📊 Your activity</h2>
+          <p class="muted small" id="dash-heat-label">Your last 182 days</p>
+          <div class="heatmap-wrap"><div class="heatmap" id="dash-heat"></div></div>
+          <div class="heat-legend">Less <span class="heat-cell"></span><span class="heat-cell l1"></span><span class="heat-cell l2"></span><span class="heat-cell l3"></span><span class="heat-cell l4"></span> More</div>
+        </div>
+        <div class="dash-card">
+          <h2>🏅 Your rank</h2>
+          <div data-leaderboard="rank"><p class="lb-empty">Loading your rank…</p></div>
+          <p class="hint" style="margin-top:8px">Full board on the <a href="community.html">Community page</a> →</p>
+        </div>
+      </div>
       <div class="dash-card" style="margin-top:20px">
         <h2>🏆 Latest achievements</h2>
         <div id="dash-achievements" class="ach-grid"></div>
@@ -152,6 +165,7 @@
 <script src="assets/js/mastery.js?v=4"></script>
 <script src="assets/js/learn.js?v=17"></script>
 <script src="assets/js/practice-data.js?v=4"></script>
-<script src="assets/js/dashboard.js?v=25"></script>
+<script src="assets/js/dashboard.js?v=26"></script>
+<script src="assets/js/leaderboard.js?v=1"></script>
 </body>
 </html>

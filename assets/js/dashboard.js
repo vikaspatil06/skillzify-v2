@@ -25,7 +25,7 @@
       var pct = L.sectionPct(t.id);
       var td = L.LESSONS.filter(function (l) { return l.section === t.id && progress[l.id]; }).length;
       var tc = L.LESSONS.filter(function (l) { return l.section === t.id; }).length;
-      tracksHtml += '<div class="progress-row"><span class="lbl">' + t.icon + " " + t.name + "</span>" +
+      tracksHtml += '<div class="progress-row track-row"><span class="lbl">' + t.icon + " " + t.name + "</span>" +
         '<div class="bar"><span style="width:' + pct + '%"></span></div>' +
         '<span class="pct">' + td + "/" + tc + "</span></div>";
     });
@@ -79,6 +79,28 @@
     renderUpgrades();
     renderNextUp();
     renderDailyPlan();
+    renderHeatmap();
+  }
+
+  // Activity heatmap (unified redesign, LeetCode pattern): the
+  // last 182 days from SkillzifyActivity.dayCounts() — the label
+  // in dashboard.html ("Your last 182 days") matches the exact
+  // number of cells rendered here.
+  function renderHeatmap() {
+    var host = document.getElementById("dash-heat");
+    if (!host) return;
+    var counts = {};
+    try { counts = (window.SkillzifyActivity && window.SkillzifyActivity.dayCounts()) || {}; } catch (e) {}
+    var iso = function (d) { var m = d.getMonth() + 1, dy = d.getDate(); return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (dy < 10 ? "0" + dy : dy); };
+    var html = "", today = new Date();
+    for (var i = 181; i >= 0; i--) {
+      var d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+      var key = iso(d);
+      var n = parseInt(counts[key] || 0, 10) || 0;
+      var lvl = n === 0 ? 0 : n === 1 ? 1 : n === 2 ? 2 : n <= 4 ? 3 : 4;
+      html += '<span class="heat-cell' + (lvl ? " l" + lvl : "") + '" title="' + key + ": " + n + (n === 1 ? " activity" : " activities") + '"></span>';
+    }
+    host.innerHTML = html;
   }
 
   // Greeting — its own function so auth changes can re-render just
