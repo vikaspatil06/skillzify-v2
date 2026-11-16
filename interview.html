@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YYR4JD16G8"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-YYR4JD16G8');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Skillzify AI Interview Studio — a real-time AI placement interview: technical, coding and HR rounds with adaptive follow-ups, a scored report and a personal improvement roadmap.">
+  <title>AI Interview Studio — Skillzify</title>
+  <link rel="icon" href="assets/logo-light-small.png">
+  <link rel="stylesheet" href="assets/css/style.css?v=39">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+  <style>
+    /* AI Interview Studio (Phase 1): setup, live session and report
+       render into #iv-root from interview.js. Layout idioms mirror the
+       placement shell: a sticky side rail beside the main column. */
+    .iv-shell { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; max-width: 1080px; margin: 0 auto; }
+    .iv-rail { position: sticky; top: calc(var(--nav-h) + 12px); }
+    @media (max-width: 900px) { .iv-shell { grid-template-columns: 1fr; } .iv-rail { position: static; } }
+    .iv-step { display: flex; gap: 10px; margin-top: 12px; }
+    .iv-step .n { flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: var(--gradient); color: #fff; font-weight: 800; font-size: .8rem; display: flex; align-items: center; justify-content: center; }
+    .iv-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; }
+    @media (max-width: 640px) { .iv-form-grid { grid-template-columns: 1fr; } }
+    .iv-transcript { display: flex; flex-direction: column; gap: 10px; max-height: 520px; overflow-y: auto; padding: 4px 2px; }
+    .iv-msg { max-width: 88%; padding: 10px 13px; border-radius: 12px; font-size: .92rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+    .iv-msg.iv-bot { align-self: flex-start; background: var(--bg-soft); border: 1px solid var(--card-border); border-bottom-left-radius: 4px; }
+    .iv-msg.iv-me { align-self: flex-end; background: color-mix(in srgb, var(--primary) 16%, var(--card)); border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--card-border)); border-bottom-right-radius: 4px; }
+    .iv-msg.iv-sys { align-self: center; max-width: 96%; background: transparent; border: 1px dashed var(--card-border); color: var(--muted); font-size: .8rem; text-align: center; }
+    .iv-msg .iv-qtag { display: block; font-family: var(--font-mono); font-size: .64rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+    .iv-composer { margin-top: 12px; }
+    .iv-composer textarea { min-height: 92px; resize: vertical; font-size: .94rem; }
+    .iv-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+    .iv-progress-line { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+    .iv-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--card-border); background: var(--bg-soft); font-size: .76rem; font-weight: 600; color: var(--muted); }
+    .iv-chip strong { color: var(--text); }
+    .iv-editor-wrap { display: flex; border: 1px solid var(--card-border); border-radius: 8px; overflow: hidden; background: var(--code-bg); }
+    .iv-gutter { flex: none; padding: 10px 8px 10px 10px; text-align: right; font-family: var(--font-mono); font-size: .82rem; line-height: 1.5; color: #5b648c; user-select: none; overflow: hidden; white-space: pre; }
+    .iv-editor { flex: 1; min-width: 0; border: 0 !important; border-radius: 0 !important; background: transparent !important; font-family: var(--font-mono); font-size: .86rem; line-height: 1.5; padding: 10px 12px !important; resize: vertical; min-height: 190px; white-space: pre; overflow: auto; }
+    .iv-editor:focus { box-shadow: none !important; }
+    .iv-tests { margin-top: 10px; display: grid; gap: 6px; }
+    .iv-test { display: flex; gap: 8px; align-items: baseline; font-family: var(--font-mono); font-size: .78rem; padding: 6px 9px; border: 1px solid var(--card-border); border-radius: 6px; background: var(--bg-soft); }
+    .iv-test .st { flex: none; font-weight: 700; }
+    .iv-test.pass .st { color: var(--success); }
+    .iv-test.fail .st { color: var(--danger); }
+    .iv-score-row { display: grid; grid-template-columns: 150px 1fr 44px; gap: 10px; align-items: center; margin-top: 8px; }
+    @media (max-width: 640px) { .iv-score-row { grid-template-columns: 110px 1fr 40px; } }
+    .iv-qrow { border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; margin-top: 10px; background: var(--bg-soft); }
+    .iv-qrow .iv-qhead { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+    .iv-road { display: grid; gap: 10px; margin-top: 10px; }
+    .iv-road-item { border: 1px solid var(--card-border); border-left: 3px solid var(--primary); border-radius: 8px; padding: 10px 12px; background: var(--bg-soft); }
+    .iv-links { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .iv-link-chip { display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--card-border); background: var(--card); font-size: .78rem; font-weight: 600; }
+    .iv-link-chip:hover { border-color: var(--primary); text-decoration: none; }
+    .iv-hist-row { display: flex; justify-content: space-between; gap: 10px; align-items: center; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; margin-top: 8px; background: var(--bg-soft); flex-wrap: wrap; }
+    .iv-big-score { font-size: 2.4rem; font-weight: 800; line-height: 1.1; }
+    .iv-timer-warn { color: var(--danger) !important; }
+  </style>
+</head>
+<body>
+
+<div id="site-nav"></div>
+<div class="toast" id="toast" role="status"></div>
+
+<main>
+  <section class="page-hero">
+    <div class="container">
+      <span class="eyebrow">AI Interview Intelligence</span>
+      <h1 class="section-title">🎙️ AI Interview Studio</h1>
+      <p class="section-sub">A real placement interview, before the real one: an AI interviewer asks, follows up on your answers, watches you code, and finishes with a scored report and a personal improvement roadmap inside Skillzify. It is a practice-based estimate of readiness — not a prediction of any hiring outcome.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:24px">
+    <div class="container">
+      <div id="iv-root" aria-live="polite">
+        <p class="hint">Loading the studio…</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="assets/js/nav.js"></script>
+<script src="assets/js/footer.js"></script>
+<script src="assets/js/app.js?v=6"></script>
+<script src="assets/js/activity.js?v=11"></script>
+<script src="assets/js/palette.js?v=2"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
+<script src="assets/js/auth.js?v=8"></script>
+<script src="assets/js/sync.js?v=20"></script>
+<script src="assets/js/ai.js?v=23"></script>
+<script src="assets/js/lessons-index.js?v=1"></script>
+<script src="assets/js/paths-data.js?v=6"></script>
+<script src="assets/js/learn-core.js?v=12"></script>
+<script src="assets/js/projects-data.js?v=2"></script>
+<script src="assets/js/placement.js?v=3"></script>
+<script src="assets/js/interview-bank.js?v=1"></script>
+<script src="assets/js/interview.js?v=1"></script>
+</body>
+</html>

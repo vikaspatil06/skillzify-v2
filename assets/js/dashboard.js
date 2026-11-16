@@ -82,7 +82,7 @@
     renderHeatmap();
   }
 
-  // Activity heatmap (unified redesign, LeetCode pattern): the
+  // Activity heatmap (unified redesign): the
   // last 182 days from SkillzifyActivity.dayCounts() — the label
   // in dashboard.html ("Your last 182 days") matches the exact
   // number of cells rendered here.

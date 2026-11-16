@@ -14,10 +14,18 @@
   <meta name="description" content="Your Skillzify profile — stats, activity, pins and achievements.">
   <title>Profile — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=38">
+  <link rel="stylesheet" href="assets/css/style.css?v=39">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+  <style>
+    /* Profile shell (redesign v2 rollout): stats stay full width; below
+       them mastery + achievements take the wide column and certificates,
+       pins and the activity feed move into a right rail. */
+    .prof-shell { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; margin-top: 20px; }
+    .prof-main, .prof-rail { display: grid; gap: 16px; align-content: start; min-width: 0; }
+    @media (max-width: 1024px) { .prof-shell { grid-template-columns: 1fr; } }
+  </style>
 </head>
 <body>
 
@@ -44,28 +52,18 @@
     <div class="container">
       <div class="dash-grid" id="profile-stats"></div>
 
-      <div class="dash-card" style="margin-top:20px">
-        <h2>🎓 Certificates</h2>
-        <p class="muted small">Complete every lesson in a section to unlock its certificate.</p>
-        <div id="profile-certs" style="margin-top:8px"></div>
-      </div>
-
-      <div class="dash-card" style="margin-top:20px">
+      <div class="prof-shell">
+      <div class="prof-main">
+      <div class="dash-card">
         <h2>📊 Topic mastery</h2>
-        <p class="muted small">Where your completed lessons live, GitHub-language-bar style.</p>
+        <p class="muted small">A stacked bar of where your completed lessons live.</p>
         <div class="mastery-bar" id="profile-mastery-bar"></div>
         <div class="mastery-legend" id="profile-mastery-legend"></div>
         <div id="profile-mastery-topics" style="margin-top:12px"></div>
       </div>
 
 
-      <div class="dash-card" style="margin-top:20px">
-        <h2>📌 Pinned</h2>
-        <p class="muted small">Pin lessons and snippets you keep coming back to. <a href="learn.html">Browse lessons</a> or <a href="compiler.html">open the compiler</a> to pin.</p>
-        <div id="profile-pins" class="pin-grid"></div>
-      </div>
-
-      <div class="dash-card" style="margin-top:20px">
+      <div class="dash-card">
         <div class="card-head">
           <h2>🏆 Achievements <span class="muted small" id="ach-count"></span></h2>
           <div class="card-drop" id="ach-drop">
@@ -79,8 +77,19 @@
         </div>
         <div id="profile-achievements" class="ach-grid"></div>
       </div>
-
-      <div class="dash-card collapsible" id="profile-feed-card" data-collapsed="1" style="margin-top:20px">
+      </div>
+      <aside class="prof-rail">
+      <div class="dash-card">
+        <h2>🎓 Certificates</h2>
+        <p class="muted small">Complete every lesson in a section to unlock its certificate.</p>
+        <div id="profile-certs" style="margin-top:8px"></div>
+      </div>
+      <div class="dash-card">
+        <h2>📌 Pinned</h2>
+        <p class="muted small">Pin lessons and snippets you keep coming back to. <a href="learn.html">Browse lessons</a> or <a href="compiler.html">open the compiler</a> to pin.</p>
+        <div id="profile-pins" class="pin-grid"></div>
+      </div>
+      <div class="dash-card collapsible" id="profile-feed-card" data-collapsed="1">
         <button class="coll-head" type="button" aria-expanded="false">
           <span class="coll-title">📰 Activity feed</span>
           <span class="coll-caret">▾</span>
@@ -88,6 +97,8 @@
         <div class="coll-body">
           <div id="profile-feed" class="feed"></div>
         </div>
+      </div>
+      </aside>
       </div>
     </div>
   </section>

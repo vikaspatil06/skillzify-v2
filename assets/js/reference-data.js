@@ -1,4 +1,4 @@
-/* Skillzify Python Reference data — W3Schools-style quick lookup, v3.
+/* Skillzify Python Reference data — quick lookup, v3.
    Every entry carries: group, name, sig, desc, ex, params, returns,
    pitfalls, out (expected output, verified by executing the example
    with real CPython — null when the example reads input or has no

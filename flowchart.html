@@ -19,8 +19,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css"/>
-  <link rel="stylesheet" href="assets/css/style.css?v=38"/>
-  <link rel="stylesheet" href="assets/css/flowchart.css?v=11"/>
+  <link rel="stylesheet" href="assets/css/style.css?v=39"/>
+  <link rel="stylesheet" href="assets/css/flowchart.css?v=12"/>
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
 </head>
 <body data-page="flowchart">
@@ -76,6 +76,28 @@
           <div class="fc-err" id="genErr" hidden></div>
         </section>
 
+        <section class="fc-card" aria-label="Run and output">
+          <h2><span class="fc-ic" data-icon="play"></span> Run it live</h2>
+          <p class="fc-cardsub">Executes your program safely in the browser and plays the run back on the chart.</p>
+          <button class="btn primary" id="btnTrace" type="button">
+            <span class="fc-ic" data-icon="play"></span> Run + trace
+          </button>
+          <div id="inputsBox">
+            <div id="inputsList"></div>
+            <button class="fc-mini" id="btnAddInput" type="button">+ Add an input() value</button>
+          </div>
+          <h2 style="margin-top:16px"><span class="fc-ic" data-icon="sheet"></span> Program output</h2>
+          <p class="fc-muted" id="outputEmpty">Nothing yet — run the trace to see output here.</p>
+          <pre class="fc-out" id="outputBox"></pre>
+          <div class="fc-export-row">
+            <button class="btn small" id="btnDlTxt" type="button">
+              <span class="fc-ic" data-icon="sheet"></span> Download walkthrough (.txt)
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <div class="fc-col">
         <section class="fc-card" aria-label="Flowchart">
           <h2><span class="fc-ic" data-icon="gen"></span> Flowchart</h2>
           <p class="fc-cardsub">Drag to pan, Ctrl+scroll to zoom. Click any block to jump to its code line.</p>
@@ -121,28 +143,9 @@
           </div>
         </section>
       </div>
+    </div>
 
-      <div class="fc-col">
-        <section class="fc-card" aria-label="Run and output">
-          <h2><span class="fc-ic" data-icon="play"></span> Run it live</h2>
-          <p class="fc-cardsub">Executes your program safely in the browser and plays the run back on the chart.</p>
-          <button class="btn primary" id="btnTrace" type="button">
-            <span class="fc-ic" data-icon="play"></span> Run + trace
-          </button>
-          <div id="inputsBox">
-            <div id="inputsList"></div>
-            <button class="fc-mini" id="btnAddInput" type="button">+ Add an input() value</button>
-          </div>
-          <h2 style="margin-top:16px"><span class="fc-ic" data-icon="sheet"></span> Program output</h2>
-          <p class="fc-muted" id="outputEmpty">Nothing yet — run the trace to see output here.</p>
-          <pre class="fc-out" id="outputBox"></pre>
-          <div class="fc-export-row">
-            <button class="btn small" id="btnDlTxt" type="button">
-              <span class="fc-ic" data-icon="sheet"></span> Download walkthrough (.txt)
-            </button>
-          </div>
-        </section>
-
+    <div class="fc-row3">
         <section class="fc-card" id="warnCard" aria-label="Static checks" hidden>
           <h2><span class="fc-ic" data-icon="warn"></span> Spotted by static checks</h2>
           <p class="fc-cardsub">Found instantly from the chart structure — no AI needed.</p>
@@ -196,7 +199,6 @@
           </div>
           <p class="fc-muted">Anyone opening the link sees this code loaded in the Lab.</p>
         </section>
-      </div>
     </div>
   </main>
 

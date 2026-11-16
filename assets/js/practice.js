@@ -680,7 +680,7 @@
     return '<span class="badge">New</span>';
   }
   function diffStars(d) { return "★".repeat(d) + "☆".repeat(3 - d); }
-  // LeetCode-style difficulty pill (unified redesign): same 1/2/3
+  // Difficulty pill (unified redesign): same 1/2/3
   // difficulty data the filter + stars already use.
   function diffPill(d) {
     var map = { 1: ["diff-easy", "Easy"], 2: ["diff-med", "Medium"], 3: ["diff-hard", "Hard"] };

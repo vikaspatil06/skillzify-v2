@@ -4,13 +4,19 @@
    page lost a specificity war against Mermaid's injected styles;
    this file wins it by selector weight (.fc-stage svg g.node.…). */
 
-.fc-hero { position: relative; padding: 34px 0 10px; }
+/* Token bridge (redesign v2 rollout): this file was written against
+   --glass / --border / --bg2, which the shared system never defined,
+   so those values silently fell back. Bridge them to the real v2
+   tokens so the Lab sits in the same system as every other page. */
+:root { --glass: var(--bg-soft); --border: var(--card-border); --bg2: var(--bg-soft); }
+
+.fc-hero { position: relative; padding: 24px 0 8px; }
 .fc-eyebrow { display: inline-flex; align-items: center; gap: 8px;
   font-size: 12px; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase; color: var(--accent); margin: 0 0 10px; }
 .fc-eyebrow::before { content: ""; width: 22px; height: 2px;
   background: var(--accent); border-radius: 2px; }
-.fc-title { font-size: clamp(30px, 4.6vw, 44px); line-height: 1.08;
+.fc-title { font-size: clamp(25px, 3.6vw, 34px); line-height: 1.08;
   margin: 0 0 10px; font-weight: 800; letter-spacing: -.01em;
   color: var(--text); }
 .fc-title .grad { background: var(--gradient);
@@ -29,8 +35,11 @@
 .fc-how h3 { margin: 1px 0 3px; font-size: 14.5px; color: var(--text); }
 .fc-how p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.45; }
 
-.fc-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr);
+.fc-grid { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 1.5fr);
   gap: 16px; align-items: start; }
+/* utility row under the two work columns: checks, AI help, export */
+.fc-row3 { display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 16px; margin-top: 16px; align-items: start; }
 .fc-col { display: grid; gap: 16px; min-width: 0; }
 .fc-card { background: var(--card); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 16px; min-width: 0; }
@@ -43,9 +52,9 @@
 .fc-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
   margin-bottom: 10px; }
 .fc-toolbar .sp { flex: 1; }
-.btn { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px;
+.btn { display: inline-flex; align-items: center; gap: 7px; border-radius: 8px;
   border: 1px solid var(--border); background: var(--glass); color: var(--text);
-  padding: 8px 14px; font-size: 13.5px; font-weight: 600; cursor: pointer;
+  padding: 7px 12px; font-size: 13.5px; font-weight: 600; cursor: pointer;
   transition: transform .12s ease, border-color .12s ease, background .12s ease; }
 .btn:hover { border-color: var(--accent); transform: translateY(-1px); }
 .btn:disabled { opacity: .55; cursor: wait; transform: none; }
@@ -54,14 +63,14 @@
 .btn.small { padding: 6px 11px; font-size: 12.5px; }
 .btn svg { flex: 0 0 auto; }
 .fc-select, .fc-textinput { background: var(--bg2); color: var(--text);
-  border: 1px solid var(--border); border-radius: 999px; padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
   font-size: 13px; font-family: inherit; }
 .fc-textinput { border-radius: 10px; width: 100%; }
 
 .fc-samples-wrap { position: relative; }
 .fc-samples-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 40;
   background: var(--card); border: 1px solid var(--border);
-  border-radius: 14px; padding: 8px; min-width: 210px;
+  border-radius: 10px; padding: 8px; min-width: 210px;
   box-shadow: 0 22px 50px -18px rgba(0,0,0,.55); display: grid; gap: 2px; }
 .fc-sample { text-align: left; background: none; border: 0; color: var(--text);
   padding: 9px 11px; border-radius: 9px; font-size: 13.5px; cursor: pointer;
@@ -72,10 +81,10 @@
 /* fixed-size boxes (Vikas, 14 Nov 2026): the editor, output and AI
    boxes never resize with their content — content scrolls INSIDE
    the box, so pasting long code can't spread a card over the page. */
-#fcEditorWrap .CodeMirror { border-radius: 12px; border: 1px solid var(--border);
+#fcEditorWrap .CodeMirror { border-radius: 10px; border: 1px solid var(--border);
   font-size: 13.5px; height: 400px; }
 #fcCode { width: 100%; height: 400px; resize: none; background: var(--bg2);
-  color: var(--text); border: 1px solid var(--border); border-radius: 12px;
+  color: var(--text); border: 1px solid var(--border); border-radius: 10px;
   font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13.5px;
   padding: 12px; }
 
@@ -99,7 +108,7 @@
 @keyframes fcspin { to { transform: rotate(360deg); } }
 
 .fc-err { border: 1px solid #e05a7a; background: rgba(224,90,122,.08);
-  border-radius: 12px; padding: 12px 14px; margin-top: 12px; }
+  border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
 .fc-err-title { font-weight: 700; color: #ff8fa8; display: flex; gap: 7px;
   align-items: center; }
 .fc-err p { margin: 6px 0 0; font-size: 13.5px; color: var(--text); }
@@ -116,7 +125,7 @@
 .fc-stat b { color: var(--text); }
 
 .fc-stage-shell { position: relative; border: 1px solid var(--border);
-  border-radius: 14px; background:
+  border-radius: 10px; background:
     radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0) 0 0/22px 22px,
     var(--bg2); overflow: hidden; }
 /* round 4: the viewport is the SVG's own viewBox (see
@@ -187,7 +196,7 @@
   color: var(--text); word-break: break-all; }
 
 .fc-out { background: #070b1d; color: #d7ffe9; border: 1px solid var(--border);
-  border-radius: 12px; padding: 12px 14px; height: 132px; overflow: auto;
+  border-radius: 10px; padding: 12px 14px; height: 132px; overflow: auto;
   font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px;
   white-space: pre-wrap; word-break: break-word; margin: 0; }
 .fc-input-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
@@ -221,7 +230,7 @@
 
 .fc-toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%)
   translateY(16px); background: var(--card); color: var(--text);
-  border: 1px solid var(--accent); border-radius: 999px; padding: 10px 18px;
+  border: 1px solid var(--accent); border-radius: 10px; padding: 10px 18px;
   font-size: 13.5px; font-weight: 600; opacity: 0; pointer-events: none;
   transition: opacity .25s ease, transform .25s ease; z-index: 200;
   box-shadow: 0 18px 44px -12px rgba(0,0,0,.6); max-width: 92vw;
@@ -231,13 +240,14 @@
 #fcPrintSheet { display: none; }
 @media (max-width: 980px) {
   .fc-grid { grid-template-columns: 1fr; }
+  .fc-row3 { grid-template-columns: 1fr; }
   .fc-how { grid-template-columns: 1fr; }
   .fc-stage { height: 420px; }
   .fc-ai-btns, .fc-export-grid { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 560px) {
   .fc-ai-btns, .fc-export-grid { grid-template-columns: 1fr; }
-  .fc-title { font-size: 28px; }
+  .fc-title { font-size: 24px; }
 }
 
 /* — Lab Sheet print layout — */

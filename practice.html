@@ -14,10 +14,20 @@
   <meta name="description" content="Skillzify Practice — topic-wise Python exercises with automated tests, hints, and AI tutor.">
   <title>Practice — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=38">
+  <link rel="stylesheet" href="assets/css/style.css?v=39">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+  <style>
+    /* Practice shell (redesign v2 rollout): the Problem of the Day stays
+       full width; below it the exercise browser (topics, filters, grid)
+       takes the wide column and the adaptive drill + review queue move
+       into a slim right rail. */
+    .prac-shell { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+    .prac-main, .prac-rail { display: grid; gap: 16px; align-content: start; min-width: 0; }
+    .prac-rail #revision-row { grid-template-columns: 1fr; }
+    @media (max-width: 1024px) { .prac-shell { grid-template-columns: 1fr; } }
+  </style>
 </head>
 <body>
 
@@ -39,20 +49,13 @@
       <div id="practice-list">
         <div class="card potd-card" id="daily-banner" style="margin-bottom:18px"></div>
 
-        <div class="card" id="drill-card" style="margin-bottom:18px"></div>
-        <p class="hint" id="challenge-note" style="display:none;margin-bottom:18px"></p>
-
-        <div class="card" style="margin-bottom:18px">
+        <div class="prac-shell">
+        <div class="prac-main">
+        <div class="card">
           <h2 class="section-title" style="font-size:1.3rem">🗺️ Progress by topic</h2>
           <p class="hint">Tap a topic to filter the exercises below.</p>
           <div id="topic-pills" class="pill-row" style="margin:12px 0"></div>
           <div id="topic-progress"></div>
-        </div>
-
-        <div class="card" id="revision-sec" style="margin-bottom:18px">
-          <h2 class="section-title" style="font-size:1.3rem">🔁 Review queue</h2>
-          <p class="hint">Exercises you attempted but haven't cracked yet — spaced repetition in action.</p>
-          <div class="grid-3" id="revision-row" style="margin-top:12px"></div>
         </div>
 
         <div class="filter-bar">
@@ -66,7 +69,18 @@
           <label class="checkline"><input type="checkbox" id="filter-unsolved"> Unsolved only</label>
         </div>
         <p class="hint" id="ex-count"></p>
-        <div class="grid-3" id="ex-grid" style="margin-top:12px"></div>
+        <div class="grid-3" id="ex-grid"></div>
+        </div>
+        <aside class="prac-rail">
+          <div class="card" id="drill-card"></div>
+          <p class="hint" id="challenge-note" style="display:none"></p>
+          <div class="card" id="revision-sec">
+            <h2 class="section-title" style="font-size:1.3rem">🔁 Review queue</h2>
+            <p class="hint">Exercises you attempted but haven't cracked yet — spaced repetition in action.</p>
+            <div class="grid-3" id="revision-row" style="margin-top:12px"></div>
+          </div>
+        </aside>
+        </div>
       </div>
 
       <div id="practice-detail" style="display:none"></div>

@@ -11,17 +11,17 @@
 </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Skillzify Code Studio — a VS Code-like Python IDE in your browser. Multi-file workspace, terminal, problems panel, AI assistant.">
+  <meta name="description" content="Skillzify Code Studio — a complete Python IDE in your browser. Multi-file workspace, terminal, problems panel, AI assistant.">
   <title>Code Studio — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=38">
+  <link rel="stylesheet" href="assets/css/style.css?v=39">
   <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
   <style>
-    /* ============ VS Code-like IDE shell (always dark, like the real thing) ============ */
-    /* Code Studio 2.0: VS Code "Dark Modern" palette — editor #0d1330,
+    /* ============ IDE shell (always dark) ============ */
+    /* Code Studio 2.0: Skillzify midnight palette — editor #0d1330,
        side/activity/panel #0a0f22, borders #141b3d, status bar #6c7bff.
        Stylesheet map (rules stay in cascade order — read top to bottom):
        shell/layout → activity bar → sidebar + accordion sections →
@@ -51,20 +51,20 @@
            font-family: "Inter", sans-serif; border-top: 1px solid var(--ide-border); }
 
     /* activity bar */
-    .activity-bar { width: 48px; background: var(--ide-activity); display: flex; flex-direction: column;
-      align-items: center; padding: 8px 0; gap: 4px; flex-shrink: 0; border-right: 1px solid var(--ide-border); }
-    .activity-bar button { width: 48px; height: 48px; background: none; border: 0; color: var(--ide-muted);
-      font-size: 20px; cursor: pointer; border-left: 2px solid transparent; position: relative; }
+    .activity-bar { width: 42px; background: var(--ide-activity); display: flex; flex-direction: column;
+      align-items: center; padding: 6px 0; gap: 2px; flex-shrink: 0; border-right: 1px solid var(--ide-border); }
+    .activity-bar button { width: 42px; height: 40px; background: none; border: 0; color: var(--ide-muted);
+      font-size: 18px; cursor: pointer; border-left: 2px solid transparent; position: relative; }
     .activity-bar button:hover { color: var(--ide-text); }
     .activity-bar button.active { color: #fff; border-left-color: var(--ide-accent); }
-    .activity-bar button .tip { position: absolute; left: 52px; top: 50%; transform: translateY(-50%);
+    .activity-bar button .tip { position: absolute; left: 46px; top: 50%; transform: translateY(-50%);
       background: var(--ide-input); color: #fff; font-size: 12px; padding: 4px 10px; border-radius: 4px;
       white-space: nowrap; display: none; z-index: 50; font-family: "Inter", sans-serif; }
     .activity-bar button:hover .tip { display: block; }
     .activity-bar .spacer { flex: 1; }
 
     /* sidebar */
-    .sidebar { width: 264px; background: var(--ide-side); border-right: 1px solid var(--ide-border);
+    .sidebar { width: 248px; background: var(--ide-side); border-right: 1px solid var(--ide-border);
       display: flex; flex-direction: column; flex-shrink: 0; min-height: 0; }
     .sidebar ::-webkit-scrollbar { width: 9px; height: 9px; }
     .sidebar ::-webkit-scrollbar-thumb { background: #232c52; border-radius: 5px; border: 2px solid var(--ide-side); }
@@ -80,7 +80,7 @@
        internally instead. */
     #view-explorer { overflow-y: auto; }
     .side-title { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--ide-muted);
-      padding: 12px 16px 8px; display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px 6px; display: flex; align-items: center; justify-content: space-between;
       text-transform: uppercase; }
     .side-title button { background: none; border: 0; color: var(--ide-muted); cursor: pointer;
       font-size: 11px; padding: 2px 7px; border-radius: 4px; font-family: inherit; }
@@ -108,7 +108,7 @@
     .side-sec.collapsed .side-sec-body { grid-template-rows: 0fr; }
     .sec-inner { overflow: hidden; min-height: 0; display: flex; flex-direction: column; }
 
-    /* file rows — compact 22px VS Code tree rows */
+    /* file rows — compact 22px tree rows */
     .file-list { overflow-y: auto; padding: 0 0 6px; flex: 1; min-height: 0; position: relative; }
     .file-list::before { content: ""; position: absolute; left: 15px; top: 0; bottom: 0; width: 1px;
       background: rgba(255,255,255,.05); pointer-events: none; }
@@ -190,7 +190,7 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .search-hit mark { background: rgba(234,179,8,.45); color: #fff; border-radius: 2px; padding: 0 1px; }
 
-    .ai-box-ide { margin: 0 16px 16px; background: #1e1e1e; border: 1px solid var(--ide-border);
+    .ai-box-ide { margin: 0 16px 16px; background: #111831; border: 1px solid var(--ide-border);
       border-radius: 8px; padding: 12px; font-size: 13px; max-height: 300px; overflow-y: auto; }
     .ai-box-ide h4 { margin: 0 0 8px; font-size: 13px; color: #9d6bff; }
     .ai-box-ide p, .ai-box-ide li { line-height: 1.6; }
@@ -248,9 +248,9 @@
     /* main column */
     .main-col { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
     .tab-bar { display: flex; background: var(--ide-side); border-bottom: 1px solid var(--ide-border);
-      align-items: stretch; min-height: 36px; overflow-x: auto; flex-shrink: 0; }
+      align-items: stretch; min-height: 32px; overflow-x: auto; flex-shrink: 0; }
     #tabs { display: flex; }
-    .tab { display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 13px;
+    .tab { display: flex; align-items: center; gap: 8px; padding: 0 10px; font-size: 12.5px;
       font-family: "JetBrains Mono", monospace; background: var(--ide-tab); color: var(--ide-muted);
       border-right: 1px solid var(--ide-border); cursor: pointer; white-space: nowrap; user-select: none; }
     .tab.active { background: var(--ide-bg); color: #fff; box-shadow: inset 0 1px 0 var(--ide-accent); }
@@ -269,7 +269,7 @@
     .tab-actions button.run:hover { background: #22d3ee; }
     .tab-actions button.run:disabled { opacity: .5; }
 
-    .breadcrumbs { padding: 5px 16px; font-size: 12px; color: var(--ide-muted); background: var(--ide-bg);
+    .breadcrumbs { padding: 4px 14px; font-size: 12px; color: var(--ide-muted); background: var(--ide-bg);
       border-bottom: 1px solid var(--ide-border); font-family: "JetBrains Mono", monospace; flex-shrink: 0; }
     .breadcrumbs .sep { margin: 0 6px; }
 
@@ -372,7 +372,7 @@
     .panel-tabs { display: flex; align-items: center; gap: 2px; padding: 0 12px; flex-shrink: 0;
       border-bottom: 1px solid var(--ide-border); }
     .panel-tabs button.ptab { background: none; border: 0; color: var(--ide-muted); font-size: 11px;
-      font-weight: 700; letter-spacing: .06em; padding: 10px 12px; cursor: pointer;
+      font-weight: 700; letter-spacing: .06em; padding: 8px 10px; cursor: pointer;
       border-bottom: 2px solid transparent; font-family: "Inter", sans-serif; }
     .panel-tabs button.ptab.active { color: #fff; border-bottom-color: var(--ide-accent); }
     .panel-tabs button.ptab .badge { background: #f87171; color: #fff; border-radius: 10px; font-size: 10px;
@@ -410,8 +410,8 @@
     .empty-note { padding: 24px; text-align: center; color: var(--ide-muted); font-size: 13px; }
 
     /* status bar */
-    .status-bar { height: 28px; background: var(--ide-accent); color: #fff; display: flex; align-items: center;
-      font-size: 12px; padding: 0 12px; gap: 16px; flex-shrink: 0; user-select: none; }
+    .status-bar { height: 24px; background: var(--ide-accent); color: #fff; display: flex; align-items: center;
+      font-size: 11.5px; padding: 0 12px; gap: 12px; flex-shrink: 0; user-select: none; }
     .status-bar .st-item { display: flex; align-items: center; gap: 6px; cursor: default; }
     .status-bar button.st-item { background: none; border: 0; color: #fff; cursor: pointer; font-size: 12px;
       padding: 3px 8px; border-radius: 3px; font-family: inherit; }
@@ -430,7 +430,7 @@
       /* touch has no hover: keep section + row actions visible */
       .sec-act { opacity: 1; }
       .frow-acts, .srow-acts { display: inline-flex; }
-      .activity-bar { width: 44px; } .activity-bar button { width: 44px; }
+      .activity-bar { width: 42px; } .activity-bar button { width: 42px; }
       .welcome-keys { grid-template-columns: 1fr; }
       /* status bar (P2-29): hide low-value items, scroll the rest */
       .status-bar { gap: 8px; padding: 0 8px; overflow-x: auto; }
@@ -624,7 +624,7 @@
         <div class="welcome" id="welcome">
           <div class="welcome-inner">
             <h1>⚡ Skillzify Code Studio</h1>
-            <p>A VS Code-like Python IDE in your browser. Multiple files, terminal, problems panel, AI assistant — no setup.</p>
+            <p>A complete Python IDE in your browser. Multiple files, terminal, problems panel, AI assistant — no setup.</p>
             <div class="welcome-keys">
               <div><kbd>Ctrl+Enter</kbd> &nbsp;Run current file</div>
               <div><kbd>Ctrl+S</kbd> &nbsp;Save workspace</div>

@@ -18,6 +18,13 @@
    GET /api/usage) and a shared 50,000/day pool that every non-admin
    answer reserves from, so learner traffic can never eat the
    reserve — and admin answers never touch the pool.
+   Exception (owner's rule, 16 Nov 2026): the three interview modes
+   (interview_turn, interview_score, interview_resume) have NO
+   per-identity daily cap — an interview never stops mid-session
+   because the learner used their tutor answers. Non-admin interview
+   calls reserve ONLY from the shared pool (pool exhaustion is
+   still a 429 POOL_CAP); admin interview calls draw from the
+   admin reserve only, like every admin answer.
    Usage is logged as counts only — never code content.
    Cap persistence: counts live in Firestore (collection
    "aiDailyCaps") when a Firebase service-account credential is
@@ -627,12 +634,17 @@ app.get("/api/admin/overview", async (req, res) => {
   }
   var t = byDate[today] || { total: 0, userAnswers: 0, anonAnswers: 0, users: {} };
   todayIds.sort(function (a, b) { return b.count - a.count; });
+  // Pool usage is read from the pool counter itself, not derived
+  // from identity totals: interview calls draw from the pool WITHOUT
+  // an identity reservation (owner's rule, 16 Nov 2026), so deriving
+  // it as (identity total − admin) would undercount the pool.
+  var poolUsed = await capGetCount(poolKey());
   res.json({
     ok: true,
     date: today,
     server: { ai: GEMINI_KEYS.length > 0 || GROQ_API_KEY !== "", capStore: capStore, authVerify: !!fbAuth, uptimeSec: Math.floor(process.uptime()), geminiKeys: GEMINI_KEYS.length, models: MODELS, groq: GROQ_API_KEY !== "", groqModels: GROQ_MODELS },
     caps: { anon: DAILY_CAP_ANON, user: DAILY_CAP_USER, admin: ADMIN_DAILY_CAP, adminEmail: ADMIN_EMAIL },
-    plan: { capacity: DAILY_CAPACITY_TOTAL, adminReserved: ADMIN_DAILY_CAP, userPool: USER_POOL_DAILY_CAP, userPoolUsed: Math.max(0, t.total - myUsed) },
+    plan: { capacity: DAILY_CAPACITY_TOTAL, adminReserved: ADMIN_DAILY_CAP, userPool: USER_POOL_DAILY_CAP, userPoolUsed: poolUsed },
     me: { uid: ident.uid, email: ident.email, used: myUsed, cap: ADMIN_DAILY_CAP },
     today: { total: t.total, userAnswers: t.userAnswers, anonAnswers: t.anonAnswers, users: Object.keys(t.users).length, identities: todayIds.slice(0, 25) },
     days: days
@@ -684,6 +696,42 @@ function isVivaJudge(o) {
   return o && (o.verdict === "correct" || o.verdict === "partial" || o.verdict === "wrong") &&
     typeof o.feedback === "string" && Array.isArray(o.revisit);
 }
+/* AI Interview Intelligence (Phase 1): three JSON modes. Validators are
+   deliberately lenient about prose fields but strict about the fields
+   the client branches on (action enum, per-item numeric scores, the
+   resume skills/questions arrays) — the client re-validates anyway and
+   falls back to fully local behaviour on anything unusable. */
+var INTERVIEW_ACTIONS = ["deeper", "clarify", "probe", "diagnostic", "redirect", "next", "end"];
+function isInterviewTurn(o) {
+  return o && typeof o.say === "string" && !!o.say.trim() &&
+    INTERVIEW_ACTIONS.indexOf(o.action) >= 0 &&
+    (o.followup_question == null || typeof o.followup_question === "string");
+}
+function isInterviewScore(o) {
+  return o && Array.isArray(o.scores) && o.scores.length >= 1 && o.scores.length <= 20 &&
+    o.scores.every(function (s) {
+      return s && Number.isInteger(s.i) && s.i >= 0 &&
+        typeof s.score === "number" && s.score >= 0 && s.score <= 100 &&
+        (s.well == null || typeof s.well === "string") &&
+        (s.improve == null || typeof s.improve === "string") &&
+        (s.evidence == null || typeof s.evidence === "string");
+    });
+}
+function isInterviewResume(o) {
+  return o && Array.isArray(o.skills) && o.skills.length <= 30 &&
+    o.skills.every(function (s) { return typeof s === "string"; }) &&
+    Array.isArray(o.questions) && o.questions.length >= 1 && o.questions.length <= 8 &&
+    o.questions.every(function (q) {
+      return q && typeof q.q === "string" && !!q.q.trim() &&
+        (q.topic == null || typeof q.topic === "string") &&
+        (q.points == null || (Array.isArray(q.points) && q.points.every(function (p) { return typeof p === "string"; })));
+    }) &&
+    (o.projects == null || (Array.isArray(o.projects) && o.projects.every(function (p) {
+      return p && typeof p.title === "string";
+    }))) &&
+    (o.quality == null || (typeof o.quality === "number" && o.quality >= 0 && o.quality <= 100)) &&
+    (o.summary == null || typeof o.summary === "string");
+}
 
 const MODES = {
   "": { style: tutorStyle, maxTokens: 1000 },
@@ -705,6 +753,11 @@ const MODES = {
   // instruction + chart structure in `context` (see buildPrompt).
   explain: { style: tutorStyle, maxTokens: 1200 },
   logic_check: { style: "", maxTokens: 1200 },
+  // AI Interview Intelligence (Phase 1): the interviewer persona lives
+  // in the style line; the strict output contracts live in buildPrompt.
+  interview_turn: { style: "You are a professional job interviewer conducting a real placement interview. You speak briefly and naturally, like a human interviewer — never like a tutor. You NEVER reveal answers, solutions, hints or the scoring rubric, and you never praise or criticise an answer's correctness directly; you react neutrally and move the interview forward. " + jsonOnly, json: true, validate: isInterviewTurn, maxTokens: 900 },
+  interview_score: { style: "You are a strict but fair interview assessor. You score candidate answers against the rubric key points provided, quote the candidate's own words as evidence, accept any technically correct alternative approach, and never invent things the candidate did not say. " + jsonOnly, json: true, validate: isInterviewScore, maxTokens: 2600 },
+  interview_resume: { style: "You are a recruitment screening analyst. You extract only what the resume actually states — never invent skills, projects or experience that are not in the text. " + jsonOnly, json: true, validate: isInterviewResume, maxTokens: 2000 },
 };
 
 function buildPrompt(mode, code, errText, context, stage) {
@@ -749,6 +802,19 @@ function buildPrompt(mode, code, errText, context, stage) {
       return "Ask ONE viva question about this lesson. It should test understanding, not memorization — ask the student to explain WHY or predict what happens. One question only.\n\nLESSON:\n" + code + "\n\nPREVIOUS QUESTIONS (don't repeat these):\n" + errText + "\n\nJSON shape: {\"question\":\"...\"}";
     case "challenge":
       return "Write ONE small daily-challenge exercise for this learner, based on their weak spots. It should take under 10 minutes. Same JSON shape and rules as a drill exercise.\n\nWEAK SPOTS:\n" + code + "\n\nLEARNER CONTEXT:\n" + context + "\n\nJSON shape: {\"title\":\"...\",\"prompt\":\"...\",\"starter\":\"def ...:\\n    # your code here\\n    pass\",\"tests\":[{\"run\":\"fn(1)\",\"expect\":\"2\"}],\"hints\":[\"nudge\",\"strategy\",\"almost there\"],\"solution\":\"...\",\"difficulty\":1}";
+    case "interview_turn":
+      // `code` carries a compact JSON session state (role, type, style,
+      // round, current question, its rubric key points, a digest of what
+      // has been covered, and the client's local read of the answer);
+      // `errText` is the candidate's last answer, verbatim.
+      return "You are mid-interview. SESSION STATE (JSON):\n" + code + "\n\nCANDIDATE'S LAST ANSWER:\n" + errText + "\n\nDecide your next move and reply with ONLY this JSON: {\"say\":\"...\",\"action\":\"deeper|clarify|probe|diagnostic|redirect|next|end\",\"followup_question\":\"...\"}\nRules:\n- \"say\" is what you say out loud first: at most 2 short sentences, in the interview style named in the state. Acknowledge the answer neutrally (\"Okay.\", \"I see.\") — never say whether it was right or wrong, never explain the correct answer, never give a hint.\n- \"action\" is what you do next: \"deeper\" = a harder follow-up on the same topic; \"clarify\" = ask them to clarify or expand an incomplete answer; \"probe\" = ask about a specific rubric point they missed; \"diagnostic\" = step down to a simpler question on the same topic; \"redirect\" = bring an off-topic answer back; \"next\" = move to the next main question (the client supplies it — set followup_question to null); \"end\" = this round is over (followup_question null).\n- When action is deeper/clarify/probe/diagnostic/redirect, \"followup_question\" is the exact question you ask — one question, grounded in the current question and the candidate's answer. Never ask anything whose answer would require revealing the solution.\n- Prefer the action the state's local read suggests unless the answer clearly warrants a different one.";
+    case "interview_score":
+      // `code` carries JSON {round, items:[{q, points:[...], answer}]}.
+      return "Score EVERY item in this interview round. ROUND DATA (JSON):\n" + code + "\n\nFor each item, judge the candidate's answer against the rubric key points (\"points\"): full coverage with correct detail scores 80-100; the core idea right but points missing scores 50-79; a partial or partly-wrong answer scores 25-49; wrong, empty or off-topic scores 0-24. Accept alternative correct phrasings and approaches. \"evidence\" must be a short verbatim quote from the candidate's answer (or \"\" if the answer is empty). \"well\" = one short sentence on what was good (or \"\"). \"improve\" = one short sentence naming the most important missing or wrong point.\n\nReply with ONLY this JSON: {\"scores\":[{\"i\":0,\"score\":0,\"well\":\"...\",\"improve\":\"...\",\"evidence\":\"...\"}]} — one entry per item, \"i\" = the item's index in the input, in input order.";
+    case "interview_resume":
+      // `code` is the resume text (client-truncated); `context` names the
+      // target role and experience level.
+      return "Analyse this resume for a " + (context || "software role") + " interview.\n\nRESUME TEXT:\n" + code + "\n\nReply with ONLY this JSON: {\"skills\":[\"...\"],\"projects\":[{\"title\":\"...\",\"tech\":\"...\",\"summary\":\"...\"}],\"quality\":0,\"summary\":\"...\",\"questions\":[{\"q\":\"...\",\"topic\":\"...\",\"points\":[\"...\"]}]}\nRules:\n- \"skills\": the technical skills actually named or clearly demonstrated in the resume (max 15).\n- \"projects\": the real projects in the resume (max 5); \"tech\" = the stack it names; \"summary\" = one line on what the project does.\n- \"quality\": a 0-100 resume quality score based on clarity, quantified impact, and how completely skills/projects/experience are described.\n- \"summary\": 2-3 sentences on the candidate's profile, strictly from the resume.\n- \"questions\": 4-6 interview questions grounded ONLY in this resume's actual projects and skills (architecture choices, trade-offs, scaling, debugging their own project) — never generic questions. Each question gets 2-4 \"points\": the key things a strong answer should cover. \"topic\" is a short tag like \"Project: <name>\" or the skill name.";
     default:
       return errText
         ? "A student ran this Python code and got this error. First explain the error in simple terms and exactly how to fix it, then give the walkthrough structure above for the code.\n\nCODE:\n" +
@@ -794,21 +860,34 @@ app.post("/api/explain", async (req, res) => {
   if (!code.trim() && !errText.trim()) return res.status(400).json({ error: "Nothing to explain.", code: "EMPTY" });
   // P2-47: reserve one answer BEFORE the Gemini call (increment-first);
   // every failure return below releases it again via releaseCap().
+  // Interview modes (owner's rule, 16 Nov 2026): NO per-identity cap —
+  // a learner who has used up their tutor answers can still start and
+  // finish an interview. Non-admin interview calls reserve only from
+  // the shared pool below; admin interview calls reserve from the
+  // admin reserve, exactly like other admin answers.
+  var isInterviewMode = mode === "interview_turn" || mode === "interview_score" || mode === "interview_resume";
   var myCap = isAdminUser ? ADMIN_DAILY_CAP : (uid ? DAILY_CAP_USER : DAILY_CAP_ANON);
-  var reserved = await dailyReserve(uid, clientIp(req), isAdminUser);
-  if (!reserved) {
-    return res.status(429).json({ error: "You've used your " + myCap.toLocaleString("en-IN") + " AI answers for today — they reset tomorrow.", code: "DAILY_CAP" });
+  var reserved = false;
+  if (isAdminUser || !isInterviewMode) {
+    reserved = await dailyReserve(uid, clientIp(req), isAdminUser);
+    if (!reserved) {
+      return res.status(429).json({ error: "You've used your " + myCap.toLocaleString("en-IN") + " AI answers for today — they reset tomorrow.", code: "DAILY_CAP" });
+    }
   }
   // Capacity division: every non-admin answer ALSO reserves from
   // the shared learner pool, so all learners together can never
   // consume the admin reserve. Admin answers skip the pool. A pool
   // refusal releases the identity reservation again — the caller
-  // used nothing.
+  // used nothing. For non-admin interview calls the pool is the ONLY
+  // reservation made, so a pool refusal has nothing else to release.
   var poolReserved = false;
   if (!isAdminUser) {
     poolReserved = await dailyReservePool();
     if (!poolReserved) {
-      await dailyRelease(uid, clientIp(req));
+      // Release the identity reservation ONLY if this request made
+      // one — releasing unconditionally would eat a reservation that
+      // belongs to an earlier, unrelated call by the same identity.
+      if (reserved) { reserved = false; await dailyRelease(uid, clientIp(req)); }
       return res.status(429).json({ error: "Skillzify's shared pool of " + USER_POOL_DAILY_CAP.toLocaleString("en-IN") + " AI answers for today is used up — it resets tomorrow.", code: "POOL_CAP" });
     }
   }

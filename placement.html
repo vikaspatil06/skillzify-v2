@@ -14,10 +14,20 @@
   <meta name="description" content="Skillzify Placement Test — answer 10 quick questions and find out where to start your Python journey.">
   <title>Placement Test — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=38">
+  <link rel="stylesheet" href="assets/css/style.css?v=39">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+  <style>
+    /* Placement shell (redesign v2 rollout): the single narrow column
+       becomes a two-part layout — a sticky "how it works" rail beside
+       the test itself. */
+    .plc-shell { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: start; max-width: 1020px; margin: 0 auto; }
+    .plc-rail { position: sticky; top: calc(var(--nav-h) + 12px); }
+    .plc-step { display: flex; gap: 10px; margin-top: 12px; }
+    .plc-step .n { flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: var(--gradient); color: #fff; font-weight: 800; font-size: .8rem; display: flex; align-items: center; justify-content: center; }
+    @media (max-width: 860px) { .plc-shell { grid-template-columns: 1fr; } .plc-rail { position: static; } }
+  </style>
 </head>
 <body>
 
@@ -33,9 +43,25 @@
   </section>
 
   <section class="section" style="padding-top:24px">
-    <div class="container" style="max-width:760px">
+    <div class="container">
+      <div class="plc-shell">
+      <aside class="card plc-rail">
+        <h2 style="margin:0;font-size:1.05rem">How it works</h2>
+        <div class="plc-step"><span class="n">1</span><p class="muted small" style="margin:0"><strong style="color:var(--text)">Answer 10 questions.</strong> A mix of reading code and predicting output — about 3 minutes.</p></div>
+        <div class="plc-step"><span class="n">2</span><p class="muted small" style="margin:0"><strong style="color:var(--text)">Get your starting section.</strong> The test places you in one of the 7 journey sections.</p></div>
+        <div class="plc-step"><span class="n">3</span><p class="muted small" style="margin:0"><strong style="color:var(--text)">Start learning.</strong> You can always go back and browse earlier lessons — placement is a starting point, not a lock.</p></div>
+        <p class="hint" style="margin:14px 0 0">Already learning? Retaking simply updates your starting point.</p>
+      </aside>
       <div id="plc-mount" aria-live="polite">
         <p class="hint">Loading the test…</p>
+      </div>
+      </div>
+      <div class="card" style="max-width:1020px;margin:16px auto 0;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        <div style="flex:1;min-width:240px">
+          <h2 style="margin:0;font-size:1.05rem">🎙️ Go deeper: AI Interview</h2>
+          <p class="muted small" style="margin:6px 0 0">This test checks what you know. The AI Interview Studio checks how you perform — a full mock placement interview (technical, live coding and HR) with adaptive follow-ups, a scored report and a personal roadmap. Its result can set your placement too.</p>
+        </div>
+        <a class="btn btn-primary" href="interview.html">Open AI Interview Studio →</a>
       </div>
     </div>
   </section>

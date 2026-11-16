@@ -14,7 +14,7 @@
   <meta name="description" content="A Skillzify learner's public skill passport — lessons, exercises, projects and paths with dates, read live from Skillzify's database.">
   <title>Skill Passport — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=38">
+  <link rel="stylesheet" href="assets/css/style.css?v=39">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -27,6 +27,12 @@
     #passport-root details { margin-top: 10px; }
     #passport-root details summary { cursor: pointer; }
     #passport-root details ul { margin: 8px 0 0; padding-left: 20px; }
+    /* Passport sheet (redesign v2 rollout): the rendered record sits in
+       one framed document sheet — narrower than the site container, with
+       a gradient top rule — instead of floating cards on the page. */
+    #passport-root { position: relative; max-width: 880px; background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; box-shadow: var(--shadow); padding: 22px; overflow: hidden; }
+    #passport-root::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--gradient); }
+    #passport-root > .dash-card { background: var(--bg-soft); }
   </style>
 </head>
 <body>
@@ -37,7 +43,8 @@
 <main>
   <section class="page-hero">
     <div class="container">
-      <h1 class="section-title">🎓 Skill Passport</h1>
+      <span class="eyebrow">Passport</span>
+      <h1 class="section-title" style="margin-top:8px">🎓 Skill Passport</h1>
       <p class="section-sub">A public, itemised record of what this learner did — every lesson, exercise, project and path, with dates — read live from Skillzify's database.</p>
     </div>
   </section>

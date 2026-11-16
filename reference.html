@@ -14,7 +14,7 @@
   <meta name="description" content="Skillzify Python reference — built-ins, string, list and dict methods, keywords.">
   <title>Python Reference — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=38">
+  <link rel="stylesheet" href="assets/css/style.css?v=39">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -27,15 +27,23 @@
 <main>
   <section class="page-hero">
     <div class="container">
-      <h1 class="section-title">📖 Python Reference</h1>
+      <span class="eyebrow">Reference</span>
+      <h1 class="section-title" style="margin-top:8px">📖 Python Reference</h1>
       <p class="section-sub">Most examples run right here — hit <strong>▶ Run here</strong> to see the output, or <strong>Try it yourself</strong> to edit it in Code Studio. (A few, like <code>input()</code>, need Code Studio.)</p>
       <p class="hint" id="ref-stats" style="margin-top:8px"></p>
     </div>
   </section>
 
   <section class="section" style="padding-top:24px">
-    <div class="container">
-      <div class="card" style="margin-bottom:18px">
+    <div class="container" style="width:min(1280px,96%)">
+      <div class="ref-layout">
+        <aside class="ref-sidebar">
+          <input type="text" id="ref-search" placeholder="🔍 Search reference…" autocomplete="off" aria-label="Search reference">
+          <div id="ref-nav"></div>
+        </aside>
+        <div class="ref-card" id="ref-content"></div>
+      </div>
+      <div class="card" style="margin-top:18px">
         <div class="daily-inner">
           <div>
             <h2 style="margin:0 0 6px">📖 Know it? Now use it.</h2>
@@ -46,13 +54,6 @@
             <a class="btn btn-ghost" href="learn.html">Lessons</a>
           </div>
         </div>
-      </div>
-      <div class="ref-layout">
-        <aside class="ref-sidebar">
-          <input type="text" id="ref-search" placeholder="🔍 Search reference…" autocomplete="off" aria-label="Search reference">
-          <div id="ref-nav"></div>
-        </aside>
-        <div class="ref-card" id="ref-content"></div>
       </div>
     </div>
   </section>

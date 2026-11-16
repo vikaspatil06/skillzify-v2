@@ -1,6 +1,6 @@
 /* ============================================================
    Skillzify v2 — learn.js (path overview)
-   Renders the Duolingo-style lesson path. Lesson content lives
+   Renders the lesson path. Lesson content lives
    on the dedicated lesson page (lesson.html + lesson.js).
    Requires learn-core.js (window.SkillzifyLearnCore) loaded first.
    ============================================================ */

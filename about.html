@@ -14,10 +14,17 @@
   <meta name="description" content="About Skillzify — Learn. Build. Shine.">
   <title>About — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=38">
+  <link rel="stylesheet" href="assets/css/style.css?v=39">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+  <style>
+    /* About (redesign v2 rollout): the four loop steps run as one
+       4-across row instead of a 2x2 block. */
+    .steps-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    @media (max-width: 1024px) { .steps-row { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 560px) { .steps-row { grid-template-columns: 1fr; } }
+  </style>
 </head>
 <body>
 
@@ -26,11 +33,16 @@
 
 <main>
   <section class="page-hero">
-    <div class="container center">
-      <img data-logo data-logo-sm src="assets/logo-light-small.png" alt="Skillzify" style="height:84px;margin-bottom:16px">
-      <h1 class="section-title">About Skillzify</h1>
-      <p class="section-sub">Learn. Build. Shine.</p>
-      <p style="color:var(--muted);max-width:640px;margin:0 auto">We believe the best way to learn programming is to write code from day one — with friendly guidance when things break.</p>
+    <div class="container">
+      <span class="eyebrow">About</span>
+      <div style="display:flex;gap:22px;align-items:center;flex-wrap:wrap;margin-top:14px">
+        <img data-logo data-logo-sm src="assets/logo-light-small.png" alt="Skillzify" style="height:84px">
+        <div style="flex:1;min-width:260px">
+          <h1 class="section-title" style="margin:0">About Skillzify</h1>
+          <p class="section-sub" style="margin:4px 0 0">Learn. Build. Shine.</p>
+          <p style="color:var(--muted);max-width:640px;margin:8px 0 0">We believe the best way to learn programming is to write code from day one — with friendly guidance when things break.</p>
+        </div>
+      </div>
       <div class="about-stats" id="about-stats">
         <div class="stat"><div class="num" id="st-lessons" data-count="250">0</div><div class="lbl">Lessons</div></div>
         <div class="stat"><div class="num" id="st-exercises" data-count="150">0</div><div class="lbl">Exercises</div></div>
@@ -42,10 +54,26 @@
   </section>
 
   <section class="section">
-    <div class="container" style="max-width:760px">
-      <h2 class="section-title" style="font-size:1.6rem">Our story</h2>
-      <p style="color:var(--muted);margin-top:12px">Skillzify started as a simple Python learning site and grew into a browser-first learning platform: structured lessons, hands-on practice with an AI tutor, guided learning paths, real-world projects, a searchable Python reference, a real Python runtime in the browser, and analytics that show exactly where you're improving.</p>
-      <p style="color:var(--muted);margin-top:12px">No installs. No account required to start. Just open the site and write your first line of Python.</p>
+    <div class="container">
+      <div class="two-col" style="align-items:start">
+        <div>
+          <span class="eyebrow">Our story</span>
+          <h2 class="section-title" style="font-size:1.6rem;margin-top:8px">Our story</h2>
+          <p style="color:var(--muted);margin-top:12px">Skillzify started as a simple Python learning site and grew into a browser-first learning platform: structured lessons, hands-on practice with an AI tutor, guided learning paths, real-world projects, a searchable Python reference, a real Python runtime in the browser, and analytics that show exactly where you're improving.</p>
+          <p style="color:var(--muted);margin-top:12px">No installs. No account required to start. Just open the site and write your first line of Python.</p>
+        </div>
+        <div>
+          <span class="eyebrow">What we believe</span>
+          <h2 class="section-title" style="font-size:1.6rem;margin-top:8px">What we believe</h2>
+          <p class="hint" style="margin-bottom:16px">Three principles behind every page on this site.</p>
+          <div style="display:grid;gap:12px">
+            <div class="card"><div class="icon">🆓</div><h3>Free forever</h3><p>Every lesson, exercise, project and reference entry is free. No paywalls, no premium tier, no catch.</p></div>
+            <div class="card"><div class="icon">🌐</div><h3>Browser-first</h3><p>No installs, no setup. The compiler, lessons and UI run entirely in your browser.*</p></div>
+            <div class="card"><div class="icon">🔒</div><h3>Your data stays yours</h3><p>Progress lives in your browser — and syncs through your own account when you sign in. No ads, no selling your data — anonymous usage analytics only.</p></div>
+          </div>
+          <p class="hint" style="margin-top:12px">*The compiler downloads the Python runtime (~10 MB) on first use.</p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -53,7 +81,7 @@
     <div class="container">
       <h2 class="section-title" style="font-size:1.6rem">How it works</h2>
       <p class="hint" style="margin-bottom:16px">Four steps, one loop — every part feeds the next.</p>
-      <div class="grid-2">
+      <div class="steps-row">
         <a class="card link-card" href="learn.html">
           <div class="icon">📖</div><h3>1. Learn</h3>
           <p><strong id="c-lessons">250</strong> structured lessons from <code>print()</code> to decorators, with examples you can run and quizzes that check understanding.</p>
@@ -75,19 +103,6 @@
           <span class="card-link">View dashboard →</span>
         </a>
       </div>
-    </div>
-  </section>
-
-  <section class="section" style="padding-top:0">
-    <div class="container">
-      <h2 class="section-title" style="font-size:1.6rem">What we believe</h2>
-      <p class="hint" style="margin-bottom:16px">Three principles behind every page on this site.</p>
-      <div class="grid-3">
-        <div class="card"><div class="icon">🆓</div><h3>Free forever</h3><p>Every lesson, exercise, project and reference entry is free. No paywalls, no premium tier, no catch.</p></div>
-        <div class="card"><div class="icon">🌐</div><h3>Browser-first</h3><p>No installs, no setup. The compiler, lessons and UI run entirely in your browser.*</p></div>
-        <div class="card"><div class="icon">🔒</div><h3>Your data stays yours</h3><p>Progress lives in your browser — and syncs through your own account when you sign in. No ads, no selling your data — anonymous usage analytics only.</p></div>
-      </div>
-      <p class="hint" style="margin-top:12px">*The compiler downloads the Python runtime (~10 MB) on first use.</p>
     </div>
   </section>
 

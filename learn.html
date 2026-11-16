@@ -14,10 +14,37 @@
   <meta name="description" content="Skillzify Python learning path — 250 interactive lessons across 7 journey sections with quizzes, coding challenges and XP.">
   <title>Learn Python — Skillzify</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=38">
+  <link rel="stylesheet" href="assets/css/style.css?v=39">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
+  <style>
+    /* Learn shell (redesign v2 rollout): the section body becomes a
+       two-column app shell via grid placement — the progress box and
+       the review queue form a slim left rail, the placement banner,
+       Continue card, search and the lesson timeline run down the wide
+       main column. No DOM moves: every block keeps its place in the
+       file and its JS hooks; only its column changes. On narrow
+       screens it collapses to one column with Continue/search/lessons
+       first and the rail blocks after. */
+    .learn-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); column-gap: 16px; align-items: start; }
+    .learn-grid > .card:first-child { grid-column: 1 / -1; }
+    .learn-grid #plc-banner, .learn-grid .continue-card, .learn-grid .search-row,
+    .learn-grid #no-results, .learn-grid #tracks { grid-column: 2; min-width: 0; }
+    .learn-grid .progress-wrap, .learn-grid #review { grid-column: 1; min-width: 0; }
+    @media (max-width: 1024px) {
+      .learn-grid { grid-template-columns: 1fr; }
+      .learn-grid > * { grid-column: 1; }
+      .learn-grid #plc-banner { order: 0; }
+      .learn-grid .continue-card { order: 1; }
+      .learn-grid .search-row { order: 2; }
+      .learn-grid #no-results { order: 3; }
+      .learn-grid #tracks { order: 4; }
+      .learn-grid .progress-wrap { order: 5; }
+      .learn-grid #review { order: 6; }
+      .learn-grid > .card:first-child { order: 7; }
+    }
+  </style>
 </head>
 <body>
 
@@ -39,7 +66,7 @@
   </section>
 
   <section class="section" style="padding-top:24px">
-    <div class="container">
+    <div class="container learn-grid">
       <div class="card" style="margin-bottom:18px">
         <div class="daily-inner">
           <div>

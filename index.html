@@ -14,41 +14,50 @@
   <meta name="description" content="Skillzify — Learn. Build. Shine. An advanced, browser-first Python learning platform for students with an AI-powered compiler.">
   <title>Skillzify — Learn. Build. Shine.</title>
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=38">
+  <link rel="stylesheet" href="assets/css/style.css?v=39">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
   <style>
-    /* Homepage-only components (unified redesign): built purely from
-       the shared tokens in style.css — no new colours, no glow. */
-    .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-top: 40px; }
-    .meta-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
-    .chip { display: inline-block; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.04em;
-      padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--muted); }
+    /* Homepage-only components (redesign v2): built purely from the
+       shared tokens in style.css — compact, sharp, no new colours. */
+    .hero { position: relative; }
+    .hero::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+      background-image: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--text) 6%, transparent) 1px, transparent 0);
+      background-size: 22px 22px;
+      -webkit-mask-image: linear-gradient(180deg, black, transparent 88%);
+      mask-image: linear-gradient(180deg, black, transparent 88%); }
+    .hero .container { position: relative; }
+    @media (min-width: 1101px) { .stats { grid-template-columns: repeat(8, 1fr); } }
+    @media (max-width: 1100px) and (min-width: 641px) { .stats { grid-template-columns: repeat(4, 1fr); } }
+    .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 26px; }
+    .meta-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 9px; }
+    .chip { display: inline-block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em;
+      padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--muted); }
     .chip strong { color: var(--text); font-family: var(--font-mono); }
     .chip-grad { background: var(--gradient); color: #fff; border: none; }
-    .step-num { font-family: var(--font-mono); font-size: 0.8rem; font-weight: 700; color: var(--primary);
-      letter-spacing: 0.18em; margin-bottom: 12px; }
-    .feat-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
-    .feat-list li { color: var(--muted); font-size: 0.94rem; padding-left: 24px; position: relative; }
-    .feat-list li::before { content: "▸"; position: absolute; left: 4px; color: var(--accent); font-weight: 700; }
+    .step-num { font-family: var(--font-mono); font-size: 0.74rem; font-weight: 700; color: var(--primary);
+      letter-spacing: 0.18em; margin-bottom: 8px; }
+    .feat-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+    .feat-list li { color: var(--muted); font-size: 0.9rem; padding-left: 20px; position: relative; }
+    .feat-list li::before { content: "▸"; position: absolute; left: 3px; color: var(--accent); font-weight: 700; }
     .feat-list li strong { color: var(--text); }
-    .levels-strip { display: flex; gap: 10px; overflow-x: auto; padding: 6px 2px 14px; margin-top: 34px; scrollbar-width: none; }
+    .levels-strip { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 10px; margin-top: 22px; scrollbar-width: none; }
     .levels-strip::-webkit-scrollbar { display: none; }
-    .level-chip { flex: none; min-width: 128px; text-align: center; background: var(--card);
-      border: 1px solid var(--card-border); border-radius: var(--r-md); padding: 16px 12px; }
-    .level-chip .lv-name { font-weight: 700; font-size: 0.88rem; margin-bottom: 4px; }
-    .level-chip .lv-xp { font-family: var(--font-mono); font-size: 0.76rem; color: var(--muted); }
+    .level-chip { flex: none; min-width: 110px; text-align: center; background: var(--card);
+      border: 1px solid var(--card-border); border-radius: var(--r-md); padding: 10px; }
+    .level-chip .lv-name { font-weight: 700; font-size: 0.84rem; margin-bottom: 2px; }
+    .level-chip .lv-xp { font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); }
     .level-chip.top { background: var(--gradient); border: none; color: #fff; }
     .level-chip.top .lv-xp { color: rgba(255,255,255,0.85); }
-    .studio-shot { background: var(--code-bg); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; text-align: left; }
-    .studio-shot .ss-tab { display: flex; align-items: center; gap: 8px; padding: 10px 16px;
-      border-bottom: 1px solid var(--card-border); font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
-    .studio-shot .ss-tab .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: none; }
-    .studio-shot pre { padding: 18px; overflow-x: auto; font-size: 0.86rem; }
-    .studio-shot code { font-family: var(--font-mono); color: #cdd6ff; line-height: 1.7; }
-    .studio-shot .ss-status { display: flex; gap: 16px; flex-wrap: wrap; padding: 9px 16px;
-      border-top: 1px solid var(--card-border); font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); }
+    .studio-shot { background: var(--code-bg); border: 1px solid var(--card-border); border-radius: 8px; overflow: hidden; text-align: left; }
+    .studio-shot .ss-tab { display: flex; align-items: center; gap: 7px; padding: 8px 12px;
+      border-bottom: 1px solid var(--card-border); font-family: var(--font-mono); font-size: 0.76rem; color: var(--muted); }
+    .studio-shot .ss-tab .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+    .studio-shot pre { padding: 13px; overflow-x: auto; font-size: 0.82rem; }
+    .studio-shot code { font-family: var(--font-mono); color: #cdd6ff; line-height: 1.6; }
+    .studio-shot .ss-status { display: flex; gap: 12px; flex-wrap: wrap; padding: 7px 12px;
+      border-top: 1px solid var(--card-border); font-family: var(--font-mono); font-size: 0.7rem; color: var(--muted); }
   </style>
 </head>
 <body>
@@ -56,8 +65,8 @@
 <div id="site-nav"></div>
 <div class="toast" id="toast" role="status"></div>
 
-<!-- Subject strip (unified redesign, W3Schools pattern): the real
-     course sections + destinations, one click from the homepage. -->
+<!-- Subject strip: the real course sections + destinations,
+     one click from the homepage. -->
 <nav class="subject-strip" aria-label="Subjects">
   <a href="learn.html">🌱 Base Camp</a>
   <a href="learn.html">🧱 Tool Shed</a>
@@ -79,7 +88,6 @@
   <section class="hero">
     <div class="container hero-grid">
       <div>
-        <img data-logo src="assets/logo-light.png" alt="Skillzify" class="hero-logo">
         <div class="tagline">Learn. Build. Shine.</div>
         <h1>Master Python the <span class="grad">modern way</span></h1>
         <p class="lead">Interactive lessons, a real in-browser Python compiler, and an AI explainer that turns confusing errors into "aha!" moments — all free, all in your browser.</p>
@@ -120,11 +128,12 @@
   <section class="section" style="padding-top:0">
     <div class="container">
       <div class="center">
+        <span class="eyebrow">Get started</span>
         <h2 class="section-title">Start where you are</h2>
         <p class="section-sub">Brand new to Python, or already comfortable? Take the 3-minute placement test, or pick a guided path — every route feeds the same progress, XP and streak.</p>
       </div>
-      <div class="card potd-card" style="margin-top:40px">
-        <span class="potd-eyebrow">🧭 Placement test</span>
+      <div class="card potd-card" style="margin-top:26px">
+        <span class="potd-eyebrow"><svg class="ic" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M15.3 8.7l-1.9 4.7-4.7 1.9 1.9-4.7z"/></svg> Placement test</span>
         <h3 style="font-size:1.3rem;margin:8px 0">Skip what you already know</h3>
         <p style="color:var(--muted);max-width:640px">A 10-question adaptive diagnostic places you at the right section of the journey and unlocks everything before it. Placement is a pointer, never progress — no XP, no lessons marked done, just the right starting line.</p>
         <div class="btn-row"><a href="placement.html" class="btn">Take the placement test →</a></div>
@@ -174,6 +183,7 @@
   <section class="section" style="padding-top:0">
     <div class="container">
       <div class="center">
+        <span class="eyebrow">The journey</span>
         <h2 class="section-title">The journey: 250 lessons, 7 sections</h2>
         <p class="section-sub">One connected path from your first <code>print()</code> to shipping real apps. Finish a lesson to unlock the next — the chain never breaks, and your place is always saved.</p>
       </div>
@@ -241,80 +251,81 @@
   <section class="section" style="padding-top:0">
     <div class="container">
       <div class="center">
+        <span class="eyebrow">Features</span>
         <h2 class="section-title">Everything you need to go from zero to hired</h2>
         <p class="section-sub">A complete learning loop: study the concept, run the code, understand the errors, prove the skill — all in one place.</p>
       </div>
       <div class="grid-4">
         <div class="card">
-          <div class="icon">🤖</div>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="9" width="16" height="10" rx="2"/><path d="M12 9V5M8.5 5h7"/><path d="M9 14h.01M15 14h.01"/><path d="M9.5 16.8h5"/></svg></div>
           <h3>AI Tutor</h3>
           <p>A Socratic tutor inside lessons and practice — it guides you to the answer with hints and explanations instead of spoiling it.</p>
           <a class="card-link" href="learn.html">Learn with AI →</a>
         </div>
         <div class="card">
-          <div class="icon">💻</div>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12.5 15H17"/></svg></div>
           <h3>Code Studio</h3>
-          <p>A VS Code-class editor (Monaco) with a real Python 3.11 runtime, multi-file workspace, packages and inline AI help.</p>
+          <p>A professional in-browser editor (Monaco) with a real Python 3.11 runtime, multi-file workspace, packages and inline AI help.</p>
           <a class="card-link" href="compiler.html">Open Code Studio →</a>
         </div>
         <div class="card">
-          <div class="icon">🔀</div>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="5" rx="1"/><rect x="14" y="16" width="7" height="5" rx="1"/><path d="M6.5 8v3a3 3 0 0 0 3 3H14"/></svg></div>
           <h3>Flowchart Lab</h3>
           <p>Paste Python and watch it become a flowchart — then play the execution back step by step and export it for lab records.</p>
           <a class="card-link" href="flowchart.html">Open Flowchart Lab →</a>
         </div>
         <div class="card">
-          <div class="icon">🏋️</div>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12h.01"/></svg></div>
           <h3>Practice + Problem of the Day</h3>
           <p>150 exercises in 3 formats with automated tests, progressive hints, timed mode — plus a fresh Problem of the Day, every day.</p>
           <a class="card-link" href="practice.html">Start practicing →</a>
         </div>
         <div class="card">
-          <div class="icon">🔁</div>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 3v5h-5"/></svg></div>
           <h3>Spaced-Repetition Reviews</h3>
           <p>Lessons come back at the right moment — 1, 3, 7, 14, 30, 60 days — so what you learn actually stays learned.</p>
           <a class="card-link" href="learn.html#review">See due reviews →</a>
         </div>
         <div class="card">
-          <div class="icon">🎯</div>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16"/><path d="M7 20v-5M12 20V8M17 20v-8"/></svg></div>
           <h3>Mastery Engine</h3>
           <p>A 0–100 mastery score per topic powers your Next Up card and a ~15-minute daily plan built from your weakest spots.</p>
           <a class="card-link" href="dashboard.html">View my mastery →</a>
         </div>
         <div class="card">
-          <div class="icon">🛂</div>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 2.8V11c0 4.6-3 7.7-7 9.5C8 18.7 5 15.6 5 11V5.8z"/><path d="M9 11.5l2.2 2.2 4.3-4.2"/></svg></div>
           <h3>Skill Passport &amp; Certificates</h3>
           <p>Downloadable certificates for every completed section, gathered into one shareable Skill Passport.</p>
           <a class="card-link" href="passport.html">Open my passport →</a>
         </div>
         <div class="card">
-          <div class="icon">🗺️</div>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg></div>
           <h3>Concept Map</h3>
           <p>The whole journey on one map — every section and lesson, coloured by your progress, so you always see what's next.</p>
           <a class="card-link" href="map.html">Explore the map →</a>
         </div>
         <div class="card">
-          <div class="icon">💬</div>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H9l-5 4z"/><path d="M8 8h8M8 11h5"/></svg></div>
           <h3>Community &amp; Leaderboard</h3>
           <p>Ask questions with code attached, share projects in the showcase, and climb the XP leaderboard.</p>
           <a class="card-link" href="community.html">Join the Circle →</a>
         </div>
         <div class="card">
-          <div class="icon">🧭</div>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M15.3 8.7l-1.9 4.7-4.7 1.9 1.9-4.7z"/></svg></div>
           <h3>Placement Test</h3>
           <p>Ten adaptive questions place you at exactly the right section — no re-learning what you already know.</p>
           <a class="card-link" href="placement.html">Take the test →</a>
         </div>
         <div class="card">
-          <div class="icon">🏆</div>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h8v4.5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3.2 3M16 6h3a3 3 0 0 1-3.2 3"/><path d="M12 12.5V15"/><path d="M9.5 20v-5h5v5"/><path d="M7.5 20h9"/></svg></div>
           <h3>Achievements &amp; Levels</h3>
           <p>32 badges and 11 levels from Novice to Grandmaster reward the habits that make programmers: streaks, reviews, solves.</p>
           <a class="card-link" href="profile.html">See achievements →</a>
         </div>
         <div class="card">
-          <div class="icon">📚</div>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6C10.2 4.4 8 4 4 4v14c4 0 6.2.4 8 2 1.8-1.6 4-2 8-2V4c-4 0-6.2.4-8 2z"/><path d="M12 6v14"/></svg></div>
           <h3>Python Reference</h3>
-          <p>127 W3Schools-style entries with parameters, pitfalls and verified examples — each linked to the lesson that teaches it.</p>
+          <p>127 reference entries with parameters, pitfalls and verified examples — each linked to the lesson that teaches it.</p>
           <a class="card-link" href="reference.html">Browse reference →</a>
         </div>
       </div>
@@ -325,28 +336,29 @@
   <section class="section" style="padding-top:0">
     <div class="container">
       <div class="center">
+        <span class="eyebrow">How it works</span>
         <h2 class="section-title">How Skillzify works</h2>
         <p class="section-sub">Four steps, one loop. Repeat it daily and the streak — and the skill — takes care of itself.</p>
       </div>
       <div class="grid-4">
         <div class="card">
           <div class="step-num">STEP 01</div>
-          <h3>📖 Learn</h3>
+          <h3>Learn</h3>
           <p>Bite-size lessons with live code, a quiz and a mini challenge. Finish one to unlock the next.</p>
         </div>
         <div class="card">
           <div class="step-num">STEP 02</div>
-          <h3>🏋️ Practice</h3>
+          <h3>Practice</h3>
           <p>Exercises with real automated tests, the daily Problem of the Day, and reviews that resurface right before you'd forget.</p>
         </div>
         <div class="card">
           <div class="step-num">STEP 03</div>
-          <h3>🛠️ Build</h3>
+          <h3>Build</h3>
           <p>Guided projects and a full Code Studio workspace turn concepts into things you can actually show.</p>
         </div>
         <div class="card">
           <div class="step-num">STEP 04</div>
-          <h3>🎓 Prove</h3>
+          <h3>Prove</h3>
           <p>Certificates, a Skill Passport, achievements and a leaderboard rank — evidence of skill, not just hours watched.</p>
         </div>
       </div>
@@ -358,10 +370,11 @@
     <div class="container">
       <div class="grid-2" style="align-items:center">
         <div>
+          <span class="eyebrow">Code Studio</span>
           <h2 class="section-title">Code Studio: a real IDE, in your browser</h2>
           <p class="section-sub">No installs, no setup, no "works on my machine". Open the page and Python 3.11 is already running.</p>
           <ul class="feat-list">
-            <li><strong>Monaco editor</strong> — the engine behind VS Code, in the new Midnight theme, with minimap, breadcrumbs and bracket colours</li>
+            <li><strong>Monaco editor</strong> — a professional code-editing engine, in the new Midnight theme, with minimap, breadcrumbs and bracket colours</li>
             <li><strong>Inline AI (Ctrl+I)</strong> — ask for a change and review it as a diff before you accept; AI Fix does the same for errors</li>
             <li><strong>Real packages</strong> — NumPy, pandas and matplotlib built in; more installable on demand</li>
             <li><strong>Multi-file workspace</strong> — files, samples and snippets that sync to your account, with share links for any program</li>
@@ -393,7 +406,7 @@ top = scores.sort_values(<span class="tok-s">"xp"</span>, ascending=<span class=
     <div class="container">
       <div class="grid-2">
         <div class="card potd-card">
-          <span class="potd-eyebrow">🎯 Problem of the Day</span>
+          <span class="potd-eyebrow"><svg class="ic" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12h.01"/></svg> Problem of the Day</span>
           <h3 style="font-size:1.3rem;margin:8px 0">One fresh challenge, every day</h3>
           <p style="color:var(--muted)">The same exercise for every learner, picked fresh each morning from the 150-exercise bank — write-code, predict-the-output and fix-the-bug formats across 17 topics, with progressive hints when you're stuck and a Socratic AI tutor that never just hands you the answer.</p>
           <div class="meta-row" style="margin-top:14px">
@@ -407,7 +420,7 @@ top = scores.sort_values(<span class="tok-s">"xp"</span>, ascending=<span class=
           <div class="btn-row"><a href="practice.html" class="btn">Solve today's problem →</a></div>
         </div>
         <div class="card">
-          <span class="potd-eyebrow">🛠️ Guided projects</span>
+          <span class="potd-eyebrow"><svg class="ic" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4.2 4.2 0 0 0-5.9 5.3L4 16.4V20h3.6l4.8-4.8a4.2 4.2 0 0 0 5.3-5.9l-2.8 2.8-2.3-.7-.7-2.3z"/></svg> Guided projects</span>
           <h3 style="font-size:1.3rem;margin:8px 0">Build things you'd actually keep</h3>
           <p style="color:var(--muted)">Fourteen guided builds with milestones and starter code — here are a few favourites:</p>
           <ul class="feat-list">
@@ -426,18 +439,19 @@ top = scores.sort_values(<span class="tok-s">"xp"</span>, ascending=<span class=
   <section class="section" style="padding-top:0">
     <div class="container">
       <div class="center">
+        <span class="eyebrow">Community</span>
         <h2 class="section-title">Learn together, climb together</h2>
         <p class="section-sub">Skillzify Circle is the community layer: help, feedback and a little healthy competition.</p>
       </div>
       <div class="grid-2">
         <div class="card">
-          <div class="icon">💬</div>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5"/><path d="M15.5 5.6a3.2 3.2 0 0 1 0 5.9M17.8 15.3c1.5.6 2.4 1.9 2.7 4.2"/></svg></div>
           <h3>Skillzify Circle</h3>
           <p>Ask questions anchored to a lesson, exercise or error — code attached, best answers earn XP — and share finished builds in the project showcase for stars and forks into Code Studio.</p>
           <a class="card-link" href="community.html">Visit the community →</a>
         </div>
         <div class="card">
-          <div class="icon">🏆</div>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h8v4.5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3.2 3M16 6h3a3 3 0 0 1-3.2 3"/><path d="M12 12.5V15"/><path d="M9.5 20v-5h5v5"/><path d="M7.5 20h9"/></svg></div>
           <h3>Leaderboard &amp; Your Rank</h3>
           <p>Every lesson, exercise and review earns XP — and XP is public. See the full leaderboard in the community, and watch your own rank (and the gap to the learner above you) on your dashboard.</p>
           <a class="card-link" href="dashboard.html">Check my rank →</a>
@@ -450,6 +464,7 @@ top = scores.sort_values(<span class="tok-s">"xp"</span>, ascending=<span class=
   <section class="section" style="padding-top:0">
     <div class="container">
       <div class="center">
+        <span class="eyebrow">Levels</span>
         <h2 class="section-title">11 levels. One Grandmaster.</h2>
         <p class="section-sub">XP comes from lessons, exercises, reviews and streaks — and levels are permanent. Here's the whole ladder:</p>
       </div>
@@ -473,6 +488,7 @@ top = scores.sort_values(<span class="tok-s">"xp"</span>, ascending=<span class=
   <section class="section" style="padding-top:0">
     <div class="container">
       <div class="center">
+        <span class="eyebrow">FAQ</span>
         <h2 class="section-title">Questions, answered</h2>
       </div>
       <div class="faq" style="max-width:760px;margin-left:auto;margin-right:auto">
