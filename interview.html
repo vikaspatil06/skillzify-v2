@@ -63,6 +63,13 @@
     .iv-hist-row { display: flex; justify-content: space-between; gap: 10px; align-items: center; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; margin-top: 8px; background: var(--bg-soft); flex-wrap: wrap; }
     .iv-big-score { font-size: 2.4rem; font-weight: 800; line-height: 1.1; }
     .iv-timer-warn { color: var(--danger) !important; }
+    /* Phase 2: mic recording state + compare checkboxes */
+    #iv-mic.rec { background: var(--danger); border-color: transparent; color: #fff; animation: iv-pulse 1.2s ease-in-out infinite; }
+    /* Phase 3: aptitude option buttons */
+    .iv-apt { display: grid; gap: 8px; margin-top: 12px; }
+    .iv-apt-opt { text-align: left; justify-content: flex-start; font-size: .92rem; padding: 10px 13px; }
+    @keyframes iv-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+    .iv-hist-row input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--primary); cursor: pointer; }
   </style>
 </head>
 <body>
@@ -75,7 +82,7 @@
     <div class="container">
       <span class="eyebrow">AI Interview Intelligence</span>
       <h1 class="section-title">🎙️ AI Interview Studio</h1>
-      <p class="section-sub">A real placement interview, before the real one: an AI interviewer asks, follows up on your answers, watches you code, and finishes with a scored report and a personal improvement roadmap inside Skillzify. It is a practice-based estimate of readiness — not a prediction of any hiring outcome.</p>
+      <p class="section-sub">A real placement interview, before the real one: an AI interviewer asks, follows up on your answers, watches you code, and finishes with a scored report and a personal improvement roadmap inside Skillzify. Now with voice answers, company simulations, project defense rounds, JD matching and interview-to-interview comparison — plus panel interviews, a full placement drive with elimination rounds, group discussions and opt-in institution sharing. It is a practice-based estimate of readiness — not a prediction of any hiring outcome.</p>
     </div>
   </section>
 
@@ -106,7 +113,7 @@
 <script src="assets/js/learn-core.js?v=12"></script>
 <script src="assets/js/projects-data.js?v=3"></script>
 <script src="assets/js/placement.js?v=3"></script>
-<script src="assets/js/interview-bank.js?v=1"></script>
-<script src="assets/js/interview.js?v=1"></script>
+<script src="assets/js/interview-bank.js?v=3"></script>
+<script src="assets/js/interview.js?v=3"></script>
 </body>
 </html>

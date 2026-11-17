@@ -168,6 +168,26 @@ service cloud.firestore {
         && request.auth.uid == resource.data.uid;
     }
 
+    // Shared interview summaries (Phase 4, 17 Nov 2026): a student may
+    // share an ANONYMISED summary of one interview (overall + per-skill
+    // scores + type — no name, no answers, no transcript) under their
+    // institution code. Reads are public so the institution dashboard
+    // can aggregate them client-side; only the owner creates their own
+    // shares and deletes them (unshare). No updates.
+    match /sharedReports/{docId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.code is string
+        && request.resource.data.code.size() >= 2
+        && request.resource.data.code.size() <= 40
+        && request.resource.data.overall is int
+        && request.resource.data.overall >= 0
+        && request.resource.data.overall <= 100;
+      allow delete: if request.auth != null && resource.data.owner == request.auth.uid;
+      allow update: if false;
+    }
+
     // Site Controls state (16 Nov 2026): one doc, siteConfig/state,
     // holding the master switch, per-page on/off flags and messages.
     // Publicly readable so every page's site-gate can check it

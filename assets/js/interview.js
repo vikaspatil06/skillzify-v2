@@ -48,7 +48,10 @@
   var ROLES = ["Python Developer", "Software Developer", "Full Stack Developer", "Frontend Developer", "Backend Developer", "Java Developer", "Data Analyst", "Data Scientist", "AI/ML Engineer", "DevOps Engineer", "Cybersecurity Analyst", "QA / Software Testing Engineer"];
   var EXPERIENCE = ["Fresher", "Intern", "0–2 years", "2–5 years"];
   var DIFFICULTIES = ["Beginner", "Intermediate", "Advanced"];
-  var TYPES = ["Mixed", "Technical", "Coding", "HR"];
+  var TYPES = ["Mixed", "Technical", "Coding", "HR", "Project", "Panel", "Full Drive", "Group Discussion"];
+  var GD_POINTS = ["takes a clear position on the topic", "supports points with reasons or examples", "builds on, or respectfully counters, what others said", "stays on the topic", "communicates clearly and concisely"];
+  var COMPANIES = BANK.companies || [];
+  var JD_KEY = "skillzify_interview_jd";
   var DURATIONS = [15, 30, 45];
   var STYLE_LIST = ["Friendly", "Professional", "Challenging"];
   var TURN_ACTIONS = ["deeper", "clarify", "probe", "diagnostic", "redirect", "next", "end"];
@@ -135,6 +138,13 @@
     S.profile = { name: siteProfile.name || "", role: "Python Developer", experience: "Fresher", skills: "", targetCompanies: "" };
   }
   if (!S.config) S.config = { role: S.profile.role || "Python Developer", experience: S.profile.experience || "Fresher", difficulty: "Intermediate", type: "Mixed", duration: 30, style: "Professional" };
+  if (!S.config.mode) S.config.mode = "Text";
+  if (typeof S.config.company !== "string") S.config.company = "";
+  if (typeof S.config.driveThreshold !== "number") S.config.driveThreshold = 40;
+  if (typeof S.profile.institution !== "string") S.profile.institution = "";
+  S.jd = storeGet(JD_KEY, "");
+  S.jdMatch = null;      // computed resume<->JD match {pct, have, missing} when both exist
+  S.voice = { rec: null, recOn: false, muted: false, usedForItem: false };
 
   function clearTimers() { S.timers.forEach(function (t) { clearInterval(t); }); S.timers = []; }
 
@@ -180,6 +190,169 @@
     return '<div class="field"><label>' + esc(label) + "</label>" + inner + (hint ? '<p class="hint">' + esc(hint) + "</p>" : "") + "</div>";
   }
 
+  /* ================= Phase 2: readiness / JD match / communication ================= */
+  function companyById(id) {
+    var found = null;
+    COMPANIES.forEach(function (co) { if (co.id === id) found = co; });
+    return found;
+  }
+  /* Readiness: a recency-weighted picture across past interviews
+     (newest counts most). Practice-based estimate ONLY — it never
+     claims a hiring probability (spec trust rules). */
+  function readinessFromHistory(hist) {
+    if (!hist || !hist.length) return null;
+    var per = {}, overallW = 0, overallSum = 0;
+    hist.forEach(function (rep, idx) {
+      var w = Math.pow(0.75, idx);
+      overallW += w; overallSum += (rep.overall || 0) * w;
+      Object.keys(rep.perSkill || {}).forEach(function (k) {
+        if (!per[k]) per[k] = { sum: 0, w: 0, n: 0, latest: null, earlierSum: 0, earlierW: 0 };
+        var s = rep.perSkill[k].score;
+        per[k].sum += s * w; per[k].w += w; per[k].n++;
+        if (per[k].latest === null) per[k].latest = s;
+        else { per[k].earlierSum += s * w; per[k].earlierW += w; }
+      });
+    });
+    var perOut = {};
+    Object.keys(per).forEach(function (k) {
+      var p = per[k];
+      var trend = null;
+      if (p.n >= 2 && p.earlierW > 0) trend = Math.round(p.latest - p.earlierSum / p.earlierW);
+      perOut[k] = { score: Math.round(p.sum / p.w), n: p.n, trend: trend };
+    });
+    return { overall: Math.round(overallSum / overallW), perSkill: perOut, interviews: hist.length, lastAt: hist[0].at };
+  }
+  function readinessBand(overall) {
+    return overall >= 75 ? "Strong practice readiness" : overall >= 55 ? "Developing readiness" : overall >= 35 ? "Early readiness" : "Foundation stage";
+  }
+  /* Resume <-> job-description match (local keyword analysis — a
+     guide for what to prepare, never an "ATS verdict"). */
+  var TERM_TOPIC = [
+    [/sql|database|mysql|postgres|mongodb|redis/, "dbms"],
+    [/rest|api|flask|django|fastapi|node|express|backend|microservice/, "web"],
+    [/pandas|numpy|excel|data analysis|power bi|tableau|matplotlib/, "data"],
+    [/algorithm|data structure|dsa|leetcode|competitive/, "dsa"],
+    [/linux|operating system|os\b|shell|bash|docker|kubernetes|aws|cloud|git/, "os"],
+    [/network|tcp|http|dns|security|cyber/, "cn"],
+    [/oop|object|class|inheritance|design pattern/, "oop"],
+    [/machine learning|ml\b|ai\b|deep learning|nlp|tensorflow|pytorch/, "data"]
+  ];
+  function topicForTerm(term) {
+    for (var i = 0; i < TERM_TOPIC.length; i++) if (TERM_TOPIC[i][0].test(term)) return TERM_TOPIC[i][1];
+    return "fundamentals";
+  }
+  function computeJdMatch() {
+    var jd = String(S.jd || "").toLowerCase();
+    if (jd.length < 60) return null;
+    var jdSkills = SKILL_TERMS.filter(function (t) { return jd.indexOf(t) !== -1; });
+    if (!jdSkills.length) return null;
+    var haveText = ((S.resume && S.resume.skills ? S.resume.skills.join(" ") : "") + " " + (S.profile.skills || "") + " " + (S.resume && S.resume.projects ? S.resume.projects.map(function (p) { return p.title + " " + p.summary; }).join(" ") : "")).toLowerCase();
+    var have = [], missing = [];
+    jdSkills.forEach(function (t) {
+      if (haveText.indexOf(t) !== -1) have.push(t);
+      else missing.push({ term: t, topic: topicForTerm(t) });
+    });
+    return { pct: Math.round(100 * have.length / jdSkills.length), jdSkills: jdSkills, have: have, missing: missing.slice(0, 8) };
+  }
+  /* Communication analytics — measured from the candidate's own
+     words only: length, filler words, structure. Speaking pace
+     (WPM) is reported ONLY for voice answers, where the timing is
+     real speech. Nothing here infers accent, emotion or
+     personality (spec trust rules). */
+  var FILLER_RES = [/\bum+\b/gi, /\buh+\b/gi, /\berm+\b/gi, /\bbasically\b/gi, /\bactually\b/gi, /\bliterally\b/gi, /\byou know\b/gi, /\bi mean\b/gi, /\bsort of\b/gi, /\bkind of\b/gi];
+  function analyzeAnswer(text, ms, viaVoice) {
+    var t = String(text || "").trim();
+    var words = t ? t.split(/\s+/).filter(Boolean).length : 0;
+    var fillers = 0;
+    FILLER_RES.forEach(function (re) { var m = t.match(re); if (m) fillers += m.length; });
+    var sentences = t ? t.split(/[.!?]+/).filter(function (s) { return s.trim().length > 1; }).length : 0;
+    var wpm = viaVoice && ms && ms > 2500 && words > 3 ? Math.round(words / (ms / 60000)) : null;
+    return { words: words, fillers: fillers, sentences: sentences, wpm: wpm };
+  }
+  function commAggregate(items) {
+    var open = items.filter(function (it) { return it.kind === "open" && it.comm; });
+    if (!open.length) return null;
+    var words = 0, fillers = 0, voiceN = 0, wpmSum = 0, wpmN = 0;
+    open.forEach(function (it) {
+      words += it.comm.words; fillers += it.comm.fillers;
+      if (it.viaVoice) voiceN++;
+      if (it.comm.wpm) { wpmSum += it.comm.wpm; wpmN++; }
+    });
+    return {
+      answers: open.length,
+      avgWords: Math.round(words / open.length),
+      fillerPer100: words ? Math.round(1000 * fillers / words) / 10 : 0,
+      voiceAnswers: voiceN,
+      avgWpm: wpmN ? Math.round(wpmSum / wpmN) : null
+    };
+  }
+  function paceBand(wpm) {
+    if (!wpm) return "";
+    return wpm < 100 ? "measured pace: unhurried" : wpm <= 165 ? "measured pace: conversational" : "measured pace: brisk";
+  }
+
+  /* ================= Phase 2: voice (Web Speech API) =================
+     The interviewer speaks each question (speechSynthesis) and the
+     candidate can answer by voice (SpeechRecognition) with the
+     transcript landing in the composer for editing before it is
+     sent — the text alternative is always fully available. */
+  function recogSupported() {
+    try { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); } catch (e) { return false; }
+  }
+  function speak(text) {
+    try {
+      if (!S.session || S.session.config.mode !== "Voice" || S.voice.muted) return;
+      if (!("speechSynthesis" in window)) return;
+      var clean = String(text || "").replace(/\s+/g, " ").trim().slice(0, 700);
+      if (!clean) return;
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(clean);
+      u.rate = 1.03;
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  function stopSpeak() { try { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); } catch (e) {} }
+  function stopMic() {
+    try { if (S.voice.rec) S.voice.rec.stop(); } catch (e) {}
+    S.voice.rec = null; S.voice.recOn = false;
+    var b = $("iv-mic");
+    if (b) { b.classList.remove("rec"); b.textContent = "🎤 Answer by voice"; }
+  }
+  function startMic() {
+    var ta = $("iv-answer");
+    if (!ta || !recogSupported()) return;
+    var Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var rec;
+    try { rec = new Ctor(); } catch (e) { toast("Voice input isn't available in this browser."); return; }
+    rec.lang = "en-IN";
+    rec.interimResults = true;
+    rec.continuous = true;
+    var base = ta.value ? ta.value.replace(/\s+$/, "") + " " : "";
+    var startedAt = Date.now();
+    S.voice.rec = rec; S.voice.recOn = true;
+    var b = $("iv-mic");
+    if (b) { b.classList.add("rec"); b.textContent = "⏹ Stop recording"; }
+    rec.onresult = function (ev) {
+      var finalText = "", interim = "";
+      for (var i = ev.resultIndex; i < ev.results.length; i++) {
+        if (ev.results[i].isFinal) finalText += ev.results[i][0].transcript;
+        else interim += ev.results[i][0].transcript;
+      }
+      if (finalText) { base += finalText.replace(/\s+/g, " "); S.voice.usedForItem = true; }
+      ta.value = base + interim;
+    };
+    rec.onend = function () {
+      if (S.voice.rec === rec) {
+        S.voice.ms = (S.voice.ms || 0) + (Date.now() - startedAt);
+        S.voice.rec = null; S.voice.recOn = false;
+        var bb = $("iv-mic");
+        if (bb) { bb.classList.remove("rec"); bb.textContent = "🎤 Answer by voice"; }
+      }
+    };
+    rec.onerror = function () {};
+    try { rec.start(); } catch (e) { stopMic(); }
+  }
+
   function renderSetup() {
     clearTimers();
     S.session = null;
@@ -187,11 +360,35 @@
     var hist = storeGet(HISTORY_KEY, []);
     var histHtml = "";
     if (hist.length) {
-      histHtml = '<div class="card"><h3 style="margin-top:0">Past interviews</h3>' + hist.map(function (h, i) {
-        return '<div class="iv-hist-row"><div><strong>' + esc(h.role) + " · " + esc(h.type) + '</strong><br><span class="hint">' + fmtDate(h.at) + " · " + esc(h.difficulty || "") + " · " + esc(h.scoring === "ai" ? "AI-scored" : h.scoring === "mixed" ? "Partly offline-scored" : "Offline-scored") + '</span></div>' +
-          '<div style="display:flex;gap:10px;align-items:center"><span class="iv-chip">Overall <strong>' + h.overall + "/100</strong></span>" +
+      var readiness = readinessFromHistory(hist);
+      var rSkills = Object.keys(readiness.perSkill).sort(function (a, b) { return readiness.perSkill[b].score - readiness.perSkill[a].score; });
+      var topSkill = rSkills.length ? rSkills[0] : null;
+      var gapSkill = rSkills.length ? rSkills[rSkills.length - 1] : null;
+      histHtml = '<div class="card"><h3 style="margin-top:0">📈 Your readiness so far</h3>' +
+        '<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><div><span class="iv-big-score">' + readiness.overall + '<span style="font-size:1.1rem;color:var(--muted)">/100</span></span><br><span class="hint">' + esc(readinessBand(readiness.overall)) + '</span></div>' +
+        '<div style="flex:1;min-width:220px"><p style="margin:0;font-size:.92rem">Weighted across your last ' + readiness.interviews + ' interview(s) — recent ones count most.' +
+        (topSkill ? ' Strongest: <strong>' + esc(topSkill) + " " + readiness.perSkill[topSkill].score + "</strong>." : "") +
+        (gapSkill && gapSkill !== topSkill ? ' Biggest gap: <strong>' + esc(gapSkill) + " " + readiness.perSkill[gapSkill].score + "</strong> — its roadmap is in that report." : "") +
+        '</p><p class="hint" style="margin:6px 0 0">A practice-based estimate from your Skillzify interviews — not a hiring probability.</p></div></div></div>';
+      histHtml += '<div class="card"><h3 style="margin-top:0">Past interviews</h3>' + hist.map(function (h, i) {
+        return '<div class="iv-hist-row"><div><strong>' + esc(h.role) + " · " + esc(h.type) + (h.companyName ? " · " + esc(h.companyName) + " sim" : "") + '</strong><br><span class="hint">' + fmtDate(h.at) + " · " + esc(h.difficulty || "") + " · " + esc(h.scoring === "ai" ? "AI-scored" : h.scoring === "mixed" ? "Partly offline-scored" : "Offline-scored") + '</span></div>' +
+          '<div style="display:flex;gap:10px;align-items:center"><label class="hint" style="display:flex;gap:5px;align-items:center"><input type="checkbox" data-iv-cmp="' + i + '"> Compare</label><span class="iv-chip">Overall <strong>' + h.overall + "/100</strong></span>" +
+          '<button class="btn btn-ghost btn-sm" data-iv-share="' + i + '" type="button">' + (h.shared ? "🏫 Shared ✓" : "🏫 Share") + '</button>' +
           '<button class="btn btn-ghost btn-sm" data-iv-view="' + i + '">View report</button></div></div>';
-      }).join("") + "</div>";
+      }).join("") + '<div style="margin-top:10px"><button class="btn btn-ghost btn-sm" id="iv-cmp-btn" type="button" disabled>Compare 2 selected interviews</button> <span class="hint">Tick "Compare" on any two past interviews to see them side by side.</span></div></div>';
+    }
+    var jdMatchHtml = "";
+    S.jdMatch = computeJdMatch();
+    if (S.jdMatch) {
+      var jm = S.jdMatch;
+      jdMatchHtml = '<div class="alert alert-success" style="margin-top:10px">🎯 <strong>JD skill match: ' + jm.pct + "%</strong> — your profile covers " + jm.have.length + " of the " + jm.jdSkills.length + " skills this JD names." +
+        (jm.missing.length ? '<br><span>Missing or unproven: ' + jm.missing.map(function (m) {
+          var skill = skillForTopic(m.topic);
+          var rm = ROADMAP[skill];
+          var lessonLink = rm && rm.lessons && rm.lessons.length ? ' <a href="lesson.html?id=' + esc(rm.lessons[0]) + '">(' + esc(lessonTitle(rm.lessons[0])) + ")</a>" : "";
+          return "<strong>" + esc(m.term) + "</strong>" + lessonLink;
+        }).join(" · ") + '</span><br><span class="hint">Questions on these gaps join your Technical round.</span>' : "<br><span>Nothing missing — the interview will still probe depth.</span>") +
+        "</div>";
     }
     var resumeStatus = "";
     if (S.resume) {
@@ -206,6 +403,8 @@
           '<div class="iv-step"><span class="n">3</span><div><strong>Code live</strong><br><span class="hint">Coding rounds run your Python against real tests, including hidden edge cases.</span></div></div>' +
           '<div class="iv-step"><span class="n">4</span><div><strong>Report &amp; roadmap</strong><br><span class="hint">Per-skill scores with evidence, and the exact Skillzify lessons that close each gap.</span></div></div>' +
           '<p class="hint" style="margin-top:14px">Scores are a practice-based estimate from this session\'s rubric — not a hiring prediction. If the AI is unreachable, the interview still runs and scores locally.</p>' +
+          '<button class="btn btn-ghost btn-sm" id="iv-inst-btn" type="button" style="margin-top:12px">🏫 Institution dashboard</button>' +
+          '<p class="hint" style="margin-top:8px">Institutions see only anonymised aggregates of summaries students explicitly shared — never names, answers or individual reports.</p>' +
         "</aside>" +
         '<div style="display:grid;gap:16px;min-width:0">' +
           '<div class="card"><h3 style="margin-top:0">👤 Candidate profile</h3><div class="iv-form-grid">' +
@@ -213,13 +412,17 @@
             field("Experience level", '<select class="input" id="iv-exp">' + options(EXPERIENCE, p.experience) + "</select>") +
             field("Your current skills", '<input class="input" id="iv-skills" type="text" value="' + esc(p.skills) + '" placeholder="e.g. Python, SQL, Flask">', "Comma-separated — used to personalise questions.") +
             field("Target companies (optional)", '<input class="input" id="iv-targets" type="text" value="' + esc(p.targetCompanies) + '" placeholder="e.g. product startups, TCS">') +
+            field("Institution code (optional)", '<input class="input" id="iv-inst" type="text" value="' + esc(p.institution || "") + '" placeholder="e.g. SIT-PUNE">', "Lets you share an anonymised score summary with your institution (Phase 4) — only if you choose to, per interview.") +
           "</div></div>" +
           '<div class="card"><h3 style="margin-top:0">🎛️ Interview setup</h3><div class="iv-form-grid">' +
             field("Target role", '<select class="input" id="iv-role">' + options(ROLES, c.role) + "</select>", "Python-stack roles get the deepest question bank; every role gets the CS core plus HR.") +
-            field("Interview type", '<select class="input" id="iv-type">' + options(TYPES, c.type) + "</select>") +
+            field("Interview type", '<select class="input" id="iv-type">' + options(TYPES, c.type) + "</select>", "Panel = 3 interviewers, no coding. Full Drive = aptitude → technical → coding → HR with elimination. Group Discussion = you + 3 simulated participants.") +
             field("Difficulty", '<select class="input" id="iv-diff">' + options(DIFFICULTIES, c.difficulty) + "</select>") +
             field("Duration", '<select class="input" id="iv-dur">' + DURATIONS.map(function (d) { return '<option value="' + d + '"' + (d === c.duration ? " selected" : "") + ">" + d + " minutes</option>"; }).join("") + "</select>", "Sets how many questions per round.") +
             field("Interviewer style", '<select class="input" id="iv-style">' + options(STYLE_LIST, c.style) + "</select>", "Friendly encourages, Professional is neutral, Challenging pushes back.") +
+            field("Company simulation (optional)", '<select class="input" id="iv-company"><option value="">None — general interview</option>' + COMPANIES.map(function (co) { return '<option value="' + co.id + '"' + (c.company === co.id ? " selected" : "") + ">" + esc(co.name) + "</option>"; }).join("") + "</select>", BANK.simDisclaimer || "") +
+            field("Answer mode", '<select class="input" id="iv-mode">' + ["Text", "Voice"].map(function (m) { return '<option value="' + m + '"' + (c.mode === m ? " selected" : "") + (m === "Voice" && !recogSupported() ? " disabled" : "") + ">" + m + (m === "Voice" ? " 🎤" : "") + "</option>"; }).join("") + "</select>", recogSupported() ? "Voice: the interviewer reads questions aloud and you can answer by speaking (transcript stays editable). Text is always available." : "Voice answers need Chrome or Edge — speech recognition isn't available in this browser. Text mode works everywhere.") +
+            field("Full Drive pass mark", '<select class="input" id="iv-threshold">' + [30, 40, 50].map(function (t) { return '<option value="' + t + '"' + ((c.driveThreshold || 40) === t ? " selected" : "") + ">" + t + " / 100</option>"; }).join("") + "</select>", "Full Drive only: score below this in any round and the drive ends, like a real elimination round.") +
           "</div>" +
           '<div class="field" style="margin-top:6px"><label>📄 Resume (optional — unlocks resume-based questions)</label>' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="input" id="iv-file" type="file" accept=".pdf,.docx,.txt" style="max-width:320px">' +
@@ -228,6 +431,11 @@
             '<textarea class="input" id="iv-resume-text" rows="4" placeholder="…or paste your resume text here, then press Parse resume" style="margin-top:8px"></textarea>' +
             '<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="iv-paste-btn" type="button">Parse resume</button> <span class="hint" id="iv-resume-hint">Your resume is parsed once by the AI; only the extracted skills, projects and questions are kept — the raw text is never stored.</span></div>' +
             resumeStatus +
+            '<div style="margin-top:14px"><label>🎯 Target job description (optional — unlocks JD matching)</label>' +
+            '<textarea class="input" id="iv-jd" rows="3" placeholder="Paste a job description here. With a resume parsed above, you will see a skill match, the gaps mapped to Skillzify lessons, and interview questions drawn from what the JD asks for.">' + esc(S.jd || "") + "</textarea>" +
+            '<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="iv-jd-btn" type="button">Save JD &amp; match</button> <span class="hint">Keyword match against your resume/profile skills — a preparation guide, not an ATS verdict. Stored only in this browser.</span></div>' +
+            jdMatchHtml +
+            "</div>" +
           "</div>" +
           '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px"><button class="btn btn-primary" id="iv-start" type="button">Start interview →</button>' +
           '<span class="hint" style="align-self:center">A full Mixed interview uses about 4–5 AI calls from the shared learner pool — interview calls never touch your personal daily tutor-answer allowance.</span></div>' +
@@ -243,12 +451,17 @@
     S.profile.experience = $("iv-exp").value;
     S.profile.skills = $("iv-skills").value.trim();
     S.profile.targetCompanies = $("iv-targets").value.trim();
+    if ($("iv-inst")) S.profile.institution = $("iv-inst").value.trim();
     S.config.role = $("iv-role").value;
     S.config.experience = S.profile.experience;
     S.config.difficulty = $("iv-diff").value;
     S.config.type = $("iv-type").value;
     S.config.duration = parseInt($("iv-dur").value, 10) || 30;
     S.config.style = $("iv-style").value;
+    if ($("iv-company")) S.config.company = $("iv-company").value || "";
+    if ($("iv-mode")) S.config.mode = $("iv-mode").value || "Text";
+    if ($("iv-threshold")) S.config.driveThreshold = parseInt($("iv-threshold").value, 10) || 40;
+    if ($("iv-jd")) { S.jd = $("iv-jd").value.trim(); storeSet(JD_KEY, S.jd); }
     S.profile.role = S.config.role;
     storeSet(PROFILE_KEY, S.profile);
     storeSet(CONFIG_KEY, S.config);
@@ -285,6 +498,151 @@
         if (rep) renderReport(rep, true);
       });
     });
+    var jdBtn = $("iv-jd-btn");
+    if (jdBtn) jdBtn.addEventListener("click", function () {
+      if ($("iv-jd")) { S.jd = $("iv-jd").value.trim(); storeSet(JD_KEY, S.jd); }
+      if (String(S.jd || "").length < 60) { toast("Paste a fuller job description first (a few lines at least)."); return; }
+      renderSetup();
+      toast(S.jdMatch ? "JD matched: " + S.jdMatch.pct + "% skill coverage." : "No recognisable skills found in that JD — try pasting the requirements section.");
+    });
+    var cmpBtn = $("iv-cmp-btn");
+    if (cmpBtn) {
+      var boxes = Array.prototype.slice.call(document.querySelectorAll("[data-iv-cmp]"));
+      var syncCmp = function () {
+        var n = boxes.filter(function (b) { return b.checked; }).length;
+        cmpBtn.disabled = n !== 2;
+        cmpBtn.textContent = n === 2 ? "Compare the 2 selected interviews" : "Compare 2 selected interviews (" + n + "/2)";
+      };
+      boxes.forEach(function (b) { b.addEventListener("change", syncCmp); });
+      cmpBtn.addEventListener("click", function () {
+        var picked = boxes.filter(function (b) { return b.checked; }).map(function (b) { return parseInt(b.getAttribute("data-iv-cmp"), 10); });
+        var hist = storeGet(HISTORY_KEY, []);
+        if (picked.length === 2 && hist[picked[0]] && hist[picked[1]]) renderCompare(hist[picked[0]], hist[picked[1]]);
+      });
+    }
+    var instBtn = $("iv-inst-btn");
+    if (instBtn) instBtn.addEventListener("click", function () { readSetupForm(); renderInstitution(S.profile.institution || ""); });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-iv-share]"), function (btn) {
+      btn.addEventListener("click", function () {
+        readSetupForm();
+        toggleShare(parseInt(btn.getAttribute("data-iv-share"), 10));
+      });
+    });
+  }
+
+  /* ================= Phase 4: institution sharing =================
+     A student may share an ANONYMISED summary of one interview
+     (overall + per-skill scores + type — no name, no answers, no
+     transcript) under their institution code. The dashboard
+     aggregates shared summaries client-side from Firestore's REST
+     API. Sharing is per-interview, off by default, and reversible
+     (unshare deletes the document). */
+  function toggleShare(idx) {
+    var hist = storeGet(HISTORY_KEY, []);
+    var rep = hist[idx];
+    if (!rep) return;
+    var auth = window.SkillzifyAuth;
+    var u = auth && typeof auth.currentUser === "function" ? auth.currentUser() : null;
+    if (!u || !u.uid) { toast("Sign in first — sharing is tied to your account so only you can unshare."); return; }
+    if (!window.firebase || !window.firebase.firestore || !window.firebase.apps || !window.firebase.apps.length) { toast("Sharing isn't available right now."); return; }
+    var db = window.firebase.firestore();
+    if (rep.shared && rep.shareId) {
+      db.collection("sharedReports").doc(rep.shareId).delete().then(function () {
+        rep.shared = false; rep.shareId = null;
+        storeSet(HISTORY_KEY, hist);
+        toast("Summary unshared — it no longer counts in your institution's dashboard.");
+        renderSetup();
+      }, function () { toast("Could not unshare — check your connection and try again."); });
+      return;
+    }
+    var code = String(S.profile.institution || "").trim();
+    if (code.length < 2) { toast("Set your institution code in your profile first (e.g. SIT-PUNE), then share."); return; }
+    var perSkill = {};
+    Object.keys(rep.perSkill || {}).forEach(function (k) { perSkill[k] = rep.perSkill[k].score; });
+    db.collection("sharedReports").add({
+      code: code, at: rep.at || Date.now(), overall: rep.overall, perSkill: perSkill,
+      type: rep.type || "", owner: u.uid
+    }).then(function (ref) {
+      rep.shared = true; rep.shareId = ref.id;
+      storeSet(HISTORY_KEY, hist);
+      toast("Shared anonymously with " + code + " — scores only, no name or answers.");
+      renderSetup();
+    }, function () { toast("Sharing failed — it may not be enabled on the server yet."); });
+  }
+  function fsDecodeFields(f) {
+    var out = {};
+    Object.keys(f || {}).forEach(function (k) {
+      var v = f[k];
+      if (typeof v.stringValue === "string") out[k] = v.stringValue;
+      else if (typeof v.integerValue === "string") out[k] = parseInt(v.integerValue, 10);
+      else if (typeof v.doubleValue === "number") out[k] = v.doubleValue;
+      else if (v.mapValue && v.mapValue.fields) {
+        var m = {};
+        Object.keys(v.mapValue.fields).forEach(function (mk) {
+          var mv = v.mapValue.fields[mk];
+          m[mk] = typeof mv.integerValue === "string" ? parseInt(mv.integerValue, 10) : (typeof mv.doubleValue === "number" ? mv.doubleValue : 0);
+        });
+        out[k] = m;
+      }
+    });
+    return out;
+  }
+  function fetchSharedReports(code, cb) {
+    var url = "https://firestore.googleapis.com/v1/projects/skillzify-1d0f2/databases/(default)/documents:runQuery";
+    var body = { structuredQuery: { from: [{ collectionId: "sharedReports" }], where: { fieldFilter: { field: { fieldPath: "code" }, op: "EQUAL", value: { stringValue: code } } }, limit: 300 } };
+    fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json(); })
+      .then(function (rows) {
+        var docs = [];
+        (rows || []).forEach(function (row) { if (row.document && row.document.fields) docs.push(fsDecodeFields(row.document.fields)); });
+        cb(null, docs);
+      }, function (e) { cb(e || new Error("fetch")); });
+  }
+  function renderInstitution(code) {
+    clearTimers();
+    S.session = null;
+    $("iv-root").innerHTML =
+      '<div style="max-width:920px;margin:0 auto;display:grid;gap:16px">' +
+        '<div class="card"><h3 style="margin-top:0">🏫 Institution dashboard</h3>' +
+          '<p class="hint" style="margin-top:0">Aggregates of interview summaries that students <strong>chose to share</strong> under an institution code. No names, no individual reports, no answers — and students can unshare at any time, which removes their summary from these numbers.</p>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="input" id="iv-inst-code" type="text" value="' + esc(code || "") + '" placeholder="Institution code, e.g. SIT-PUNE" style="max-width:280px">' +
+          '<button class="btn btn-primary btn-sm" id="iv-inst-load" type="button">Load dashboard</button>' +
+          '<button class="btn btn-ghost btn-sm" id="iv-inst-back" type="button">Back to setup</button></div>' +
+          '<div id="iv-inst-body" style="margin-top:14px"><p class="hint">Enter a code and load to see its shared summaries.</p></div>' +
+        "</div></div>";
+    $("iv-inst-back").addEventListener("click", renderSetup);
+    var load = function () {
+      var c = $("iv-inst-code").value.trim();
+      var bodyEl = $("iv-inst-body");
+      if (c.length < 2) { bodyEl.innerHTML = '<p class="hint">Enter an institution code first.</p>'; return; }
+      bodyEl.innerHTML = '<p class="hint">Loading shared summaries…</p>';
+      fetchSharedReports(c, function (err, docs) {
+        if (err) { bodyEl.innerHTML = '<p class="hint">Could not load — sharing may not be enabled on the server yet, or the connection failed.</p>'; return; }
+        if (!docs.length) { bodyEl.innerHTML = '<p class="hint">No shared summaries under <strong>' + esc(c) + '</strong> yet. Students share from their Past interviews list, per interview, only if they choose to.</p>'; return; }
+        var sum = 0, per = {}, types = {}, recent = 0, cutoff = Date.now() - 30 * 86400000;
+        docs.forEach(function (d) {
+          sum += d.overall || 0;
+          if (d.at && d.at > cutoff) recent++;
+          if (d.type) types[d.type] = (types[d.type] || 0) + 1;
+          Object.keys(d.perSkill || {}).forEach(function (k) {
+            if (!per[k]) per[k] = { sum: 0, n: 0 };
+            per[k].sum += d.perSkill[k]; per[k].n++;
+          });
+        });
+        var avg = Math.round(sum / docs.length);
+        var skillRows = Object.keys(per).sort(function (a, b) { return per[b].sum / per[b].n - per[a].sum / per[a].n; }).map(function (k) {
+          return barRow(k + " · " + per[k].n + " report(s)", Math.round(per[k].sum / per[k].n));
+        }).join("");
+        var typeBits = Object.keys(types).map(function (t) { return esc(t) + " × " + types[t]; }).join(" · ");
+        bodyEl.innerHTML =
+          '<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><div><span class="iv-big-score">' + avg + '<span style="font-size:1.1rem;color:var(--muted)">/100</span></span><br><span class="hint">Average overall across shared summaries</span></div>' +
+          '<div style="flex:1;min-width:220px"><p style="margin:0;font-size:.92rem"><strong>' + docs.length + '</strong> shared summar' + (docs.length === 1 ? "y" : "ies") + " · <strong>" + recent + '</strong> in the last 30 days' + (typeBits ? "<br>" + typeBits : "") + '</p>' +
+          '<p class="hint" style="margin:6px 0 0">Averages over students who opted in — not a whole-cohort measure.</p></div></div>' +
+          (skillRows ? '<h4 style="margin:16px 0 0">Average per-skill scores</h4>' + skillRows : "");
+      });
+    };
+    $("iv-inst-load").addEventListener("click", load);
+    if (code) load();
   }
 
   /* ---------------- resume: extraction + parse ---------------- */
@@ -436,13 +794,30 @@
     if (type === "Technical") return { tech: base.tech + base.hr, coding: 0, hr: 0 };
     if (type === "Coding") return { tech: 0, coding: duration === 45 ? 3 : 2, hr: 0 };
     if (type === "HR") return { tech: 0, coding: 0, hr: base.hr + 3 };
+    if (type === "Panel") return { tech: base.tech, coding: 0, hr: base.hr };
+    if (type === "Full Drive") return { tech: base.tech, coding: base.coding, hr: base.hr };
+    if (type === "Group Discussion") return { tech: 0, coding: 0, hr: 0 };
     return { tech: base.tech, coding: base.coding, hr: base.hr };
   }
+  function aptitudeItem(q) {
+    return { kind: "aptitude", id: q.id, topic: "aptitude", skill: "Aptitude", area: q.area, q: q.q, options: q.options.slice(), answer: q.answer, why: q.why, chosen: null, score: null };
+  }
+  function pickAptitude(n) {
+    var areas = ["Quantitative", "Logical", "Verbal"];
+    var pools = areas.map(function (a) { return shuffle((BANK.aptitude || []).filter(function (q) { return q.area === a; })); });
+    var out = [], i = 0;
+    while (out.length < n && pools.some(function (p) { return p.length; })) {
+      var p = pools[i % pools.length];
+      if (p.length) out.push(p.pop());
+      i++;
+    }
+    return out.map(aptitudeItem);
+  }
   function skillForTopic(t) {
-    return { fundamentals: "Python Fundamentals", oop: "OOP", dsa: "Data Structures & Algorithms", dbms: "Databases & SQL", os: "Operating Systems", cn: "Computer Networks", web: "Web & APIs", data: "Data & pandas", hr: "Communication & HR", project: "Project Knowledge", resume: "Project Knowledge", coding: "Coding" }[t] || "Python Fundamentals";
+    return { fundamentals: "Python Fundamentals", oop: "OOP", dsa: "Data Structures & Algorithms", dbms: "Databases & SQL", os: "Operating Systems", cn: "Computer Networks", web: "Web & APIs", data: "Data & pandas", hr: "Communication & HR", project: "Project Knowledge", resume: "Project Knowledge", coding: "Coding", gd: "Group Discussion", aptitude: "Aptitude" }[t] || "Python Fundamentals";
   }
   function openItem(q, src) {
-    return { kind: "open", src: src || "bank", id: q.id || null, topic: q.topic, skill: q.skill || skillForTopic(q.topic), q: q.q, points: (q.points || []).slice(), followups: q.followups || [], answer: "", fuQ: "", fuAnswer: "", fuKind: "", skipped: false, score: null, scoreSrc: "", well: "", improve: "", evidence: "" };
+    return { kind: "open", src: src || "bank", id: q.id || null, tier: q.tier || 0, topic: q.topic, skill: q.skill || skillForTopic(q.topic), q: q.q, points: (q.points || []).slice(), followups: q.followups || [], answer: "", fuQ: "", fuAnswer: "", fuKind: "", skipped: false, score: null, scoreSrc: "", well: "", improve: "", evidence: "" };
   }
   function codingItem(c) {
     return { kind: "coding", id: c.id, topic: "coding", skill: "Coding", title: c.title, prompt: c.prompt, starter: c.starter, code: c.starter, visible: c.visible, hidden: c.hidden, minutes: c.minutes, optimalTime: c.optimalTime, optimalSpace: c.optimalSpace, ideaPoints: c.ideaPoints, submitted: false, visResults: null, allResults: null, timeUsedSec: 0, approach: "", complexityAnswer: "", parts: null, score: null, well: "", improve: "", evidence: "" };
@@ -470,26 +845,79 @@
     });
     return picked;
   }
+  function effDifficulty(diff, bias) {
+    var ladder = ["Beginner", "Intermediate", "Advanced"];
+    var i = ladder.indexOf(diff);
+    if (i < 0) i = 1;
+    return ladder[clamp(i + (bias || 0), 0, 2)];
+  }
+  function projectDeepItems(title, n) {
+    var chain = BANK.projectDeep || [];
+    return chain.slice(0, n).map(function (tpl) {
+      var q = openItem({ topic: "project", q: tpl.q.split("{title}").join(title), points: tpl.points, followups: (tpl.followups || []).map(function (f) { return { kind: f.kind, point: f.point, q: String(f.q || "").split("{title}").join(title) }; }) }, "project");
+      return q;
+    });
+  }
   function buildPlan() {
     var c = S.config, counts = countsFor(c.type, c.duration), rounds = [];
+    var co = companyById(c.company);
+    if (co && co.hrBoost && counts.hr > 0) counts.hr += 1;
+    var proj = (S.projectMaterial && S.projectMaterial.length) ? S.projectMaterial : useSkillzifyProjects(false);
+    var hasProject = !!(proj && proj.length);
+    if (c.type === "Group Discussion") {
+      var gdTopicsAll = BANK.gdTopics || [];
+      if (!gdTopicsAll.length) return rounds;
+      var gdTopic = gdTopicsAll[Math.floor(Math.random() * gdTopicsAll.length)];
+      return [{ kind: "gd", label: "Group Discussion", items: [], gdTopic: gdTopic, gdSteps: gdBuildSteps(gdTopic), gdStep: 0, score: null, scoreMode: null }];
+    }
+    if (c.type === "Full Drive") {
+      var aptItems = pickAptitude(c.duration === 15 ? 8 : c.duration === 45 ? 12 : 10);
+      if (aptItems.length) rounds.push({ kind: "aptitude", label: "Aptitude Round", items: aptItems, score: null, scoreMode: "local" });
+    }
+    if (c.type === "Project") {
+      var pTitle = hasProject ? proj[0].title : "your strongest project";
+      var pItems = projectDeepItems(pTitle, c.duration === 15 ? 3 : 4);
+      if (pItems.length) rounds.push({ kind: "project", label: "Project Defense", items: pItems, score: null, scoreMode: null });
+      return rounds;
+    }
     if (counts.tech > 0) {
-      var topics = BANK.roleTopics[c.role] || ["fundamentals", "oop", "dsa", "dbms", "os", "cn", "web"];
-      var items = pickTechnical(counts.tech, topics, c.difficulty).map(function (q) { return openItem(q, "bank"); });
+      var roleTopics = BANK.roleTopics[c.role] || ["fundamentals", "oop", "dsa", "dbms", "os", "cn", "web"];
+      var topics = co ? co.topics.concat(roleTopics.filter(function (t) { return co.topics.indexOf(t) === -1; })) : roleTopics;
+      var items = pickTechnical(counts.tech, topics, effDifficulty(c.difficulty, co ? co.tierBias : 0)).map(function (q) { return openItem(q, "bank"); });
       if (S.resume && S.resume.questions.length) {
         S.resume.questions.slice(0, 2).forEach(function (q) {
           items.push(openItem({ topic: q.topic || "resume", q: q.q, points: q.points, followups: [] }, "resume"));
         });
       }
-      var proj = (S.projectMaterial && S.projectMaterial.length) ? S.projectMaterial : useSkillzifyProjects(false);
-      (proj || []).slice(0, 2).forEach(function (pr) {
-        items.push(openItem({
-          topic: "project",
-          q: "Let's talk about your Skillzify project \"" + pr.title + "\" — " + (pr.tagline || "") + " What was the hardest part to build, and how did you solve it?",
-          points: ["what the project does and the problem it solves", "their own contribution to building it", "the hardest technical problem and how they solved it", "what they would improve or scale next"],
-          followups: [{ kind: "deeper", q: "If \"" + pr.title + "\" suddenly had 10,000 users, what would break first, and what would you change?" }]
-        }, "project"));
-      });
+      if (S.jdMatch && S.jdMatch.missing.length) {
+        var usedIds = {};
+        items.forEach(function (it) { if (it.id) usedIds[it.id] = 1; });
+        var jdTopics = [];
+        S.jdMatch.missing.forEach(function (m) { if (jdTopics.indexOf(m.topic) === -1) jdTopics.push(m.topic); });
+        jdTopics.slice(0, 2).forEach(function (topic) {
+          var cand = BANK.technical.filter(function (q) { return q.topic === topic && !usedIds[q.id]; });
+          if (cand.length) {
+            var q = cand[Math.floor(Math.random() * cand.length)];
+            usedIds[q.id] = 1;
+            items.push(openItem(q, "jd"));
+          }
+        });
+      }
+      if (c.type !== "Mixed" && c.type !== "Full Drive" && c.type !== "Panel" && hasProject) {
+        (proj || []).slice(0, 2).forEach(function (pr) {
+          items.push(openItem({
+            topic: "project",
+            q: "Let's talk about your Skillzify project \"" + pr.title + "\" — " + (pr.tagline || "") + " What was the hardest part to build, and how did you solve it?",
+            points: ["what the project does and the problem it solves", "their own contribution to building it", "the hardest technical problem and how they solved it", "what they would improve or scale next"],
+            followups: [{ kind: "deeper", q: "If \"" + pr.title + "\" suddenly had 10,000 users, what would break first, and what would you change?" }]
+          }, "project"));
+        });
+      }
       if (items.length) rounds.push({ kind: "technical", label: "Technical Round", items: items, score: null, scoreMode: null });
+    }
+    if ((c.type === "Mixed" || c.type === "Full Drive" || c.type === "Panel") && hasProject) {
+      var deep = projectDeepItems(proj[0].title, c.duration === 15 ? 2 : c.duration === 45 ? 4 : 3);
+      if (deep.length) rounds.push({ kind: "project", label: "Project Round", items: deep, score: null, scoreMode: null });
     }
     if (counts.coding > 0) {
       var tiers = c.difficulty === "Beginner" ? [1] : c.difficulty === "Advanced" ? [2, 3] : [1, 2];
@@ -501,7 +929,38 @@
       var hrItems = shuffle(BANK.hr.slice()).slice(0, counts.hr).map(function (q) { return openItem(q, "bank"); });
       rounds.push({ kind: "hr", label: "HR Round", items: hrItems, score: null, scoreMode: null });
     }
+    if (c.type === "Panel") {
+      var personas = BANK.panelPersonas || [];
+      if (!rounds.some(function (r) { return r.kind === "project"; })) {
+        var mgrItems = projectDeepItems("your strongest project", 2);
+        var insertAt = rounds.length;
+        for (var ri2 = 0; ri2 < rounds.length; ri2++) if (rounds[ri2].kind === "hr") { insertAt = ri2; break; }
+        if (mgrItems.length) rounds.splice(insertAt, 0, { kind: "project", label: "Project Round", items: mgrItems, score: null, scoreMode: null });
+      }
+      rounds.forEach(function (r) {
+        var p = r.kind === "technical" ? personas[0] : r.kind === "project" ? personas[1] : r.kind === "hr" ? personas[2] : null;
+        if (p) { r.persona = p; r.label = p.role; }
+      });
+    }
     return rounds;
+  }
+  /* GD script: participants open, then alternate with the
+     candidate's contributions; the moderator closes. */
+  function gdBuildSteps(topic) {
+    var v = topic.voices;
+    function line(i, field) { return { who: "bot", name: v[i].name + " · participant", text: v[i][field] }; }
+    return [
+      line(0, "open"), line(1, "open"), line(2, "open"),
+      { who: "user" },
+      line(1, "follow"),
+      { who: "user" },
+      line(0, "follow"),
+      { who: "user" },
+      line(2, "follow"),
+      { who: "bot", name: "Moderator", text: topic.close },
+      { who: "user" },
+      { who: "end" }
+    ];
   }
 
   /* ---------------- local rubric scoring ---------------- */
@@ -607,7 +1066,11 @@
   /* ---------------- session view ---------------- */
   function currentRound() { return S.session ? S.session.rounds[S.session.ri] : null; }
   function currentItem() { var r = currentRound(); return r ? r.items[S.session.ii] : null; }
-  function pushBot(text, tag) { S.session.transcript.push({ who: "bot", text: text, tag: tag || "" }); renderTranscript(); }
+  function pushBot(text, tag) {
+    S.session.transcript.push({ who: "bot", text: text, tag: tag || "" });
+    renderTranscript();
+    if (S.session.config.mode === "Voice" && (!tag || tag.indexOf("Problem") === -1)) speak(text);
+  }
   function pushMe(text) { S.session.transcript.push({ who: "me", text: text }); renderTranscript(); }
   function pushSys(text) { S.session.transcript.push({ who: "sys", text: text }); renderTranscript(); }
   function renderSession() {
@@ -629,9 +1092,16 @@
     }).join("");
     el.innerHTML = '<span class="iv-chip">🎙️ <strong>' + esc(sess.config.role) + '</strong></span><span class="iv-chip">' + esc(sess.config.difficulty) + " · " + esc(sess.config.style) + "</span>" + chips +
       '<span class="iv-chip" id="iv-elapsed">⏱ 0:00</span><span class="iv-chip">AI calls: <strong id="iv-aicalls">' + sess.aiCalls + "</strong></span>" +
+      (sess.config.mode === "Voice" ? '<button class="btn btn-ghost btn-sm" id="iv-mute" type="button">' + (S.voice.muted ? "🔇 Voice off" : "🔊 Voice on") + "</button>" : "") +
       '<button class="btn btn-ghost btn-sm" id="iv-quit" type="button" style="margin-left:auto">End interview</button>';
     $("iv-quit").addEventListener("click", function () {
-      if (window.confirm("End this interview now? It won't be scored or saved.")) { clearTimers(); S.session = null; renderSetup(); }
+      if (window.confirm("End this interview now? It won't be scored or saved.")) { stopMic(); stopSpeak(); clearTimers(); S.session = null; renderSetup(); }
+    });
+    var muteBtn = $("iv-mute");
+    if (muteBtn) muteBtn.addEventListener("click", function () {
+      S.voice.muted = !S.voice.muted;
+      if (S.voice.muted) stopSpeak();
+      muteBtn.textContent = S.voice.muted ? "🔇 Voice off" : "🔊 Voice on";
     });
   }
   function renderTranscript() {
@@ -647,6 +1117,33 @@
     if (!el || !S.session) return;
     var sess = S.session, item = currentItem();
     if (sess.phase === "coding" && item) { renderCodingComposer(el, item); return; }
+    if (sess.phase === "aptitude" && item) {
+      el.innerHTML = '<div class="iv-composer"><div class="iv-apt">' + item.options.map(function (opt, i) {
+        return '<button class="btn btn-ghost iv-apt-opt" data-iv-apt="' + i + '" type="button">' + String.fromCharCode(65 + i) + ". " + esc(opt) + "</button>";
+      }).join("") + '</div><p class="hint" style="margin:8px 0 0">Pick one — answers lock in immediately, like a real aptitude test. Explanations come with your report.</p></div>';
+      Array.prototype.forEach.call(el.querySelectorAll("[data-iv-apt]"), function (btn) {
+        btn.addEventListener("click", function () { submitAptitude(parseInt(btn.getAttribute("data-iv-apt"), 10)); });
+      });
+      return;
+    }
+    if (sess.phase === "gd") {
+      var round = currentRound();
+      var contributions = round ? round.items.length : 0;
+      el.innerHTML =
+        '<div class="iv-composer"><textarea class="input" id="iv-answer" placeholder="Add your view to the discussion… take a position, give a reason or an example, build on what others said."></textarea>' +
+        '<div class="iv-actions"><button class="btn btn-primary" id="iv-send" type="button">Contribute →</button>' +
+        (recogSupported() ? '<button class="btn btn-ghost" id="iv-mic" type="button">🎤 Answer by voice</button>' : "") +
+        (contributions >= 2 ? '<button class="btn btn-ghost" id="iv-gd-wrap" type="button">Wrap up the GD</button>' : "") +
+        '<span class="hint" id="iv-busy"></span></div></div>';
+      $("iv-send").addEventListener("click", onSubmitAnswer);
+      var micG = $("iv-mic");
+      if (micG) micG.addEventListener("click", function () { if (S.voice.recOn) stopMic(); else startMic(); });
+      var wrap = $("iv-gd-wrap");
+      if (wrap) wrap.addEventListener("click", gdWrap);
+      var taG = $("iv-answer");
+      if (taG) { taG.addEventListener("keydown", function (e) { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") onSubmitAnswer(); }); taG.focus(); }
+      return;
+    }
     if (sess.phase === "scoring") { el.innerHTML = '<p class="hint" style="margin-top:12px">⏳ Scoring this round…</p>'; return; }
     if (sess.phase === "done") { el.innerHTML = ""; return; }
     var placeholder = sess.phase === "approach" ? "Explain your approach: what was the core idea, and why does it work?"
@@ -655,9 +1152,13 @@
     el.innerHTML =
       '<div class="iv-composer"><textarea class="input" id="iv-answer" placeholder="' + esc(placeholder) + '"></textarea>' +
       '<div class="iv-actions"><button class="btn btn-primary" id="iv-send" type="button">' + (sess.phase === "main" ? "Answer →" : "Continue →") + "</button>" +
+      (recogSupported() ? '<button class="btn btn-ghost" id="iv-mic" type="button">🎤 Answer by voice</button>' : "") +
       (sess.phase === "main" ? '<button class="btn btn-ghost" id="iv-skip" type="button">Skip question</button>' : "") +
-      '<span class="hint" id="iv-busy"></span></div></div>';
+      '<span class="hint" id="iv-busy"></span></div>' +
+      (recogSupported() ? '<p class="hint" style="margin:6px 0 0">Voice answers are transcribed into the box — check and edit before sending. Nothing is recorded or stored; the transcript is just your answer text.</p>' : "") + "</div>";
     $("iv-send").addEventListener("click", onSubmitAnswer);
+    var mic = $("iv-mic");
+    if (mic) mic.addEventListener("click", function () { if (S.voice.recOn) stopMic(); else startMic(); });
     var ta = $("iv-answer");
     ta.addEventListener("keydown", function (e) { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") onSubmitAnswer(); });
     var skip = $("iv-skip");
@@ -681,7 +1182,7 @@
   /* ---------------- engine flow ---------------- */
   function startInterview() {
     var rounds = buildPlan();
-    if (!rounds.length || !rounds.some(function (r) { return r.items.length; })) { toast("No questions available right now — please try again."); return; }
+    if (!rounds.length || !rounds.some(function (r) { return r.items.length || r.kind === "gd"; })) { toast("No questions available right now — please try again."); return; }
     S.session = {
       id: "iv-" + Date.now().toString(36),
       startedAt: Date.now(),
@@ -694,7 +1195,10 @@
     S.resumeAiCalls = 0;
     renderSession();
     var c = S.session.config;
-    var scope = c.type === "Mixed" ? "technical questions, a live coding round, and an HR conversation" : c.type === "Technical" ? "technical questions" : c.type === "Coding" ? "live coding problems" : "an HR conversation";
+    var scope = c.type === "Mixed" ? "technical questions, a project defense, a live coding round, and an HR conversation" : c.type === "Technical" ? "technical questions" : c.type === "Coding" ? "live coding problems" : c.type === "Project" ? "a deep-dive defense of one of your projects" : c.type === "Panel" ? "a panel interview — three interviewers in one sitting: a technical lead, a hiring manager and an HR manager" : c.type === "Full Drive" ? "a full placement drive: an aptitude test, then technical, coding and HR rounds — score below the " + (c.driveThreshold || 40) + " pass mark in any round and the drive ends there, just like the real thing" : c.type === "Group Discussion" ? "a group discussion with three other participants" : "an HR conversation";
+    var co = companyById(c.company);
+    S.session.companyName = co ? co.name : "";
+    S.session.jdPct = S.jdMatch ? S.jdMatch.pct : null;
     var name = S.profile.name ? " " + S.profile.name.split(" ")[0] : "";
     var intro = c.style === "Friendly"
       ? "Hi" + name + "! Great to meet you. I'm your Skillzify interviewer, and today we'll go through " + scope + ". Take your time, think out loud, and don't worry about being perfect — I just want to see how you think. Here's your first question."
@@ -702,15 +1206,30 @@
       ? "Let's begin" + name + ". This interview covers " + scope + ". I expect precise, complete answers — vague generalities won't score, and I will push on anything that sounds memorised. First question."
       : "Hello" + name + ", welcome to your Skillzify interview for the " + c.role + " role. We'll cover " + scope + ". Answer in your own words, with examples where you can. First question.";
     pushBot(intro, "Welcome");
+    if (co) pushSys("🏢 " + co.name + " simulation — " + co.note + " " + (BANK.simDisclaimer || ""));
+    if (c.mode === "Voice") pushSys("🎤 Voice mode is on: questions are read aloud, and you can answer with the mic button (the transcript stays editable before you send it).");
     var first = currentRound();
-    pushSys(first.label + " — " + first.items.length + (first.kind === "coding" ? " problem(s)" : " question(s)"));
+    if (first.persona) pushBot(first.persona.intro, first.persona.name + " · " + first.persona.role);
+    if (first.kind === "gd" && first.gdTopic) {
+      pushBot("Today's topic: \"" + first.gdTopic.title + "\"\n\n" + first.gdTopic.brief + "\n\nThe three participants will open, then it's your turn — contribute at least twice, take a clear position, and build on what others say.", "Moderator");
+      pushSys("The other participants are simulations with their own positions; only your contributions are scored.");
+    }
+    if (first.kind !== "gd") pushSys(first.label + " — " + first.items.length + (first.kind === "coding" ? " problem(s)" : " question(s)"));
     askCurrent();
     startElapsedTimer();
   }
   function askCurrent() {
     var sess = S.session, item = currentItem(), round = currentRound();
+    if (round && round.kind === "gd") { gdAdvance(); return; }
     if (!item) { endRound(); return; }
     renderProgress();
+    if (item.kind === "aptitude") {
+      sess.phase = "aptitude";
+      pushBot(item.q, "Aptitude · " + item.area + " · Question " + (sess.ii + 1) + " of " + round.items.length);
+      sess.shownAt = Date.now();
+      renderComposer();
+      return;
+    }
     if (item.kind === "coding") {
       sess.phase = "coding";
       sess.codingItemStartedAt = Date.now();
@@ -721,8 +1240,62 @@
       return;
     }
     sess.phase = "main";
-    pushBot(item.q, round.label + " · " + (TOPIC_LABEL[item.topic] || item.topic) + (item.src === "resume" ? " · from your resume" : item.src === "project" ? " · your project" : ""));
+    pushBot(item.q, (round.persona ? round.persona.name + " · " + round.persona.role : round.label + " · " + (TOPIC_LABEL[item.topic] || item.topic)) + (item.src === "resume" ? " · from your resume" : item.src === "project" ? " · your project" : item.src === "jd" ? " · from the job description" : ""));
+    sess.shownAt = Date.now();
     renderComposer();
+  }
+  /* ---------------- Phase 4: group discussion flow ---------------- */
+  function gdAdvance() {
+    var sess = S.session, round = currentRound();
+    if (!sess || !round || round.kind !== "gd") return;
+    renderProgress();
+    while (round.gdStep < round.gdSteps.length) {
+      var st = round.gdSteps[round.gdStep++];
+      if (st.who === "bot") { pushBot(st.text, st.name); continue; }
+      if (st.who === "user") { sess.phase = "gd"; renderComposer(); return; }
+      if (st.who === "end") { endRound(); return; }
+    }
+    endRound();
+  }
+  function gdSubmit(text) {
+    var sess = S.session, round = currentRound();
+    text = String(text || "").trim();
+    if (!text) { toast("Add your view first — even two sentences moves the discussion."); return; }
+    var item = openItem({ topic: "gd", q: "Your contribution to the discussion: \"" + round.gdTopic.title + "\"", points: GD_POINTS }, "gd");
+    stampVoice(item);
+    item.answer = text;
+    item.answerMs = sess.shownAt ? Date.now() - sess.shownAt : 0;
+    round.items.push(item);
+    pushMe(text);
+    sess.shownAt = Date.now();
+    gdAdvance();
+  }
+  function gdWrap() {
+    var round = currentRound();
+    if (!round || round.kind !== "gd") return;
+    stopMic(); stopSpeak();
+    round.gdStep = round.gdSteps.length;
+    pushSys("You wrapped up the discussion.");
+    endRound();
+  }
+  /* ---------------- Phase 3: aptitude answering ---------------- */
+  function submitAptitude(idx) {
+    var sess = S.session, item = currentItem();
+    if (!sess || !item || item.kind !== "aptitude" || item.chosen !== null) return;
+    item.chosen = idx;
+    item.score = idx === item.answer ? 100 : 0;
+    pushMe(item.options[idx]);
+    advanceItem();
+  }
+  /* Fold any voice-recording time into the item being answered and
+     reset the per-question voice counters (Phase 2 analytics). */
+  function stampVoice(item) {
+    item.voiceMs = (item.voiceMs || 0) + (S.voice.ms || 0);
+    if (S.voice.usedForItem) item.viaVoice = true;
+    S.voice.ms = 0;
+    S.voice.usedForItem = false;
+    stopMic();
+    stopSpeak();
   }
   function onSubmitAnswer() {
     var ta = $("iv-answer");
@@ -737,17 +1310,22 @@
   function submitAnswer(text, skipped) {
     var sess = S.session;
     if (!sess) return;
+    var round0 = currentRound();
+    if (round0 && round0.kind === "gd" && sess.phase === "gd") { gdSubmit(text); return; }
     var item = currentItem();
     if (!item) return;
     text = String(text || "");
     if (sess.phase === "approach") { item.approach = text; pushMe(text || "(no explanation given)"); askComplexity(); return; }
     if (sess.phase === "complexity") { item.complexityAnswer = text; pushMe(text || "(not stated)"); finishCodingItem(item); return; }
-    if (sess.phase === "followup") { item.fuAnswer = text; pushMe(text || "(no follow-up answer)"); advanceItem(); return; }
+    if (sess.phase === "followup") { stampVoice(item); item.fuAnswer = text; pushMe(text || "(no follow-up answer)"); advanceItem(); return; }
+    stampVoice(item);
+    item.answerMs = sess.shownAt ? Date.now() - sess.shownAt : 0;
     item.answer = text;
     item.skipped = !!skipped;
     pushMe(skipped ? "(skipped)" : text);
     if (skipped || !text.trim()) { advanceItem(); return; }
     var info = bandOf(item, text);
+    item.band = info.band;
     if (!sess.turnUsed[sess.ri] && !sess.aiDead && window.SkillzifyAI) {
       sess.turnUsed[sess.ri] = true;
       setBusy("Your interviewer is thinking…");
@@ -772,13 +1350,16 @@
   function localFollowupOrAdvance(item, info) {
     var fu = decideLocalFollowup(item, info);
     if (!fu) { advanceItem(); return; }
-    askFollowup(item, reactionFor(S.session.config.style, info.band, fu.kind), fu.q, fu.kind);
+    var round = currentRound();
+    var style = round && round.persona ? round.persona.style : S.session.config.style;
+    askFollowup(item, reactionFor(style, info.band, fu.kind), fu.q, fu.kind);
   }
   function askFollowup(item, say, q, kind) {
     item.fuQ = q;
     item.fuKind = kind;
     S.session.phase = "followup";
     pushBot((say ? say + "\n\n" : "") + q, "Follow-up");
+    S.session.shownAt = Date.now();
     renderComposer();
   }
   function aiTurn(item, answer, info, cb) {
@@ -801,12 +1382,37 @@
       cb({ say: res.data.say.slice(0, 600), action: res.data.action, followup_question: typeof res.data.followup_question === "string" ? res.data.followup_question.slice(0, 500) : "" });
     });
   }
+  /* Adaptive difficulty polish (Phase 2): after a strong answer,
+     swap the NEXT bank question for a harder one on the same topic;
+     after a weak one, swap in an easier one. One swap per round, so
+     the plan's shape stays stable and the change stays honest. */
+  function maybeAdaptNext(prevItem) {
+    var sess = S.session, round = currentRound();
+    if (!sess || !round || !prevItem || !prevItem.band) return;
+    if (round.kind !== "technical" && round.kind !== "project") return;
+    if (sess.adaptedRound === sess.ri) return;
+    var next = round.items[sess.ii];
+    if (!next || next.kind !== "open" || next.src !== "bank" || !next.tier) return;
+    var dir = prevItem.band === "strong" ? 1 : (prevItem.band === "weak" || prevItem.band === "irrelevant") ? -1 : 0;
+    if (!dir) return;
+    var wantTier = clamp(next.tier + dir, 1, 3);
+    if (wantTier === next.tier) return;
+    var used = {};
+    sess.rounds.forEach(function (r) { r.items.forEach(function (it) { if (it.id) used[it.id] = 1; }); });
+    var cand = BANK.technical.filter(function (q) { return q.topic === next.topic && q.tier === wantTier && !used[q.id]; });
+    if (!cand.length) return;
+    round.items[sess.ii] = openItem(cand[Math.floor(Math.random() * cand.length)], "bank");
+    sess.adaptedRound = sess.ri;
+    pushSys(dir > 0 ? "↗ That answer was strong — the next question steps up a level." : "↘ Adjusting — the next question takes a step back to rebuild.");
+  }
   function advanceItem() {
     var sess = S.session;
     if (!sess) return;
+    var prevItem = currentItem();
     sess.ii++;
     renderProgress();
     if (sess.ii >= currentRound().items.length) { endRound(); return; }
+    maybeAdaptNext(prevItem);
     askCurrent();
   }
 
@@ -866,7 +1472,7 @@
   function endRound() {
     var sess = S.session, round = currentRound();
     if (!sess || !round) return;
-    if (round.kind === "coding") {
+    if (round.kind === "coding" || round.kind === "aptitude") {
       computeRoundScore(round);
       round.scoreMode = "local";
       afterRoundScored(round);
@@ -891,6 +1497,17 @@
     var sess = S.session;
     if (!sess) return;
     pushSys(round.label + " complete — round score " + round.score + "/100" + (round.scoreMode === "offline" ? " (offline rubric scoring — the AI was unavailable)" : "") + ".");
+    if (sess.config.type === "Full Drive") {
+      var th = sess.config.driveThreshold || 40;
+      if (round.score < th) {
+        sess.driveOutcome = { cleared: false, atLabel: round.label, score: round.score, threshold: th };
+        sess.rounds = sess.rounds.slice(0, sess.ri + 1);
+        pushSys("🏁 Drive ended — " + round.score + "/100 is below the " + th + " pass mark for the " + round.label + ". That's how a real drive eliminates; your report and roadmap are ready.");
+        finishInterview();
+        return;
+      }
+      pushSys("✓ Cleared the " + round.label + " (" + round.score + " ≥ " + th + " pass mark) — moving on.");
+    }
     sess.ri++;
     sess.ii = 0;
     sess.phase = "main";
@@ -898,7 +1515,9 @@
     if (sess.ri >= sess.rounds.length) { finishInterview(); return; }
     var next = currentRound();
     pushSys(next.label + " — " + next.items.length + (next.kind === "coding" ? " problem(s)" : " question(s)"));
-    if (next.kind === "hr") {
+    if (next.persona) {
+      pushBot(next.persona.intro, next.persona.name + " · " + next.persona.role);
+    } else if (next.kind === "hr") {
       pushBot(sess.config.style === "Friendly"
         ? "Great work so far! Now let's talk about you — your experiences, how you work with people, and what you're aiming for."
         : "That concludes the technical portion. Now the HR round — I want specific, real examples from your own experience, structured clearly: situation, your actions, the result.", next.label);
@@ -1183,8 +1802,10 @@
           var passed = 0;
           (item.allResults || []).forEach(function (r) { if (r.pass) passed++; });
           itemsOut.push({ kind: "coding", skill: item.skill, title: item.title, q: item.prompt, score: sc, parts: item.parts, testsPassed: passed, testsTotal: (item.allResults || []).length, timeUsedSec: item.timeUsedSec, approach: item.approach, complexityAnswer: item.complexityAnswer, optimalTime: item.optimalTime, optimalSpace: item.optimalSpace });
+        } else if (item.kind === "aptitude") {
+          itemsOut.push({ kind: "aptitude", skill: item.skill, area: item.area, q: item.q, options: item.options, chosen: item.chosen, answer: item.answer, why: item.why, score: sc });
         } else {
-          itemsOut.push({ kind: "open", skill: item.skill, topic: item.topic, q: item.q, answer: item.answer, fuQ: item.fuQ, fuAnswer: item.fuAnswer, score: sc, well: item.well || "", improve: item.improve || "", evidence: item.evidence || "", scoreSrc: item.scoreSrc || "" });
+          itemsOut.push({ kind: "open", skill: item.skill, topic: item.topic, q: item.q, answer: item.answer, fuQ: item.fuQ, fuAnswer: item.fuAnswer, score: sc, well: item.well || "", improve: item.improve || "", evidence: item.evidence || "", scoreSrc: item.scoreSrc || "", viaVoice: !!item.viaVoice, comm: analyzeAnswer((item.answer || "") + " " + (item.fuAnswer || ""), item.voiceMs || 0, !!item.viaVoice) });
         }
       });
     });
@@ -1210,7 +1831,12 @@
       experience: sess.config.experience, overall: overall, rounds: roundScores, perSkill: perSkillOut,
       items: itemsOut, weaknesses: weaknesses, roadmap: roadmap, aiCalls: sess.aiCalls,
       scoring: anyAi && anyOffline ? "mixed" : anyAi ? "ai" : "offline",
-      resumeUsed: sess.resumeUsed
+      resumeUsed: sess.resumeUsed,
+      company: sess.config.company || "", companyName: sess.companyName || "",
+      mode: sess.config.mode || "Text",
+      jdPct: typeof sess.jdPct === "number" ? sess.jdPct : null,
+      drive: sess.driveOutcome || null,
+      comm: commAggregate(itemsOut)
     };
   }
   function saveHistory(report) {
@@ -1227,7 +1853,8 @@
       var perSkill = {};
       Object.keys(report.perSkill).forEach(function (k) { perSkill[k] = report.perSkill[k].score; });
       var p = window.firebase.firestore().collection("interviews").add({
-        uid: u.uid, at: report.at, role: report.role, type: report.type, overall: report.overall, perSkill: perSkill
+        uid: u.uid, at: report.at, role: report.role, type: report.type, overall: report.overall, perSkill: perSkill,
+        company: report.companyName || "", mode: report.mode || "Text"
       });
       if (p && typeof p.catch === "function") p.catch(function () {});
     } catch (e) {}
@@ -1236,6 +1863,9 @@
     var sess = S.session;
     if (!sess) return;
     sess.phase = "done";
+    stopMic();
+    stopSpeak();
+    if (sess.config.type === "Full Drive" && !sess.driveOutcome) sess.driveOutcome = { cleared: true, threshold: sess.config.driveThreshold || 40 };
     clearTimers();
     var report = buildReport(sess);
     saveHistory(report);
@@ -1260,6 +1890,57 @@
   function barRow(label, score) {
     return '<div class="iv-score-row"><span style="font-weight:600;font-size:.88rem">' + esc(label) + '</span><span class="bar"><span style="width:' + clamp(score, 0, 100) + '%"></span></span><strong>' + score + "</strong></div>";
   }
+  /* ---------------- Phase 2: interview comparison ---------------- */
+  function deltaChip(d) {
+    if (d === null || typeof d !== "number" || isNaN(d)) return '<span class="hint">—</span>';
+    if (d > 0) return '<span style="color:var(--success);font-weight:700">▲ +' + d + "</span>";
+    if (d < 0) return '<span style="color:var(--danger);font-weight:700">▼ ' + d + "</span>";
+    return '<span class="hint">±0</span>';
+  }
+  function renderCompare(repA, repB) {
+    clearTimers();
+    var older = repA.at <= repB.at ? repA : repB;
+    var newer = older === repA ? repB : repA;
+    var skillNames = {};
+    Object.keys(older.perSkill || {}).forEach(function (k) { skillNames[k] = 1; });
+    Object.keys(newer.perSkill || {}).forEach(function (k) { skillNames[k] = 1; });
+    var skillRows = Object.keys(skillNames).sort().map(function (k) {
+      var a = older.perSkill[k] ? older.perSkill[k].score : null;
+      var b = newer.perSkill[k] ? newer.perSkill[k].score : null;
+      return '<div class="iv-score-row" style="grid-template-columns:170px 1fr 90px"><span style="font-weight:600;font-size:.88rem">' + esc(k) + '</span><span style="font-size:.88rem">' + (a === null ? "—" : a) + " → <strong>" + (b === null ? "—" : b) + '</strong></span><span>' + deltaChip(a === null || b === null ? null : b - a) + "</span></div>";
+    }).join("");
+    var roundKinds = {};
+    (older.rounds || []).forEach(function (r) { roundKinds[r.kind] = r; });
+    var roundRows = (newer.rounds || []).map(function (r) {
+      var o = roundKinds[r.kind];
+      return '<div class="iv-score-row" style="grid-template-columns:170px 1fr 90px"><span style="font-weight:600;font-size:.88rem">' + esc(r.label) + '</span><span style="font-size:.88rem">' + (o ? o.score : "—") + " → <strong>" + r.score + '</strong></span><span>' + deltaChip(o ? r.score - o.score : null) + "</span></div>";
+    }).join("");
+    var commHtml = "";
+    if (older.comm && newer.comm) {
+      commHtml = '<div class="card"><h3 style="margin-top:0">🗣️ Communication — measured, compared</h3>' +
+        '<p style="font-size:.92rem;margin:0">Average answer length: <strong>' + older.comm.avgWords + " → " + newer.comm.avgWords + " words</strong> · filler words: <strong>" + older.comm.fillerPer100 + " → " + newer.comm.fillerPer100 + " per 100 words</strong>" +
+        (older.comm.avgWpm && newer.comm.avgWpm ? ' · speaking pace: <strong>' + older.comm.avgWpm + " → " + newer.comm.avgWpm + " wpm</strong>" : "") + ".</p>" +
+        '<p class="hint" style="margin:6px 0 0">Measured from your answer text (and voice timing, when used) only — no accent, emotion or personality inference.</p></div>';
+    }
+    $("iv-root").innerHTML =
+      '<div style="max-width:920px;margin:0 auto;display:grid;gap:16px">' +
+        '<div class="card"><h3 style="margin-top:0">⚖️ Interview comparison</h3>' +
+          '<div style="display:flex;gap:14px;flex-wrap:wrap">' +
+            '<div style="flex:1;min-width:230px"><span class="hint">' + fmtDate(older.at) + '</span><br><strong>' + esc(older.role) + " · " + esc(older.type) + (older.companyName ? " · " + esc(older.companyName) + " sim" : "") + '</strong><br><span class="iv-big-score" style="font-size:1.9rem">' + older.overall + '<span style="font-size:1rem;color:var(--muted)">/100</span></span></div>' +
+            '<div style="align-self:center;font-size:1.4rem">→</div>' +
+            '<div style="flex:1;min-width:230px"><span class="hint">' + fmtDate(newer.at) + '</span><br><strong>' + esc(newer.role) + " · " + esc(newer.type) + (newer.companyName ? " · " + esc(newer.companyName) + " sim" : "") + '</strong><br><span class="iv-big-score" style="font-size:1.9rem">' + newer.overall + '<span style="font-size:1rem;color:var(--muted)">/100</span></span> ' + deltaChip(newer.overall - older.overall) + '</div>' +
+          "</div>" +
+          '<h4 style="margin:16px 0 0">Per-round</h4>' + (roundRows || '<p class="hint">No shared round data.</p>') +
+          '<h4 style="margin:16px 0 0">Per-skill</h4>' + (skillRows || '<p class="hint">No skill data.</p>') +
+          '<p class="hint" style="margin:10px 0 0">Different interviews ask different questions, so treat deltas as a trend signal, not an exact measurement.</p>' +
+          '<div style="margin-top:12px"><button class="btn btn-ghost" id="iv-cmp-back" type="button">Back to setup</button></div>' +
+        "</div>" + commHtml +
+      "</div>";
+    var back = $("iv-cmp-back");
+    if (back) back.addEventListener("click", renderSetup);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function renderReport(report, fromHistory) {
     clearTimers();
     var scoringNote = report.scoring === "ai"
@@ -1284,6 +1965,12 @@
           '<p style="margin:4px 0;font-size:.88rem">Tests: <strong>' + it.testsPassed + "/" + it.testsTotal + " passed</strong> · time used " + Math.floor((it.timeUsedSec || 0) / 60) + "m " + ((it.timeUsedSec || 0) % 60) + "s · your complexity: " + esc(it.complexityAnswer || "not stated") + " · reference: time " + esc(it.optimalTime) + ", space " + esc(it.optimalSpace) + "</p>" +
           '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">' + partChips + "</div></div>";
       }
+      if (it.kind === "aptitude") {
+        var aptCorrect = it.chosen === it.answer;
+        return '<div class="iv-qrow"><div class="iv-qhead"><strong>' + (aptCorrect ? "✅ " : "❌ ") + esc(it.q) + '</strong><span class="iv-chip">' + esc(it.area) + ' · <strong>' + it.score + '/100</strong></span></div>' +
+          '<p style="margin:6px 0 0;font-size:.88rem">Your answer: <strong>' + esc(it.chosen !== null && typeof it.chosen === "number" && it.options[it.chosen] ? it.options[it.chosen] : "—") + "</strong>" + (aptCorrect ? "" : ' · Correct answer: <strong>' + esc(it.options[it.answer]) + "</strong>") + "</p>" +
+          (it.why ? '<p class="hint" style="margin:4px 0 0">' + esc(it.why) + "</p>" : "") + "</div>";
+      }
       return '<div class="iv-qrow"><div class="iv-qhead"><strong>' + (idx + 1) + ". " + esc(it.q.length > 130 ? it.q.slice(0, 130) + "…" : it.q) + '</strong><span class="iv-chip">' + esc(it.skill) + ' · <strong>' + it.score + '/100</strong></span></div>' +
         (it.well ? '<p style="margin:6px 0 0;font-size:.88rem">✅ <strong>What went well:</strong> ' + esc(it.well) + "</p>" : "") +
         (it.improve ? '<p style="margin:4px 0 0;font-size:.88rem">🎯 <strong>Improve:</strong> ' + esc(it.improve) + "</p>" : "") +
@@ -1296,16 +1983,43 @@
         (rm.path ? '<a class="iv-link-chip" href="paths.html#path=' + esc(rm.path.id) + '">🛤️ Path: ' + esc(rm.path.title) + "</a>" : "");
       return '<div class="iv-road-item"><strong>' + esc(rm.skill) + " — " + rm.score + '/100</strong><p class="hint" style="margin:4px 0 0">Targeted practice for this gap:</p><div class="iv-links">' + links + "</div></div>";
     }).join("") : '<p class="hint">No skill scored below 65 — no weak spots to map. Raise the difficulty and go again.</p>';
+    var driveHtml = "";
+    if (report.drive) {
+      driveHtml = report.drive.cleared
+        ? '<div class="card"><h3 style="margin-top:0">🏁 Full Drive — cleared</h3><p style="font-size:.92rem;margin:0">You cleared every round at or above the <strong>' + report.drive.threshold + ' pass mark</strong> — the full drive, start to finish. The overall score above is your drive score.</p></div>'
+        : '<div class="card"><h3 style="margin-top:0">🏁 Full Drive — ended at the ' + esc(report.drive.atLabel || "round") + '</h3><p style="font-size:.92rem;margin:0">That round scored <strong>' + report.drive.score + '/100</strong>, below the <strong>' + report.drive.threshold + ' pass mark</strong> — so the drive ended there, exactly how a real elimination drive works. The overall score covers the rounds you attempted; the roadmap below targets the round that stopped you.</p></div>';
+    }
+    var commHtml = "";
+    if (report.comm) {
+      var cm = report.comm;
+      commHtml = '<div class="card"><h3 style="margin-top:0">🗣️ Communication — what was measured</h3>' +
+        '<p style="font-size:.92rem;margin:0">Across ' + cm.answers + ' spoken/written answers: average length <strong>' + cm.avgWords + ' words</strong> · filler words <strong>' + cm.fillerPer100 + ' per 100 words</strong> (um, uh, basically, actually…)' +
+        (cm.avgWpm ? ' · speaking pace <strong>' + cm.avgWpm + ' words/min</strong> across ' + cm.voiceAnswers + ' voice answer(s) — ' + esc(paceBand(cm.avgWpm)) : ' · <span class="hint">speaking pace is measured in Voice mode</span>') + ".</p>" +
+        '<p class="hint" style="margin:6px 0 0">Descriptive measurements from your own words and timing only. Nothing here infers accent, emotion or personality, and communication is reported separately — it does not change your scores.</p></div>';
+    }
+    var readyHtml = "";
+    var histNow = storeGet(HISTORY_KEY, []);
+    if (histNow.length >= 2) {
+      var rd = readinessFromHistory(histNow);
+      var trendBits = Object.keys(rd.perSkill).filter(function (k) { return rd.perSkill[k].trend !== null && rd.perSkill[k].trend !== 0; })
+        .sort(function (a, b) { return Math.abs(rd.perSkill[b].trend) - Math.abs(rd.perSkill[a].trend); }).slice(0, 4)
+        .map(function (k) { return esc(k) + " " + deltaChip(rd.perSkill[k].trend); }).join(" · ");
+      readyHtml = '<div class="card"><h3 style="margin-top:0">📈 Readiness after this interview</h3>' +
+        '<p style="font-size:.92rem;margin:0">Overall readiness across your last ' + rd.interviews + ' interviews: <strong>' + rd.overall + "/100 — " + esc(readinessBand(rd.overall)) + '</strong>.' + (trendBits ? ' Moving: ' + trendBits + "." : "") + '</p>' +
+        '<p class="hint" style="margin:6px 0 0">Recency-weighted and practice-based — an estimate from your Skillzify interviews, never a hiring probability. Compare any two interviews from the setup screen to see the full picture.</p></div>';
+    }
     $("iv-root").innerHTML =
       '<div style="max-width:920px;margin:0 auto;display:grid;gap:16px">' +
         '<div class="card"><div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap"><div><div class="iv-big-score">' + report.overall + '<span style="font-size:1.1rem;color:var(--muted)">/100</span></div><span class="hint">Overall score</span></div>' +
           '<div style="flex:1;min-width:240px"><h3 style="margin:0 0 4px">📋 Interview report — ' + esc(report.role) + '</h3>' +
-          '<p class="hint" style="margin:0">' + fmtDate(report.at) + " · " + esc(report.type) + " · " + esc(report.difficulty) + " · " + esc(report.style) + (report.resumeUsed ? " · resume-based questions included" : "") + " · AI calls used: " + report.aiCalls + "</p>" +
+          '<p class="hint" style="margin:0">' + fmtDate(report.at) + " · " + esc(report.type) + " · " + esc(report.difficulty) + " · " + esc(report.style) + (report.companyName ? " · 🏢 " + esc(report.companyName) + " simulation" : "") + (report.mode === "Voice" ? " · 🎤 Voice mode" : "") + (typeof report.jdPct === "number" ? " · 🎯 JD match " + report.jdPct + "%" : "") + (report.resumeUsed ? " · resume-based questions included" : "") + " · AI calls used: " + report.aiCalls + "</p>" +
+          (report.companyName ? '<p class="hint" style="margin:4px 0 0">' + esc(BANK.simDisclaimer || "") + "</p>" : "") +
           '<p style="margin:8px 0 0;font-size:.92rem">' + esc(readiness) + '</p>' +
           '<p class="hint" style="margin:6px 0 0">' + esc(scoringNote) + " This is a practice-based estimate from one session — not a hiring probability.</p></div></div>" +
           '<h4 style="margin:16px 0 0">Per-round scores</h4>' + roundsHtml +
           '<h4 style="margin:16px 0 0">Per-skill scores</h4>' + skillsHtml +
         "</div>" +
+        driveHtml + commHtml + readyHtml +
         '<div class="card"><h3 style="margin-top:0">🔍 Question-by-question breakdown</h3>' + itemsHtml + "</div>" +
         '<div class="card"><h3 style="margin-top:0">🗺️ Your improvement roadmap</h3>' +
           (report.weaknesses.length ? '<p class="hint" style="margin-top:0">Weak spots from this interview (' + report.weaknesses.map(function (w) { return esc(w.skill) + " " + w.score; }).join(" · ") + "), each mapped to the Skillzify lessons, practice and path that fix it:</p>" : "") +
@@ -1345,5 +2059,5 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 
-  window.SkillzifyInterview = { version: 1 };
+  window.SkillzifyInterview = { version: 3 };
 })();

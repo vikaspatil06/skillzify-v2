@@ -548,12 +548,152 @@
      shown to candidates in the report; configurable here). */
   var CODING_RUBRIC = { correctness: 35, time: 20, space: 15, edge: 15, quality: 10, explanation: 5 };
 
+  /* ================= Phase 2: company simulations =================
+     Practice patterns modelled on each company's PUBLICLY KNOWN
+     recruitment style (round mix and emphasis) — never the company's
+     actual questions, and always labelled in the UI as a simulation
+     based on publicly available recruitment information, not an
+     official interview. topics[] re-weights the technical round;
+     tierBias shifts the difficulty ladder by one rung; hrBoost adds
+     an extra HR question in Mixed interviews. */
+  var SIM_DISCLAIMER = "Simulation based on publicly available recruitment information — not an official interview, and not this company's actual questions.";
+  var COMPANIES = [
+    { id: "tcs", name: "TCS", note: "Broad fundamentals, steady difficulty, strong HR emphasis (NQT-style pattern).", topics: ["fundamentals", "oop", "dbms", "os", "cn"], tierBias: -1, hrBoost: true },
+    { id: "infosys", name: "Infosys", note: "Core CS fundamentals with puzzle-style problem solving and training-readiness HR.", topics: ["fundamentals", "oop", "dsa", "dbms"], tierBias: 0, hrBoost: false },
+    { id: "wipro", name: "Wipro", note: "Fundamentals and databases at a gentle ramp, with a real HR conversation.", topics: ["fundamentals", "oop", "dbms", "cn"], tierBias: -1, hrBoost: true },
+    { id: "accenture", name: "Accenture", note: "Balanced technical + web/APIs, project talk, and situational HR.", topics: ["fundamentals", "oop", "dsa", "web", "dbms"], tierBias: 0, hrBoost: false },
+    { id: "cognizant", name: "Cognizant", note: "Fundamentals, SQL and web basics with an HR round that probes communication.", topics: ["fundamentals", "oop", "dbms", "web"], tierBias: 0, hrBoost: true },
+    { id: "capgemini", name: "Capgemini", note: "Core CS breadth — OOP, DSA, DBMS, OS — at a steady intermediate level.", topics: ["fundamentals", "oop", "dsa", "dbms", "os"], tierBias: 0, hrBoost: false },
+    { id: "amazon", name: "Amazon", note: "DSA-heavy and deep, plus behavioural questions in the leadership-principles style (STAR evidence matters).", topics: ["dsa", "oop", "fundamentals", "dbms"], tierBias: 1, hrBoost: true },
+    { id: "microsoft", name: "Microsoft", note: "Deep DSA and design-flavoured problem solving; precise, structured answers.", topics: ["dsa", "oop", "fundamentals", "os"], tierBias: 1, hrBoost: false },
+    { id: "google", name: "Google", note: "The hardest ladder here: algorithms depth, complexity fluency, thinking out loud.", topics: ["dsa", "fundamentals", "oop"], tierBias: 1, hrBoost: false }
+  ];
+
+  /* ============ Phase 2: project-defense chain (deep) ============
+     Asked in sequence about ONE project (the candidate's own, from
+     their resume or their Skillzify builds). {title} is substituted
+     by the engine. The chain walks the way a real project round
+     does: architecture → choices → hardest problem → scale. */
+  var PROJECT_DEEP = [
+    { topic: "project", q: "Walk me through \"{title}\" as if I'm a senior engineer reviewing it: what problem does it solve, who uses it, and how is it put together — the main components and how data flows between them?",
+      points: ["the problem and its users, stated crisply", "the main components / architecture", "how data flows through the system", "their own role in building it"],
+      followups: [{ kind: "deeper", q: "Which component of \"{title}\" would you redesign first if you started over, and why?" }] },
+    { topic: "project", q: "What were the two or three most important technical choices you made in \"{title}\" — and for the biggest one, what did you consider and reject, and why?",
+      points: ["named concrete technical choices", "an alternative that was considered", "reasoning / trade-offs behind the decision"],
+      followups: [{ kind: "probe", point: 2, q: "What would have to change for the rejected option to become the right choice?" }] },
+    { topic: "project", q: "What was the hardest bug or problem you hit while building \"{title}\"? Take me through how you found the root cause — not just the fix.",
+      points: ["a specific, real problem (not a generic one)", "a systematic debugging approach", "the actual root cause", "how they verified the fix"],
+      followups: [{ kind: "deeper", q: "What would you put in place so that class of bug can't come back in \"{title}\"?" }] },
+    { topic: "project", q: "Last one on \"{title}\": if it suddenly had to serve 100× the users or data, what breaks first — and what's your plan for it?",
+      points: ["a plausible first bottleneck, correctly identified", "a concrete scaling approach", "the trade-offs or costs of that approach"],
+      followups: [] }
+  ];
+
+  /* ================= Phase 3: aptitude bank =================
+     Multiple-choice aptitude for the Full Placement Drive's first
+     round (quantitative / logical / verbal) — the round real
+     service-company drives open with. Scored locally: chosen index
+     vs `answer`. `why` is shown in the report after the drive. */
+  var APTITUDE = [
+    { id: "a1", area: "Quantitative", q: "A train travels 60 km in 45 minutes. What is its average speed?", options: ["70 km/h", "75 km/h", "80 km/h", "90 km/h"], answer: 2, why: "45 minutes is 0.75 hours; 60 / 0.75 = 80 km/h." },
+    { id: "a2", area: "Quantitative", q: "What is 15% of 240?", options: ["24", "36", "30", "48"], answer: 1, why: "10% of 240 is 24 and 5% is 12; 24 + 12 = 36." },
+    { id: "a3", area: "Quantitative", q: "A shopkeeper buys an item for ₹800 and sells it for ₹920. What is the profit percentage?", options: ["10%", "12%", "20%", "15%"], answer: 3, why: "Profit is ₹120 on a cost of ₹800: 120/800 = 15%." },
+    { id: "a4", area: "Quantitative", q: "What is the average of 12, 18, 20, 22 and 28?", options: ["18", "20", "22", "24"], answer: 1, why: "The sum is 100; 100 / 5 = 20." },
+    { id: "a5", area: "Quantitative", q: "5 workers can finish a job in 12 days. How long will 10 workers take, at the same rate?", options: ["4 days", "8 days", "6 days", "10 days"], answer: 2, why: "The job needs 5 × 12 = 60 worker-days; 60 / 10 = 6 days." },
+    { id: "a6", area: "Quantitative", q: "What comes next in the series: 2, 6, 12, 20, 30, …?", options: ["42", "36", "40", "48"], answer: 0, why: "Each term is n × (n+1): 1×2, 2×3, 3×4, 4×5, 5×6, so next is 6×7 = 42." },
+    { id: "a7", area: "Logical", q: "All cats are animals. Some animals are black. Which conclusion can be drawn for certain?", options: ["All cats are black", "Some cats are black", "No cat is black", "None of these can be concluded for certain"], answer: 3, why: "The black animals might not include any cats — nothing about cats' colour follows for certain." },
+    { id: "a8", area: "Logical", q: "Find the odd one out: 3, 5, 11, 14, 17, 21", options: ["3", "14", "17", "21"], answer: 1, why: "14 is the only even number; the rest are odd." },
+    { id: "a9", area: "Logical", q: "If BOOK is coded as 43 by adding the positions of its letters in the alphabet (A=1, B=2, …), what is PEN coded as?", options: ["28", "32", "35", "41"], answer: 2, why: "B+O+O+K = 2+15+15+11 = 43. P+E+N = 16+5+14 = 35." },
+    { id: "a10", area: "Logical", q: "A is B's brother. B is C's mother. How is A related to C?", options: ["Father", "Brother", "Uncle", "Grandfather"], answer: 2, why: "A is the brother of C's mother — C's maternal uncle." },
+    { id: "a11", area: "Logical", q: "What comes next in the series: 1, 1, 2, 3, 5, 8, …?", options: ["10", "13", "12", "16"], answer: 1, why: "Each term is the sum of the previous two (Fibonacci): 5 + 8 = 13." },
+    { id: "a12", area: "Logical", q: "If yesterday was Friday, what day is the day after tomorrow?", options: ["Sunday", "Monday", "Tuesday", "Saturday"], answer: 1, why: "Yesterday Friday → today is Saturday → tomorrow Sunday → day after tomorrow is Monday." },
+    { id: "a13", area: "Verbal", q: "Choose the word closest in meaning to CANDID.", options: ["Shy", "Rude", "Proud", "Frank"], answer: 3, why: "Candid means frank — honest and direct in speech." },
+    { id: "a14", area: "Verbal", q: "Choose the word most opposite in meaning to SCARCE.", options: ["Rare", "Abundant", "Costly", "Limited"], answer: 1, why: "Scarce means in short supply; abundant means plentiful." },
+    { id: "a15", area: "Verbal", q: "Which sentence is grammatically correct?", options: ["She don't like coffee.", "She doesn't likes coffee.", "She doesn't like coffee.", "She not like coffee."], answer: 2, why: "With doesn't, the main verb stays in its base form: doesn't like." },
+    { id: "a16", area: "Verbal", q: "He has been working here ___ 2019.", options: ["for", "since", "from", "by"], answer: 1, why: "Since is used with a point in time (2019); for is used with a duration." },
+    { id: "a17", area: "Verbal", q: "What does the idiom 'to bite the bullet' mean?", options: ["To eat quickly", "To face something unpleasant bravely", "To waste money", "To argue loudly"], answer: 1, why: "It means to endure a painful or difficult situation with courage." },
+    { id: "a18", area: "Verbal", q: "What is one word for 'a person who speaks many languages'?", options: ["Polyglot", "Bilingual", "Orator", "Verbose"], answer: 0, why: "A polyglot knows or uses several languages (bilingual is exactly two)." }
+  ];
+
+  /* ================= Phase 3: panel personas =================
+     A panel interview is one sitting with three interviewers.
+     Each persona owns one round, has its own follow-up style, and
+     introduces itself when its round begins. */
+  var PANEL_PERSONAS = [
+    { key: "tech", name: "Ananya", role: "Technical Lead", style: "Challenging", intro: "I'm Ananya, the technical lead. I'll dig into your fundamentals and problem-solving — expect me to push on anything vague." },
+    { key: "mgr", name: "Rohan", role: "Hiring Manager", style: "Professional", intro: "I'm Rohan, the hiring manager. I care about the work you've actually shipped — we'll go deep on one of your projects." },
+    { key: "hr", name: "Priya", role: "HR Manager", style: "Friendly", intro: "And I'm Priya from HR. I'll ask about how you work with people, handle pressure, and what you're looking for next." }
+  ];
+
+  /* ================= Phase 4: group discussion =================
+     A moderated GD with three simulated participants. Each topic
+     carries each participant's opening position and one follow-up
+     reaction; the engine interleaves them with the candidate's own
+     contributions. Participants are simulations, labelled as such
+     in the UI; scoring judges only the candidate's contributions. */
+  var GD_TOPICS = [
+    { id: "gd1", title: "Artificial intelligence in classrooms — a tool or a threat?",
+      brief: "Schools and colleges are split on whether AI tools help students learn or simply do the learning for them.",
+      voices: [
+        { name: "Aarav", stance: "Pro-tool", open: "I think AI in classrooms is clearly a tool. A student stuck at midnight gets an explanation instantly instead of waiting two days for a doubt session. Used well, it personalises learning the way no single teacher with sixty students can.", follow: "I'd add that the threat framing assumes students only copy. The same was said about calculators — the answer was to change what we test, not ban the tool." },
+        { name: "Meera", stance: "Cautious", open: "I'm cautious. If the AI writes the essay and solves the problem set, the student practises nothing. Learning is the struggle itself — remove it and you get graduates who can prompt but cannot think.", follow: "And there's an honesty problem too. Teachers can't tell genuine work from generated work anymore, so assessment itself is breaking down." },
+        { name: "Kabir", stance: "Middle path", open: "I sit in the middle: it depends entirely on how it's deployed. AI as a tutor that asks questions is very different from AI as an answer machine. The institution's rules decide which one shows up.", follow: "Exactly — policy is the real topic here. Allow it for drafting and doubts, ban it in exams, and teach students to verify what it says." }
+      ],
+      close: "We've heard the main positions — tool, threat, and 'it depends on the rules'. Final thoughts are welcome before we wrap up." },
+    { id: "gd2", title: "Should freshers prefer startups or large companies?",
+      brief: "A classic fresher dilemma: the learning speed and ownership of a startup versus the structure and brand of a large company.",
+      voices: [
+        { name: "Meera", stance: "Startups", open: "For a fresher, a startup is a fast-forward button. You ship real code in week one, sit with founders, and learn in one year what takes three in a large company. Early career is for learning speed, not comfort.", follow: "Brand names matter less than people think — recruiters ask what you built, and at a startup you actually built things." },
+        { name: "Kabir", stance: "Large companies", open: "I'd argue the opposite. A fresher doesn't know what good engineering looks like yet. Large companies teach process, code review, scale — the discipline that makes the startup chaos survivable later.", follow: "And let's be honest about risk: most startups fail or pay late. A first job also has to pay the rent reliably." },
+        { name: "Aarav", stance: "It depends", open: "Both of you assume the company type decides everything. The team and the manager matter more. A great mentor at a boring company beats a chaotic startup with no guidance, every time.", follow: "I'd judge the offer by one question: who will review my work and teach me in the first six months? Everything else is secondary." }
+      ],
+      close: "Startups for speed, large companies for structure, and the mentor question cutting across both — a good place to land your final view." },
+    { id: "gd3", title: "Remote work or office work for early-career engineers?",
+      brief: "Many companies now hire freshers into hybrid or fully remote roles. Is that a gift or a handicap at the start of a career?",
+      voices: [
+        { name: "Kabir", stance: "Remote", open: "Remote is a gift. A fresher from a small town gets a metro salary without metro rent, and deep-work hours at home beat an open-plan office for actual coding. The savings in year one are life-changing.", follow: "The mentorship argument is real but solvable — pair programming over a call and good written culture teach plenty, if the team bothers." },
+        { name: "Aarav", stance: "Office", open: "For the first two years, office wins and it's not close. You learn by overhearing seniors debug, by the corridor question that saves you a day. Remote freshers often stay invisible and plateau quietly.", follow: "Visibility matters for growth too — promotions go to people the leads actually know and trust." },
+        { name: "Meera", stance: "Hybrid", open: "This is why hybrid exists. Two or three office days for mentorship and bonding, remote days for focus and savings. The mistake is treating it as all-or-nothing.", follow: "Though I'd say the fresher shouldn't choose by policy alone — a fully remote team with strong rituals can out-teach a lazy office." }
+      ],
+      close: "Savings and focus on one side, mentorship and visibility on the other, hybrid in between — final positions, please." },
+    { id: "gd4", title: "Social media does more harm than good for students.",
+      brief: "Attention, comparison, misinformation on one side; community, learning and opportunity on the other.",
+      voices: [
+        { name: "Aarav", stance: "Agree", open: "I agree with the statement. The platforms are engineered to steal attention — the average student loses hours daily to feeds designed against their interests. Add comparison anxiety and misinformation, and the harm ledger is longer.", follow: "The learning argument is weak too — for every good tutorial there are fifty distractions one swipe away, and the algorithm promotes the distractions." },
+        { name: "Kabir", stance: "Disagree", open: "I disagree. The same platforms run the study communities, internship alerts and open-source showcases that got half my class placed. The tool isn't the harm — unregulated use is, and that's teachable.", follow: "Also, for students outside big cities, social media IS the network. It levels access to mentors and opportunities that used to need connections." },
+        { name: "Meera", stance: "Balanced", open: "The statement is too sweeping. Harm and good run on the same rails; what differs is the student's intent — consumption versus creation. A student posting projects gains; a student only scrolling pays.", follow: "I'd put responsibility on design too — if a platform profits from addiction, self-control alone is an unfair ask of a sixteen-year-old." }
+      ],
+      close: "Harm, good, and the intent question — we've circled the statement well. Your closing take?" },
+    { id: "gd5", title: "Degrees vs skills — what should hiring value more?",
+      brief: "Employers increasingly list 'skills-based hiring' while still filtering by degree. Which signal deserves more weight?",
+      voices: [
+        { name: "Meera", stance: "Skills", open: "Skills, plainly. A degree certifies attendance across four years; a portfolio demonstrates the actual job. When a candidate shows real projects and passes a work-sample test, the degree adds almost no information.", follow: "Degrees also filter out late bloomers and self-taught talent — exactly the hungry candidates companies claim to want." },
+        { name: "Aarav", stance: "Degrees still matter", open: "I'll defend the degree a little. It signals sustained effort, foundational theory, and the ability to finish something hard over years. Skills tests can be gamed in a weekend; four years of coursework is harder to fake.", follow: "And in fields like core engineering or research, the theory IS the skill — you can't portfolio your way past thermodynamics." },
+        { name: "Kabir", stance: "Sequence matters", open: "I think the honest answer is: degree as a floor for some roles, skills as the decider for all. Use the degree to check foundations if you must, but let the work sample make the final call.", follow: "Companies say skills-first but filter degree-first because it's cheap. The ones who actually test skills get the better hires — the data from their own funnels shows it." }
+      ],
+      close: "Skills as proof, degrees as signal, and the funnel argument on the table — last word to you." },
+    { id: "gd6", title: "Electric vehicles are the future of Indian roads.",
+      brief: "EV sales are rising, charging infrastructure is thin, and petrol is familiar. Is the transition inevitable?",
+      voices: [
+        { name: "Kabir", stance: "Inevitable", open: "The transition is inevitable. Running costs are a fifth of petrol, city pollution is a public-health emergency, and every major manufacturer has committed. Two-wheelers alone — most of India's vehicles — are already flipping fast.", follow: "Charging anxiety shrinks every year; battery swapping for two-wheelers is already working in several cities." },
+        { name: "Meera", stance: "Not so fast", open: "I'd slow down. Our electricity is still largely coal-generated, batteries are imported, and a family in a small town can't charge on a highway trip today. 'Future' yes — but the timeline being sold is fantasy.", follow: "There's also the disposal question nobody answers: millions of dead batteries need a recycling system that doesn't exist yet at scale." },
+        { name: "Aarav", stance: "Segment-wise", open: "Both are right by segment. City two-wheelers and fleet cars: electric wins today. Long-haul trucks and rural use: not yet. India's EV story will be won segment by segment, not in one wave.", follow: "Policy should match that — subsidise where the economics already work instead of spreading thin everywhere." }
+      ],
+      close: "Inevitable, premature, or segment-by-segment — bring us home with your final position." }
+  ];
+
   window.SkillzifyInterviewBank = {
-    version: 1,
+    version: 3,
     technical: TECHNICAL,
     hr: HR,
     coding: CODING,
     roleTopics: ROLE_TOPICS,
-    codingRubric: CODING_RUBRIC
+    codingRubric: CODING_RUBRIC,
+    companies: COMPANIES,
+    simDisclaimer: SIM_DISCLAIMER,
+    projectDeep: PROJECT_DEEP,
+    aptitude: APTITUDE,
+    panelPersonas: PANEL_PERSONAS,
+    gdTopics: GD_TOPICS
   };
 })();
