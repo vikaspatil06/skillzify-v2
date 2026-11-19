@@ -41,6 +41,7 @@
     "        <h4>Company</h4>\n" +
     '        <a href="about.html">About us</a>\n' +
     '        <a href="contact.html">Contact</a>\n' +
+    '        <a href="privacy.html">Privacy Policy</a>\n' +
     "      </div>\n" +
     "    </div>\n" +
     '    <div class="footer-bottom"><span>© <span data-year>2026</span> Skillzify · Learn. Build. Shine.</span><a href="#" onclick="window.scrollTo({top:0,behavior:\'smooth\'});return false;">Back to top ↑</a></div>\n' +

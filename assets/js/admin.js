@@ -270,6 +270,12 @@
   ];
   var SC_NAMES = {};
   SC_PAGES.forEach(function (p) { SC_NAMES[p[0]] = p[1]; });
+  /* Ads (19 Nov 2026): placement names match the [data-ad-name]
+     placeholders in the pages and the server's ADS_SLOTS list. */
+  var SC_ADS_SLOTS = [
+    ["home", "Home (bottom)"], ["learn", "Learn (bottom)"], ["lesson", "Lesson (end)"],
+    ["dashboard", "Dashboard (bottom)"], ["practice", "Practice (bottom)"]
+  ];
   var scState = null;
   var scBusy = false;
   var scWired = false;
@@ -307,7 +313,36 @@
         '<button class="btn btn-sm btn-ghost sc-page-msg-save" type="button" data-page="' + f + '">Save</button></div>' +
         "</div>";
     }).join("");
+    scAdsRender();
     scSetEnabled();
+  }
+  function scAdsRender() {
+    if (!scState) return;
+    var ads = scState.ads || { enabled: false, publisherId: "", slots: {} };
+    var tog = el("sc-ads-toggle");
+    if (tog) tog.checked = ads.enabled === true;
+    var pub = el("sc-ads-pub");
+    if (pub && document.activeElement !== pub) pub.value = ads.publisherId || "";
+    var wrap = el("sc-ads-slots");
+    if (!wrap) return;
+    if (wrap.querySelector("input:focus")) return; // never clobber typing
+    wrap.innerHTML = SC_ADS_SLOTS.map(function (s) {
+      var v = (ads.slots && ads.slots[s[0]]) || "";
+      return '<div class="sc-msgedit" style="margin-top:0;align-items:center">' +
+        '<span class="hint" style="width:130px;flex:none">' + esc(s[1]) + "</span>" +
+        '<input class="sc-input sc-ads-slot" type="text" data-slot="' + s[0] + '" maxlength="20" placeholder="Slot ID (digits)" value="' + esc(v) + '"></div>';
+    }).join("");
+  }
+  function scAdsCollect() {
+    var slots = {};
+    document.querySelectorAll(".sc-ads-slot").forEach(function (n) {
+      slots[n.getAttribute("data-slot")] = n.value.trim();
+    });
+    return {
+      enabled: !!el("sc-ads-toggle").checked,
+      publisherId: el("sc-ads-pub").value.trim(),
+      slots: slots
+    };
   }
   function scLoad() {
     return idToken().then(function (tok) {
@@ -436,6 +471,13 @@
     });
     el("sc-message-save").addEventListener("click", function () {
       scPost({ message: el("sc-message").value }, "Default message saved.");
+    });
+    el("sc-ads-toggle").addEventListener("change", function () {
+      var a = scAdsCollect();
+      scPost({ ads: a }, a.enabled ? "Ads are ON." : "Ads are off.");
+    });
+    el("sc-ads-save").addEventListener("click", function () {
+      scPost({ ads: scAdsCollect() }, "Ad settings saved.");
     });
     card.addEventListener("change", function (ev) {
       var t = ev.target;

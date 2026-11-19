@@ -731,11 +731,33 @@ var SITE_PAGES = [
 var SITE_DEFAULT_MESSAGE = "An update is on the way — we'll be back soon.";
 var SITE_COLLECTION = "siteConfig";
 var SITE_DOC = "state";
+/* Ads (19 Nov 2026): dormant AdSense scaffold. The config lives in
+   the same siteConfig/state doc; ads.js reads it exactly like
+   site-gate.js reads the page switches. Nothing renders anywhere
+   until the admin saves a publisher ID AND flips enabled on.
+   Placement names are fixed so a typo can never invent a slot. */
+var ADS_SLOTS = ["home", "learn", "lesson", "dashboard", "practice"];
+var ADS_PUB_RE = /^ca-pub-\d{8,20}$/;
+var ADS_SLOT_RE = /^\d{5,20}$/;
 var siteMem = null;   // last known state when Firestore is off/unavailable
 var siteCache = null; // { at, pub } — 10 s read cache for /api/site-status
 
 function siteDefaultState() {
-  return { master: true, pages: {}, pageMessages: {}, message: SITE_DEFAULT_MESSAGE, updatedAt: "", updatedBy: "" };
+  return { master: true, pages: {}, pageMessages: {}, message: SITE_DEFAULT_MESSAGE, updatedAt: "", updatedBy: "",
+    ads: { enabled: false, publisherId: "", slots: {} } };
+}
+function adsSanitize(raw) {
+  var d = { enabled: false, publisherId: "", slots: {} };
+  if (!raw || typeof raw !== "object") return d;
+  if (typeof raw.enabled === "boolean") d.enabled = raw.enabled;
+  if (typeof raw.publisherId === "string" && ADS_PUB_RE.test(raw.publisherId)) d.publisherId = raw.publisherId;
+  if (raw.slots && typeof raw.slots === "object") {
+    Object.keys(raw.slots).forEach(function (k) {
+      var v = raw.slots[k];
+      if (ADS_SLOTS.indexOf(k) !== -1 && typeof v === "string" && ADS_SLOT_RE.test(v)) d.slots[k] = v;
+    });
+  }
+  return d;
 }
 // Only well-formed, known-page state ever leaves this function: the
 // doc is admin-written, but the gate trusts whatever it reads, so
@@ -765,6 +787,7 @@ function siteSanitize(raw) {
   }
   if (typeof raw.updatedAt === "string") d.updatedAt = raw.updatedAt;
   if (typeof raw.updatedBy === "string") d.updatedBy = raw.updatedBy;
+  d.ads = adsSanitize(raw.ads);
   return d;
 }
 async function siteLoadState() {
@@ -793,7 +816,7 @@ async function siteSaveState(state) {
   }
 }
 function sitePublic(state) {
-  return { master: state.master, pages: state.pages, pageMessages: state.pageMessages, message: state.message, updatedAt: state.updatedAt };
+  return { master: state.master, pages: state.pages, pageMessages: state.pageMessages, message: state.message, updatedAt: state.updatedAt, ads: state.ads };
 }
 // GET /api/site-status — public read for site-gate.js (its fallback
 // when the Firestore REST read is unavailable). Never returns the
@@ -845,6 +868,33 @@ app.post("/api/admin/site-config", async (req, res) => {
   if (body.message !== undefined && typeof body.message !== "string") {
     return res.status(400).json({ ok: false, error: "message must be text.", code: "BAD_MESSAGE" });
   }
+  if (body.ads !== undefined) {
+    var ba = body.ads;
+    if (!ba || typeof ba !== "object" || Array.isArray(ba)) {
+      return res.status(400).json({ ok: false, error: "ads must be an object.", code: "BAD_ADS" });
+    }
+    if (ba.enabled !== undefined && typeof ba.enabled !== "boolean") {
+      return res.status(400).json({ ok: false, error: "ads.enabled must be true or false.", code: "BAD_ADS" });
+    }
+    if (ba.publisherId !== undefined && typeof ba.publisherId !== "string") {
+      return res.status(400).json({ ok: false, error: "ads.publisherId must be text.", code: "BAD_ADS" });
+    }
+    if (typeof ba.publisherId === "string" && ba.publisherId !== "" && !ADS_PUB_RE.test(ba.publisherId)) {
+      return res.status(400).json({ ok: false, error: "ads.publisherId must look like ca-pub- followed by digits.", code: "BAD_ADS" });
+    }
+    if (ba.slots !== undefined) {
+      if (!ba.slots || typeof ba.slots !== "object" || Array.isArray(ba.slots)) {
+        return res.status(400).json({ ok: false, error: "ads.slots must be an object.", code: "BAD_ADS" });
+      }
+      var badSlot = null;
+      Object.keys(ba.slots).forEach(function (k) {
+        var v = ba.slots[k];
+        if (ADS_SLOTS.indexOf(k) === -1) badSlot = k;
+        else if (typeof v !== "string" || (v !== "" && !ADS_SLOT_RE.test(v))) badSlot = k;
+      });
+      if (badSlot) return res.status(400).json({ ok: false, error: "Bad ad slot: " + badSlot, code: "BAD_ADS" });
+    }
+  }
   var state = await siteLoadState();
   var at = new Date().toISOString();
   if (typeof body.master === "boolean" && body.master !== state.master) {
@@ -867,6 +917,18 @@ app.post("/api/admin/site-config", async (req, res) => {
       if (v && state.pageMessages[k] !== v) { state.pageMessages[k] = v; }
       else if (!v && state.pageMessages[k]) { delete state.pageMessages[k]; }
     });
+  }
+  if (body.ads && typeof body.ads === "object") {
+    var na = { enabled: state.ads.enabled, publisherId: state.ads.publisherId, slots: Object.assign({}, state.ads.slots) };
+    if (typeof body.ads.enabled === "boolean") na.enabled = body.ads.enabled;
+    if (typeof body.ads.publisherId === "string") na.publisherId = body.ads.publisherId;
+    if (body.ads.slots && typeof body.ads.slots === "object") {
+      Object.keys(body.ads.slots).forEach(function (k) {
+        var v = body.ads.slots[k];
+        if (v === "") { delete na.slots[k]; } else { na.slots[k] = v; }
+      });
+    }
+    state.ads = na;
   }
   state.updatedAt = at;
   state.updatedBy = ident.email;

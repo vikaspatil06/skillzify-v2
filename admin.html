@@ -237,6 +237,17 @@
               </div>
             </div>
             <div id="sc-pages"></div>
+            <div style="padding:14px 0 2px;border-top:1px dashed var(--card-border);margin-top:14px">
+              <div class="sc-master" style="border-bottom:none;padding:0">
+                <div class="grow"><b>📣 Ads (AdSense)</b><div class="hint">Off by default. An ad renders only when this is on, a publisher ID is saved, and that page's placement has a slot ID. Create the units in the AdSense console first, then paste the IDs here. Note: the day you switch this on, update the About page's "No ads" card to match.</div></div>
+                <label class="sc-switch"><input type="checkbox" id="sc-ads-toggle"><span class="track"></span></label>
+              </div>
+              <div class="sc-msgedit">
+                <input class="sc-input" type="text" id="sc-ads-pub" maxlength="24" placeholder="Publisher ID — ca-pub-0000000000000000">
+              </div>
+              <div id="sc-ads-slots" style="display:grid;gap:8px;margin-top:8px"></div>
+              <div style="margin-top:10px"><button class="btn btn-sm" id="sc-ads-save" type="button">Save ad settings</button></div>
+            </div>
           </div>
         </div>
 
@@ -268,6 +279,6 @@
 <script src="assets/js/auth.js?v=9"></script>
 <script src="assets/js/sync.js?v=23"></script>
 <script src="assets/js/lazy.js?v=1"></script>
-<script src="assets/js/admin.js?v=5"></script>
+<script src="assets/js/admin.js?v=6"></script>
 </body>
 </html>

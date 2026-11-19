@@ -16,4 +16,9 @@
   <url><loc>https://vikaspatil06.github.io/skillzify-v2/community.html</loc><lastmod>2026-11-19</lastmod><changefreq>weekly</changefreq><priority>0.6</priority></url>
   <url><loc>https://vikaspatil06.github.io/skillzify-v2/about.html</loc><lastmod>2026-11-19</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc>https://vikaspatil06.github.io/skillzify-v2/contact.html</loc><lastmod>2026-11-19</lastmod><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url>
+    <loc>https://vikaspatil06.github.io/skillzify-v2/privacy.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
 </urlset>
