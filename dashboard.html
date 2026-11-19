@@ -13,6 +13,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Your Skillzify learning dashboard — progress, streaks and run history.">
   <title>Dashboard — Skillzify</title>
+  <link rel="canonical" href="https://vikaspatil06.github.io/skillzify-v2/dashboard.html">
+  <meta name="theme-color" content="#070b1a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+  <meta name="robots" content="noindex, nofollow">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Skillzify">
+  <meta property="og:title" content="Dashboard — Skillzify">
+  <meta property="og:description" content="Your Skillzify learning dashboard — progress, streaks and run history.">
+  <meta property="og:url" content="https://vikaspatil06.github.io/skillzify-v2/dashboard.html">
+  <meta property="og:image" content="https://vikaspatil06.github.io/skillzify-v2/assets/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Dashboard — Skillzify">
+  <meta name="twitter:description" content="Your Skillzify learning dashboard — progress, streaks and run history.">
+  <meta name="twitter:image" content="https://vikaspatil06.github.io/skillzify-v2/assets/og-image.png">
   <link rel="icon" href="assets/logo-light-small.png">
   <link rel="stylesheet" href="assets/css/style.css?v=42">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -37,6 +54,7 @@
     .dash-rail .dash-grid { grid-template-columns: 1fr; margin-top: 0; }
     @media (max-width: 1024px) { .dash-shell { grid-template-columns: 1fr; } }
   </style>
+<script src="assets/js/error-reporter.js?v=1"></script>
 </head>
 <body>
 
@@ -137,11 +155,12 @@
               </div>
             </div>
             <div class="dash-card">
-              <h2>🔥 Day streak</h2>
-              <div class="big" id="dash-streak" style="margin-top:12px">0🔥</div>
-              <p class="hint" id="dash-streak-best" style="margin:4px 0 0"></p>
-              <p class="hint">Learn, practise or run code on consecutive days to grow your streak.</p>
-              <a href="compiler.html" class="btn btn-sm" style="margin-top:10px">Keep it going →</a>
+              <h2>📅 This week</h2>
+              <div class="big" id="dash-week" style="margin-top:12px">0 / 5 days</div>
+              <div id="dash-week-dots" style="display:flex;gap:6px;margin-top:10px" aria-hidden="true"></div>
+              <p class="hint" id="dash-streak-line" style="margin:8px 0 0"></p>
+              <p class="hint">Aim for 5 learning days a week — rest days are part of the plan, and one missed day a week never breaks your streak.</p>
+              <a href="learn.html" class="btn btn-sm" style="margin-top:10px">Start learning →</a>
             </div>
             <div class="dash-card">
               <h2>⚡ Level</h2>
@@ -179,21 +198,21 @@
 <script src="assets/js/nav.js"></script>
 <script src="assets/js/footer.js"></script>
 <script src="assets/js/app.js?v=6"></script>
-<script src="assets/js/activity.js?v=11"></script>
+<script src="assets/js/activity.js?v=12"></script>
 <script src="assets/js/palette.js?v=2"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js?v=9"></script>
-<script src="assets/js/sync.js?v=21"></script>
-<script src="assets/js/ai.js?v=23"></script>
+<script src="assets/js/sync.js?v=23"></script>
+<script src="assets/js/lazy.js?v=1"></script>
 <script src="assets/js/lessons-index.js?v=1"></script>
 <script src="assets/js/learn-core.js?v=12"></script>
 <script src="assets/js/review.js?v=11"></script>
 <script src="assets/js/mastery.js?v=4"></script>
 <script src="assets/js/learn.js?v=17"></script>
 <script src="assets/js/practice-data.js?v=4"></script>
-<script src="assets/js/dashboard.js?v=27"></script>
+<script src="assets/js/dashboard.js?v=28"></script>
 <script src="assets/js/leaderboard.js?v=1"></script>
 </body>
 </html>

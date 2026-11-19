@@ -13,6 +13,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Skillzify admin — system status, AI usage, configuration and community at a glance. Admins only.">
   <title>Admin — Skillzify</title>
+  <link rel="canonical" href="https://vikaspatil06.github.io/skillzify-v2/admin.html">
+  <meta name="theme-color" content="#070b1a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+  <meta name="robots" content="noindex, nofollow">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Skillzify">
+  <meta property="og:title" content="Admin — Skillzify">
+  <meta property="og:description" content="Skillzify admin — system status, AI usage, configuration and community at a glance. Admins only.">
+  <meta property="og:url" content="https://vikaspatil06.github.io/skillzify-v2/admin.html">
+  <meta property="og:image" content="https://vikaspatil06.github.io/skillzify-v2/assets/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Admin — Skillzify">
+  <meta name="twitter:description" content="Skillzify admin — system status, AI usage, configuration and community at a glance. Admins only.">
+  <meta name="twitter:image" content="https://vikaspatil06.github.io/skillzify-v2/assets/og-image.png">
   <link rel="icon" href="assets/logo-light-small.png">
   <link rel="stylesheet" href="assets/css/style.css?v=42">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -89,11 +106,16 @@
     #site-controls-card { margin-top:16px; }
     #sc-pages { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:12px; }
     .sc-page { border:1px solid var(--card-border); background:var(--bg-soft); border-radius:10px; padding:12px; }
+    .ce-row { border:1px solid var(--card-border); background:var(--bg-soft); border-radius:10px; padding:10px 12px; margin-top:8px; }
+    .ce-top { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .ce-top .hint { margin-left:auto; }
+    .ce-msg { font-family:"JetBrains Mono",monospace; font-size:.82rem; margin-top:4px; word-break:break-word; }
     .sc-page-top { display:flex; align-items:center; gap:10px; }
     .sc-page-top b { flex:1; min-width:0; }
     @media (max-width:1200px) { #sc-pages { grid-template-columns:repeat(2,1fr); } }
     @media (max-width:720px) { #sc-pages { grid-template-columns:1fr; } }
   </style>
+<script src="assets/js/error-reporter.js?v=1"></script>
 </head>
 <body>
 
@@ -217,6 +239,17 @@
             <div id="sc-pages"></div>
           </div>
         </div>
+
+        <div class="card admin-card" id="client-errors-card">
+          <h2>🐞 Client errors</h2>
+          <p class="sub">Uncaught JavaScript errors reported by learners' browsers, newest first. Identical errors are deduped — the count is how many times each one fired.</p>
+          <p class="hint" id="ce-status">Loading errors…</p>
+          <div id="ce-list"></div>
+          <div style="margin-top:10px;display:flex;gap:8px">
+            <button class="btn btn-sm" id="ce-refresh" type="button">Refresh</button>
+            <button class="btn btn-sm btn-ghost" id="ce-clear" type="button">Clear all</button>
+          </div>
+        </div>
     </div>
     </div>
   </section>
@@ -227,14 +260,14 @@
 <script src="assets/js/nav.js"></script>
 <script src="assets/js/footer.js"></script>
 <script src="assets/js/app.js?v=6"></script>
-<script src="assets/js/activity.js?v=11"></script>
+<script src="assets/js/activity.js?v=12"></script>
 <script src="assets/js/palette.js?v=2"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
 <script src="assets/js/auth.js?v=9"></script>
-<script src="assets/js/sync.js?v=21"></script>
-<script src="assets/js/ai.js?v=23"></script>
-<script src="assets/js/admin.js?v=4"></script>
+<script src="assets/js/sync.js?v=23"></script>
+<script src="assets/js/lazy.js?v=1"></script>
+<script src="assets/js/admin.js?v=5"></script>
 </body>
 </html>
