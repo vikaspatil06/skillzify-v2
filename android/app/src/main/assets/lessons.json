@@ -5572,7 +5572,7 @@
         "A dict mapping extensions → folder names drives the whole sort.",
         "mkdir(exist_ok=True) safely creates folders that may already exist."
       ],
-      "code": "from pathlib import Path\n\ndef organize(folder, mapping):\n    for f in Path(folder).iterdir():\n        if f.is_file() and f.suffix in mapping:\n            dest = Path(folder) / mapping[f.suffix]\n            dest.mkdir(exist_ok=True)\n            print(f, \"->\", dest.name)\n\norganize(\"downloads\", {\".jpg\": \"images\", \".pdf\": \"docs\"})",
+      "code": "from pathlib import Path\n\ndef organize(folder, mapping):\n    for f in Path(folder).iterdir():\n        if f.is_file() and f.suffix in mapping:\n            dest = Path(folder) / mapping[f.suffix]\n            dest.mkdir(exist_ok=True)\n            print(f, \"->\", dest.name)\n\nPath(\"downloads\").mkdir(exist_ok=True)\norganize(\"downloads\", {\".jpg\": \"images\", \".pdf\": \"docs\"})",
       "quiz": [
         {
           "q": "What does Path(folder).iterdir() yield?",
