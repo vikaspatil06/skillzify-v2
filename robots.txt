@@ -1,0 +1,11 @@
+# Skillzify — robots.txt
+# Public learning content is crawlable; account and admin surfaces are not.
+User-agent: *
+Allow: /
+Disallow: /skillzify-v2/admin.html
+Disallow: /skillzify-v2/auth.html
+Disallow: /skillzify-v2/reset-password.html
+Disallow: /skillzify-v2/dashboard.html
+Disallow: /skillzify-v2/profile.html
+
+Sitemap: https://vikaspatil06.github.io/skillzify-v2/sitemap.xml

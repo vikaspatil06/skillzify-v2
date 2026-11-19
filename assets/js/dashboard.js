@@ -31,21 +31,39 @@
     });
     document.getElementById("dash-tracks").innerHTML = tracksHtml;
 
-    // Streak — single source of truth: SkillzifyActivity.streak()
-    // (counter bumped by A.log() on any activity day). The profile and
-    // the achievements read the same number, so they can never disagree.
+    // Weekly rhythm first (Tier 2, 19 Nov 2026): the headline is days
+    // learned this week against a 5-day goal; the streak rides along
+    // as a secondary line. Both read SkillzifyActivity — the same
+    // source the profile uses, so they can never disagree.
     var st = null;
     try { st = window.SkillzifyActivity ? window.SkillzifyActivity.streak() : null; } catch (e) {}
+    var wp = null;
+    try { wp = window.SkillzifyActivity && window.SkillzifyActivity.weekProgress ? window.SkillzifyActivity.weekProgress() : null; } catch (e) {}
+    if (!wp) wp = weekFallback();
+    var wkEl = document.getElementById("dash-week");
+    if (wkEl && wp) wkEl.textContent = wp.done + " / " + wp.goal + " days";
+    var dotsEl = document.getElementById("dash-week-dots");
+    if (dotsEl && wp) {
+      var dayLetters = ["M", "T", "W", "T", "F", "S", "S"];
+      var todayIdx = (new Date().getDay() + 6) % 7;
+      dotsEl.innerHTML = wp.days.map(function (on, i) {
+        return '<span style="width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:700;' +
+          (on ? "background:#6366F1;background:var(--gradient);color:#fff" : "background:var(--bg-soft);color:var(--muted);border:1px solid var(--card-border)") +
+          (i === todayIdx ? ";outline:2px solid var(--accent)" : "") + '">' + dayLetters[i] + "</span>";
+      }).join("");
+    }
     // P2-16: when SkillzifyActivity fails to load, the fallback reads
     // the raw counter — but it must replicate the lapse check, not
     // trust .count: a streak whose last activity was neither today
-    // nor yesterday has lapsed and reads 0.
+    // nor yesterday (and not freeze-bridged) has lapsed and reads 0.
     var streakN = st ? st.current : streakFallbackCount();
-    document.getElementById("dash-streak").textContent = streakN + " 🔥";
-    // Best streak beside the current one — badges stay permanent, and the
-    // two numbers together tell the truth (Vikas's call, 9 Nov).
-    var stb = document.getElementById("dash-streak-best");
-    if (stb && st && st.longest > 0) stb.textContent = "Best: " + st.longest + " days";
+    var slEl = document.getElementById("dash-streak-line");
+    if (slEl) {
+      var parts = [];
+      if (streakN > 0) parts.push("🔥 " + streakN + "-day streak");
+      if (st && st.longest > streakN) parts.push("best " + st.longest + " days");
+      slEl.textContent = parts.length ? parts.join(" · ") : "Your streak builds as you learn — no rush.";
+    }
 
     // Level
     try {
@@ -115,7 +133,7 @@
     var user = null;
     try { user = window.SkillzifyAuth ? window.SkillzifyAuth.currentUser() : null; } catch (e) {}
     el.textContent =
-      user ? "Welcome back, " + user.name.split(" ")[0] + "! Keep the streak alive 🔥" :
+      user ? "Welcome back, " + user.name.split(" ")[0] + "! Ready when you are." :
              "Your learning at a glance — log in to sync your name here.";
     if (!greetingWired && window.SkillzifyAuth && typeof window.SkillzifyAuth.onAuthChange === "function") {
       greetingWired = true;
@@ -134,8 +152,37 @@
       if (!last || isNaN(last.getTime())) return 0;
       var iso = function (d) { var m = d.getMonth() + 1, dy = d.getDate(); return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (dy < 10 ? "0" + dy : dy); };
       var lastIso = iso(last), today = iso(new Date()), yest = iso(new Date(Date.now() - 864e5));
-      return (lastIso === today || lastIso === yest) ? (raw.count || 0) : 0;
+      if (lastIso === today || lastIso === yest) return raw.count || 0;
+      // Freeze bridge (mirrors activity.js): exactly one missed day,
+      // and the counter's last freeze is absent, spent on this gap, or
+      // a week or more old.
+      var gap = Math.round((new Date(today) - new Date(lastIso)) / 864e5);
+      if (gap === 2) {
+        var f = raw.freezeDay ? iso(new Date(raw.freezeDay)) : null;
+        if (!f || f === yest || Math.round((new Date(yest) - new Date(f)) / 864e5) >= 7) return raw.count || 0;
+      }
+      return 0;
     } catch (e) { return 0; }
+  }
+
+  // Weekly-goal fallback (Tier 2, 19 Nov 2026): same Mon–Sun count
+  // activity.js weekProgress() computes, read straight from the days
+  // log when activity.js didn't load.
+  function weekFallback() {
+    try {
+      var days = JSON.parse(localStorage.getItem("skillzify_activity_days") || "{}") || {};
+      var now = new Date(), sinceMon = (now.getDay() + 6) % 7;
+      var out = { done: 0, goal: 5, days: [] };
+      for (var i = 0; i < 7; i++) {
+        var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - sinceMon + i);
+        var m = d.getMonth() + 1, dy = d.getDate();
+        var iso = d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (dy < 10 ? "0" + dy : dy);
+        var on = (days[iso] || 0) > 0;
+        out.days.push(on);
+        if (on) out.done++;
+      }
+      return out;
+    } catch (e) { return null; }
   }
 
   /* Next Up card (Mastery Engine Phase 2): the dashboard hero now shows

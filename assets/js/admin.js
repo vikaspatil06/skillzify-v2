@@ -104,6 +104,7 @@
             show("root");
             loadCommunity();
             wireSiteControls();
+            wireErrors();
             scLoad();
           })
           .catch(function () { loading = false; show("unavailable"); });
@@ -361,6 +362,66 @@
       scLoad();
     });
   }
+  /* ---- Client errors panel (Tier 2, 19 Nov 2026) ----
+     Reads GET /api/admin/errors with the same verified admin token as
+     the overview; Clear POSTs /api/admin/errors/clear. On a backend
+     without the endpoint (older deploy), the panel says so plainly. */
+  var ceWired = false;
+  function ceStatus(t) { var s = el("ce-status"); if (s) s.textContent = t || ""; }
+  function ceRender(list) {
+    var box = el("ce-list");
+    if (!box) return;
+    if (!list || !list.length) { box.innerHTML = '<p class="hint">No errors reported. 🎉</p>'; return; }
+    box.innerHTML = list.map(function (e) {
+      var when = "";
+      try { if (e.lastTs) when = new Date(e.lastTs).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }); } catch (err) {}
+      return '<div class="ce-row"><div class="ce-top"><b>' + esc(e.page || "(unknown page)") + "</b>" +
+        (e.count > 1 ? ' <span class="chip bad">×' + e.count + "</span>" : "") +
+        '<span class="hint">' + esc(when) + "</span></div>" +
+        '<div class="ce-msg">' + esc(e.msg || "") + "</div>" +
+        (e.src ? '<div class="hint">' + esc(e.src) + "</div>" : "") + "</div>";
+    }).join("");
+  }
+  function ceLoad() {
+    return idToken().then(function (tok) {
+      return fetch(BASE + "/api/admin/errors?token=" + encodeURIComponent(tok || ""))
+        .then(function (r) {
+          if (!r.ok) throw new Error("http " + r.status);
+          return r.json();
+        })
+        .then(function (d) {
+          if (!d || !d.ok) throw new Error("bad payload");
+          ceStatus("");
+          ceRender(d.errors || []);
+        });
+    }).catch(function () {
+      ceStatus("Couldn't reach the server — error list unavailable. (On a backend without client error reporting, this panel wakes up with that deploy.)");
+    });
+  }
+  function ceClear() {
+    if (!window.confirm("Clear all reported client errors?")) return;
+    idToken().then(function (tok) {
+      return fetch(BASE + "/api/admin/errors/clear?token=" + encodeURIComponent(tok || ""), { method: "POST" })
+        .then(function (r) {
+          if (!r.ok) throw new Error("http " + r.status);
+          return r.json();
+        });
+    }).then(function () {
+      ceStatus("Cleared.");
+      ceRender([]);
+    }).catch(function () {
+      ceStatus("Couldn't clear — server unreachable.");
+    });
+  }
+  function wireErrors() {
+    var card = el("client-errors-card");
+    if (!card || ceWired) return;
+    ceWired = true;
+    el("ce-refresh").addEventListener("click", ceLoad);
+    el("ce-clear").addEventListener("click", ceClear);
+    ceLoad();
+  }
+
   function wireSiteControls() {
     var card = el("site-controls-card");
     if (!card || scWired) return;

@@ -18,8 +18,9 @@
    GET /api/usage) and a shared 50,000/day pool that every non-admin
    answer reserves from, so learner traffic can never eat the
    reserve — and admin answers never touch the pool.
-   Exception (owner's rule, 16 Nov 2026): the three interview modes
-   (interview_turn, interview_score, interview_resume) have NO
+   Exception (owner's rule, 16 Nov 2026): the four interview modes
+   (interview_turn, interview_score, interview_resume, interview_gd)
+   have NO
    per-identity daily cap — an interview never stops mid-session
    because the learner used their tutor answers. Non-admin interview
    calls reserve ONLY from the shared pool (pool exhaustion is
@@ -484,12 +485,68 @@ async function dailyReserve(uid, ip, isAdmin) {
   var cap = isAdmin ? ADMIN_DAILY_CAP : (uid ? DAILY_CAP_USER : DAILY_CAP_ANON);
   return reserveKey(dailyKey(uid, ip), cap);
 }
-// The shared learner pool: ONE counter that every non-admin answer
+// The shared learner pool: a counter that every non-admin answer
 // reserves from (see USER_POOL_DAILY_CAP). Same reserve/release
-// mechanics as a per-identity cap, under its own key.
+// mechanics as a per-identity cap, under its own keys.
+//
+// Tier 3 (19 Nov 2026): the pool counter is SHARDED. As one doc
+// (`pool|<date>`) it took a transaction from every non-admin answer
+// on the site, and a Firestore document sustains only about one
+// write per second — bursts serialised and retried on it. The pool
+// now lives in up to POOL_SHARDS shard docs (`pool0|<date>` …),
+// each holding an equal share of the budget; a reservation picks a
+// shard at random and transacts only there, falling through to the
+// next shard when one is full, so a refusal still means the whole
+// pool is genuinely exhausted. The shard count shrinks for tiny
+// budgets (tests, env overrides) so small caps stay exact:
+// shards = min(POOL_SHARDS, budget), per-shard = ceil(budget /
+// shards) — the worst-case overshoot is under one answer per shard
+// (< 0.02% at the 50,000 default, and exact whenever the budget
+// divides evenly, as 50,000 / 10 does). A release must name the
+// shard its reservation used, so dailyReservePool returns the
+// shard KEY (or null when the pool is exhausted), not a boolean.
+// Migration: a pre-sharding deploy may already have counted answers
+// in the legacy `pool|<date>` doc today. Nothing writes that doc
+// anymore, so its count is frozen — read once per process per day
+// and subtracted from the budget.
 function poolKey() { return "pool|" + dayStr(); }
-async function dailyReservePool() { return reserveKey(poolKey(), USER_POOL_DAILY_CAP); }
-async function dailyReleasePool() { return releaseKey(poolKey()); }
+const POOL_SHARDS = 10;
+function poolShardKey(i) { return "pool" + i + "|" + dayStr(); }
+var legacyPoolCache = { date: "", promise: null };
+function legacyPoolCount() {
+  var today = dayStr();
+  if (legacyPoolCache.date !== today || !legacyPoolCache.promise) {
+    legacyPoolCache = { date: today, promise: capGetCount(poolKey()).catch(function () { return 0; }) };
+  }
+  return legacyPoolCache.promise;
+}
+async function poolBudget() {
+  var legacy = await legacyPoolCount();
+  return { budget: Math.max(0, USER_POOL_DAILY_CAP - legacy), legacy: legacy };
+}
+async function dailyReservePool() {
+  var b = await poolBudget();
+  if (b.budget <= 0) return null;
+  var shards = Math.max(1, Math.min(POOL_SHARDS, b.budget));
+  var perShard = Math.ceil(b.budget / shards);
+  var start = Math.floor(Math.random() * shards);
+  for (var n = 0; n < shards; n++) {
+    var key = poolShardKey((start + n) % shards);
+    if (await reserveKey(key, perShard)) return key;
+  }
+  return null;
+}
+async function dailyReleasePool(shardKey) {
+  if (shardKey) return releaseKey(shardKey);
+}
+// Total pool consumption today (legacy doc + every shard) — read by
+// the admin overview. Shards beyond the effective count are always
+// zero, so summing all POOL_SHARDS is exact.
+async function poolUsedCount() {
+  var total = await legacyPoolCount();
+  for (var i = 0; i < POOL_SHARDS; i++) total += await capGetCount(poolShardKey(i));
+  return total;
+}
 async function reserveKey(key, cap) {
   initCapStore();
   if (capStore === "firestore" && capDb) {
@@ -584,7 +641,7 @@ async function capSnapshot() {
         var m = id.match(/_(\d{4}-\d{2}-\d{2})$/);
         if (!m) return;
         var head = id.slice(0, id.length - m[0].length);
-        if (head === "pool") return; // control counter, not an identity
+        if (head.indexOf("pool") === 0) return; // pool shards are control counters, not identities
         out.push({ type: head.charAt(0) === "u" ? "user" : "anon", who: head.slice(2), date: m[1], count: typeof data.count === "number" ? data.count : 0 });
       });
       return out;
@@ -595,7 +652,7 @@ async function capSnapshot() {
   daily.forEach(function (rec, key) {
     var parts = String(key).split("|");
     if (parts.length !== 2) return;
-    if (parts[0] === "pool") return; // control counter, not an identity
+    if (parts[0].indexOf("pool") === 0) return; // pool shards are control counters, not identities
     out.push({ type: parts[0].charAt(0) === "u" ? "user" : "anon", who: parts[0].slice(2), date: parts[1], count: rec && typeof rec.count === "number" ? rec.count : 0 });
   });
   return out;
@@ -638,7 +695,7 @@ app.get("/api/admin/overview", async (req, res) => {
   // from identity totals: interview calls draw from the pool WITHOUT
   // an identity reservation (owner's rule, 16 Nov 2026), so deriving
   // it as (identity total − admin) would undercount the pool.
-  var poolUsed = await capGetCount(poolKey());
+  var poolUsed = await poolUsedCount();
   res.json({
     ok: true,
     date: today,
@@ -883,6 +940,9 @@ function isInterviewScore(o) {
         (s.evidence == null || typeof s.evidence === "string");
     });
 }
+function isInterviewGd(o) {
+  return o && typeof o.reply === "string" && !!o.reply.trim() && o.reply.length <= 700;
+}
 function isInterviewResume(o) {
   return o && Array.isArray(o.skills) && o.skills.length <= 30 &&
     o.skills.every(function (s) { return typeof s === "string"; }) &&
@@ -924,6 +984,12 @@ const MODES = {
   interview_turn: { style: "You are a professional job interviewer conducting a real placement interview. You speak briefly and naturally, like a human interviewer — never like a tutor. You NEVER reveal answers, solutions, hints or the scoring rubric, and you never praise or criticise an answer's correctness directly; you react neutrally and move the interview forward. " + jsonOnly, json: true, validate: isInterviewTurn, maxTokens: 900 },
   interview_score: { style: "You are a strict but fair interview assessor. You score candidate answers against the rubric key points provided, quote the candidate's own words as evidence, accept any technically correct alternative approach, and never invent things the candidate did not say. " + jsonOnly, json: true, validate: isInterviewScore, maxTokens: 2600 },
   interview_resume: { style: "You are a recruitment screening analyst. You extract only what the resume actually states — never invent skills, projects or experience that are not in the text. " + jsonOnly, json: true, validate: isInterviewResume, maxTokens: 2000 },
+  // Phase 4 extension (Tier 2, 19 Nov 2026): one AI-reactive exchange
+  // in the Group Discussion — a simulated participant answers the
+  // candidate's actual point, in character. An interview mode, so the
+  // pool-only rule above applies; the client falls back to the
+  // scripted participant line whenever this call fails.
+  interview_gd: { style: "You are a named participant in a group discussion at a campus placement drive in India — a fellow candidate, not an examiner. You speak in character, briefly and naturally. You react to what the candidate just said: agree and extend it, or respectfully counter it. You never score the candidate, never give feedback on their performance, never mention being an AI or a simulation, and never break character. " + jsonOnly, json: true, validate: isInterviewGd, maxTokens: 300 },
 };
 
 function buildPrompt(mode, code, errText, context, stage) {
@@ -981,6 +1047,10 @@ function buildPrompt(mode, code, errText, context, stage) {
       // `code` is the resume text (client-truncated); `context` names the
       // target role and experience level.
       return "Analyse this resume for a " + (context || "software role") + " interview.\n\nRESUME TEXT:\n" + code + "\n\nReply with ONLY this JSON: {\"skills\":[\"...\"],\"projects\":[{\"title\":\"...\",\"tech\":\"...\",\"summary\":\"...\"}],\"quality\":0,\"summary\":\"...\",\"questions\":[{\"q\":\"...\",\"topic\":\"...\",\"points\":[\"...\"]}]}\nRules:\n- \"skills\": the technical skills actually named or clearly demonstrated in the resume (max 15).\n- \"projects\": the real projects in the resume (max 5); \"tech\" = the stack it names; \"summary\" = one line on what the project does.\n- \"quality\": a 0-100 resume quality score based on clarity, quantified impact, and how completely skills/projects/experience are described.\n- \"summary\": 2-3 sentences on the candidate's profile, strictly from the resume.\n- \"questions\": 4-6 interview questions grounded ONLY in this resume's actual projects and skills (architecture choices, trade-offs, scaling, debugging their own project) — never generic questions. Each question gets 2-4 \"points\": the key things a strong answer should cover. \"topic\" is a short tag like \"Project: <name>\" or the skill name.";
+    case "interview_gd":
+      // `code` carries JSON {topic, brief, name, stance, opening};
+      // `errText` is the candidate's contribution, verbatim.
+      return "GROUP DISCUSSION (JSON):\n" + code + "\n\nTHE CANDIDATE JUST SAID:\n" + errText + "\n\nReply with ONLY this JSON: {\"reply\":\"...\"} — your next spoken line AS the participant named in the JSON, holding the stance named there. Rules:\n- At most 2 short sentences, conversational, in character — a fellow candidate in a real GD.\n- React to the candidate's actual point: agree and add something new, or respectfully counter with a reason. Do not repeat your opening, do not summarise the discussion, and do not ask the candidate a direct interview question.\n- Never comment on how well the candidate is doing.";
     default:
       return errText
         ? "A student ran this Python code and got this error. First explain the error in simple terms and exactly how to fix it, then give the walkthrough structure above for the code.\n\nCODE:\n" +
@@ -1003,6 +1073,89 @@ function providerError(status) {
   if (status === 503) return { status: 503, code: "OVERLOADED", error: "AI provider is overloaded — try again in a moment." };
   return { status: 502, code: "MODEL_ERROR", error: "AI provider error (HTTP " + status + ")." };
 }
+
+/* ---- Client error reporting (Tier 2, 19 Nov 2026) ----
+   Pages POST uncaught JS errors to /api/error-report (public — errors
+   matter most for signed-out learners; payloads are strictly shaped
+   and scrubbed: page path without query, message truncated, long
+   opaque tokens masked, no stack traces, no IPs or identities kept).
+   Reports dedupe by (page, message, source) into a counter, held in
+   memory and mirrored to Firestore (collection clientErrors) when the
+   cap store's credential is configured, so they survive restarts.
+   The admin reads and clears them via /api/admin/errors behind the
+   same verified-admin guard as /api/admin/overview. */
+const ERR_COLLECTION = "clientErrors";
+const errCrypto = require("crypto");
+const errMem = new Map(); // hash -> {page, msg, src, count, firstTs, lastTs}
+function errHash(page, msg, src) { return errCrypto.createHash("sha1").update(page + "|" + msg + "|" + src).digest("hex"); }
+function errScrub(s, max) {
+  return String(s == null ? "" : s).replace(/\s+/g, " ").replace(/[A-Za-z0-9_-]{40,}/g, "…").trim().slice(0, max);
+}
+app.post("/api/error-report", async (req, res) => {
+  var b = req.body || {};
+  var page = errScrub(b.page, 120).split("?")[0];
+  var msg = errScrub(b.msg, 300);
+  var src = errScrub(b.src, 200);
+  if (!msg) return res.status(400).json({ ok: false, error: "msg required" });
+  var now = Date.now();
+  var hash = errHash(page, msg, src);
+  var cur = errMem.get(hash);
+  if (cur) { cur.count++; cur.lastTs = now; }
+  else {
+    if (errMem.size >= 200) { // stay bounded: drop the stalest entry
+      var oldest = null, oldestTs = Infinity;
+      errMem.forEach(function (v, k) { if (v.lastTs < oldestTs) { oldestTs = v.lastTs; oldest = k; } });
+      if (oldest) errMem.delete(oldest);
+    }
+    errMem.set(hash, { page: page, msg: msg, src: src, count: 1, firstTs: now, lastTs: now });
+  }
+  initCapStore();
+  if (capStore === "firestore" && capDb) {
+    try {
+      var ref = capDb.collection(ERR_COLLECTION).doc(hash);
+      var snap = await ref.get();
+      var d = snap.exists ? snap.data() : null;
+      await ref.set({ page: page, msg: msg, src: src, count: ((d && d.count) || 0) + 1, firstTs: (d && d.firstTs) || now, lastTs: now });
+    } catch (e) { /* the memory copy stands; the mirror is best-effort */ }
+  }
+  return res.status(204).end();
+});
+async function errAdminGuard(req, res) {
+  var ident = await resolveIdentity(req, null, req.query || {});
+  if (!ident.uid || ident.email !== ADMIN_EMAIL) {
+    res.status(403).json({ ok: false, error: "Admins only.", code: "NOT_ADMIN" });
+    return false;
+  }
+  return true;
+}
+app.get("/api/admin/errors", async (req, res) => {
+  if (!(await errAdminGuard(req, res))) return;
+  initCapStore();
+  if (capStore === "firestore" && capDb) {
+    try {
+      var snap = await capDb.collection(ERR_COLLECTION).orderBy("lastTs", "desc").limit(50).get();
+      var list = [];
+      snap.forEach(function (doc) { var d = doc.data(); list.push({ page: d.page, msg: d.msg, src: d.src, count: d.count, firstTs: d.firstTs, lastTs: d.lastTs }); });
+      return res.json({ ok: true, source: "firestore", errors: list });
+    } catch (e) { /* fall through to the memory copy */ }
+  }
+  var mem = Array.from(errMem.values()).sort(function (a, b) { return b.lastTs - a.lastTs; }).slice(0, 50);
+  return res.json({ ok: true, source: "memory", errors: mem });
+});
+app.post("/api/admin/errors/clear", async (req, res) => {
+  if (!(await errAdminGuard(req, res))) return;
+  errMem.clear();
+  initCapStore();
+  if (capStore === "firestore" && capDb) {
+    try {
+      var snap = await capDb.collection(ERR_COLLECTION).limit(200).get();
+      var batch = capDb.batch();
+      snap.forEach(function (doc) { batch.delete(doc.ref); });
+      await batch.commit();
+    } catch (e) { /* memory is cleared regardless */ }
+  }
+  return res.json({ ok: true });
+});
 
 app.post("/api/explain", async (req, res) => {
   const started = Date.now();
@@ -1031,7 +1184,7 @@ app.post("/api/explain", async (req, res) => {
   // finish an interview. Non-admin interview calls reserve only from
   // the shared pool below; admin interview calls reserve from the
   // admin reserve, exactly like other admin answers.
-  var isInterviewMode = mode === "interview_turn" || mode === "interview_score" || mode === "interview_resume";
+  var isInterviewMode = mode === "interview_turn" || mode === "interview_score" || mode === "interview_resume" || mode === "interview_gd";
   var myCap = isAdminUser ? ADMIN_DAILY_CAP : (uid ? DAILY_CAP_USER : DAILY_CAP_ANON);
   var reserved = false;
   if (isAdminUser || !isInterviewMode) {
@@ -1046,10 +1199,10 @@ app.post("/api/explain", async (req, res) => {
   // refusal releases the identity reservation again — the caller
   // used nothing. For non-admin interview calls the pool is the ONLY
   // reservation made, so a pool refusal has nothing else to release.
-  var poolReserved = false;
+  var poolShard = null;
   if (!isAdminUser) {
-    poolReserved = await dailyReservePool();
-    if (!poolReserved) {
+    poolShard = await dailyReservePool();
+    if (!poolShard) {
       // Release the identity reservation ONLY if this request made
       // one — releasing unconditionally would eat a reservation that
       // belongs to an earlier, unrelated call by the same identity.
@@ -1059,7 +1212,7 @@ app.post("/api/explain", async (req, res) => {
   }
   async function releaseCap() {
     if (reserved) { reserved = false; await dailyRelease(uid, clientIp(req)); }
-    if (poolReserved) { poolReserved = false; await dailyReleasePool(); }
+    if (poolShard) { var ps = poolShard; poolShard = null; await dailyReleasePool(ps); }
   }
   // A success the client never received (disconnected before delivery —
   // P1-23) releases the reservation instead of burning a daily answer
@@ -1385,6 +1538,7 @@ app.use(express.static(path.join(__dirname), {
     // request URL -> no-cache (stored, but revalidated via ETag on
     // every load, so a 304 keeps it cheap); ?v= -> cache for a day.
     var url = (res.req && (res.req.originalUrl || res.req.url)) || "";
+    if (/\.webmanifest$/.test(filePath)) res.setHeader("Content-Type", "application/manifest+json");
     var versioned = /[?&]v=/.test(url);
     if (/\.html?$/.test(filePath) || !versioned) res.setHeader("Cache-Control", "no-cache");
     else res.setHeader("Cache-Control", "public, max-age=86400");

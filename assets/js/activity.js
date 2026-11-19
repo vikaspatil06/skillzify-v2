@@ -82,14 +82,32 @@
     var t = new Date(v);
     return isNaN(t.getTime()) ? null : isoDay(t);
   }
+  function dayDiff(a, b) { return Math.round((new Date(b) - new Date(a)) / 864e5); } // b − a, in days
+  // Silent streak freeze (Tier 2, 19 Nov 2026): one missed day never
+  // breaks a streak, at most once per rolling 7 days. "Silent" is the
+  // point — no banner, no guilt copy; the streak simply survives. The
+  // counter's freezeDay records the missed day the last freeze covered,
+  // so the rule survives reloads and rides along when the counter
+  // syncs cross-device (an extra field; older readers ignore it).
+  function freezeCovers(s, missedDay) {
+    if (!missedDay) return false;
+    var f = normDay(s.freezeDay);
+    if (!f) return true;                  // never used
+    if (f === missedDay) return true;     // already spent on this exact gap
+    return dayDiff(f, missedDay) >= 7;    // last freeze was a week or more earlier
+  }
   // {last, count, current} — current is 0 when the streak has lapsed
-  // (last activity was neither today nor yesterday); count keeps the
+  // (last activity was neither today nor yesterday, and the gap is
+  // more than the one day the freeze can bridge); count keeps the
   // last completed length so `longest` stays correct.
   function streakCounter() {
     var s = get(STREAK_KEY, { last: null, count: 0 });
     var last = normDay(s.last);
     var today = isoDay(new Date()), yest = isoDay(new Date(Date.now() - 864e5));
     var current = (last === today || last === yest) ? (s.count || 0) : 0;
+    // Frozen, not lapsed: exactly one missed day (yesterday) and the
+    // freeze covers it — the streak stays alive until today ends.
+    if (!current && last && dayDiff(last, today) === 2 && freezeCovers(s, yest)) current = s.count || 0;
     return { last: last, count: s.count || 0, current: current };
   }
   function bumpStreakCounter() {
@@ -101,7 +119,12 @@
     // today still counts as a continuation, never a reset to 1.
     if (last && last > today) return s;
     if (last === today) return s; // already counted today
-    s.count = (last === yest) ? (s.count || 0) + 1 : 1;
+    if (last === yest) s.count = (s.count || 0) + 1;
+    else if (last && dayDiff(last, today) === 2 && freezeCovers(s, yest)) {
+      // The freeze silently bridges the single missed day.
+      s.count = (s.count || 0) + 1;
+      s.freezeDay = yest;
+    } else s.count = 1;
     s.last = today;
     set(STREAK_KEY, s);
     try { if (window.SkillzifySync && typeof window.SkillzifySync.markDirty === "function") window.SkillzifySync.markDirty(); } catch (e) {}
@@ -131,6 +154,25 @@
     // another device) than this device's local days log.
     if (c.count > longest) longest = c.count;
     return { current: c.current, longest: longest };
+  }
+
+  // Weekly goal (Tier 2, 19 Nov 2026): learning is framed by the week,
+  // not by an unbroken chain — 5 active days in a Mon–Sun week is a
+  // great week, rest days included. Derived from the same days log
+  // the heatmap uses; nothing new is stored.
+  var WEEK_GOAL = 5;
+  function weekProgress() {
+    var days = dayCounts();
+    var now = new Date();
+    var sinceMon = (now.getDay() + 6) % 7; // Monday = 0
+    var out = { done: 0, goal: WEEK_GOAL, days: [] };
+    for (var i = 0; i < 7; i++) {
+      var iso = isoDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - sinceMon + i));
+      var on = (days[iso] || 0) > 0;
+      out.days.push(on);
+      if (on) out.done++;
+    }
+    return out;
   }
 
   /* ---------------- achievements ---------------- */
@@ -484,7 +526,7 @@
 
   window.SkillzifyActivity = {
     log: log, feed: feed, dayCounts: dayCounts, runCount: runCount,
-    streak: streak, bumpStreak: bumpStreakCounter, achievements: achievements, unlocked: unlocked,
+    streak: streak, bumpStreak: bumpStreakCounter, weekProgress: weekProgress, achievements: achievements, unlocked: unlocked,
     identicon: identicon,
     pins: pins, togglePin: togglePin, isPinned: isPinned,
     stars: stars, toggleStar: toggleStar, isStarred: isStarred,

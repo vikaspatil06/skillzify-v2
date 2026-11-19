@@ -6,7 +6,8 @@
    Syncs lesson progress, XP, streaks, exercise attempts and the
    profile between this website and the Android app via Cloud
    Firestore, per firestore-spec.md v1. The Code Studio workspace
-   (compiler files) syncs website-to-website only. Merge rules MUST stay
+   (compiler files) syncs website-to-website only, in its own
+   document since v23 (see the workspace note below). Merge rules MUST stay
    identical on web + Android:
 
    - lessons: UNION of keys
@@ -47,6 +48,14 @@
      survives only when its mtime is newer than its tombstone; an
      edit after the deletion resurrects it. tabs/active are
      last-write-wins by updatedAt, filtered to surviving files.
+     Since v23 (Tier 3, 19 Nov 2026) the workspace lives in its OWN
+     document, users/{uid}/syncData/workspace, written only when it
+     actually changes; the main doc carries just a `wsUpdatedAt`
+     pointer so other devices know when to fetch it. A pre-v23 cloud
+     doc's inline `workspace` field is folded into the merge and
+     deleted on the first v23 cycle — the migration is automatic and
+     self-healing (a stale pre-v23 client re-writing the field is
+     folded and migrated again on the next v23 cycle).
    - updatedAt: set to now on every local write that gets pushed
 
    localStorage streak dates are NORMALIZED to yyyy-MM-dd for the
@@ -943,6 +952,32 @@
       return root.firebase.firestore();
     } catch (e) { return null; }
   }
+  /* Lazy Firestore SDK (19 Nov 2026): most pages no longer ship the
+     firestore-compat script tag (it is ~100 KB gzip and only a signed-in
+     session ever uses it). ensureFirestore injects it on first need and
+     calls back true/false. Pages that still ship the tag statically
+     (admin, community, dashboard, interview, passport, profile) skip
+     straight through. On load failure the waiters get false and a later
+     call may retry. */
+  var fsState = "idle", fsWaiters = [];
+  function fsFlush(ok) {
+    var w = fsWaiters; fsWaiters = [];
+    for (var i = 0; i < w.length; i++) { try { w[i](ok); } catch (e) {} }
+  }
+  function ensureFirestore(cb) {
+    if (typeof cb !== "function") return;
+    if (root.firebase && root.firebase.firestore) { cb(true); return; }
+    fsWaiters.push(cb);
+    if (fsState === "loading") return;
+    fsState = "loading";
+    try {
+      var s = document.createElement("script");
+      s.src = "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js";
+      s.onload = function () { fsState = "ready"; fsFlush(!!(root.firebase && root.firebase.firestore)); };
+      s.onerror = function () { fsState = "idle"; fsFlush(false); };
+      (document.head || document.documentElement).appendChild(s);
+    } catch (e) { fsState = "idle"; fsFlush(false); }
+  }
   function uid() {
     try {
       var u = root.firebase && root.firebase.auth && root.firebase.auth().currentUser;
@@ -952,14 +987,20 @@
   function userDoc(d, u) {
     // Layout: ONE document per user at users/{uid} with map fields:
     // { profile: {...}, progress: {...}, exercises: {...}, paths: {...},
-    //   customPaths: {...}, workspace: {...}, projects: {...},
+    //   customPaths: {...}, projects: {...},
     //   placement: {...}, counters: {...}, achievements: {...} }. The Android app reads its fields by name
-    // and ignores the rest, so the extra customPaths/workspace fields are safe.
-    // NOTE: `workspace` is website-only for now — the Android app has its
-    // own local compiler workspace and does not read this field.
+    // and ignores the rest, so the extra fields are safe.
     // (A doc ref needs an even number of path segments; users/{uid}/profile
     // would be a collection path and is invalid.)
     return d.doc("users/" + u);
+  }
+  function workspaceDoc(d, u) {
+    // The Code Studio workspace's own document (v23 split): up to
+    // 700 KB of files no longer ride — and get rewritten with — every
+    // progress sync. Website-only: the Android app has its own local
+    // compiler workspace and never reads this. Owner-only rules live
+    // in firestore.rules, mirroring the parent doc.
+    return d.doc("users/" + u + "/syncData/workspace");
   }
 
   /* ---------- status ---------- */
@@ -986,9 +1027,13 @@
   // It never writes merged state locally — the caller does that only
   // AFTER the cloud write commits, so a failed/aborted transaction
   // leaves local state untouched.
-  function buildMerged(data) {
+  function buildMerged(data, wsData) {
     data = data || {};
-    var cloud = [data.profile || null, data.progress || null, data.exercises || null, data.paths || null, data.customPaths || null, data.workspace || null, data.reviews || null, data.projects || null];
+    // The effective cloud workspace folds BOTH sources: the legacy
+    // inline field (pre-v23 docs, or a stale pre-v23 client) and the
+    // workspace doc. Per-file LWW makes the fold order-safe.
+    var cloudWs = mergeWorkspace(data.workspace || null, wsData || null);
+    var cloud = [data.profile || null, data.progress || null, data.exercises || null, data.paths || null, data.customPaths || null, cloudWs, data.reviews || null, data.projects || null];
     var mergedProfile = mergeProfile(readLocalProfile(), cloud[0]);
     var mergedProgress = mergeProgress(readLocalProgress(), cloud[1]);
     var mergedExercises = mergeExercises(readLocalExercises(), cloud[2]);
@@ -1092,16 +1137,22 @@
     if (Object.keys(achPayload).length) payload.achievements = achPayload;
     if (Object.keys(mergedActivityDays).length) payload.activityDays = mergedActivityDays;
     var wsSkipped = false;
+    var wsPayload = null;
     if (wsHasFiles && !workspaceTooBig(mergedWorkspace)) {
-      payload.workspace = mergedWorkspace;
+      // The workspace itself goes to its own doc (see syncCycleWith);
+      // the main payload carries only the pointer other devices use
+      // to decide whether to fetch that doc.
+      wsPayload = mergedWorkspace;
+      payload.wsUpdatedAt = mergedWorkspace.updatedAt;
     } else if (wsHasFiles) {
       wsSkipped = true; // too large for the 1 MiB doc limit: keep cloud's copy
     }
+    var wsChanged = !!wsPayload && contentChanged(mergedWorkspace, cloud[5]);
     if (rvHasItems && !reviewsTooBig(mergedReviews)) payload.reviews = mergedReviews;
     return {
       profile: mergedProfile, progress: mergedProgress, exercises: mergedExercises,
       paths: mergedPaths, customPaths: mergedCustomPaths, workspace: mergedWorkspace,
-      reviews: mergedReviews, projects: mergedProjects, placement: mergedPlacement, counters: mergedCounters, achievements: mergedAchievements, activityDays: mergedActivityDays, payload: payload, wsSkipped: wsSkipped
+      reviews: mergedReviews, projects: mergedProjects, placement: mergedPlacement, counters: mergedCounters, achievements: mergedAchievements, activityDays: mergedActivityDays, payload: payload, wsSkipped: wsSkipped, wsPayload: wsPayload, wsChanged: wsChanged
     };
   }
   // Write a merged result locally + report success. Runs only after the
@@ -1138,22 +1189,50 @@
   // write committed, false on any failure (previously the set() error was
   // swallowed with .catch(function () {}) and syncCycle resolved true
   // regardless, so handleLogout wiped unsynced progress on offline logout).
+  function deleteSentinel() {
+    try {
+      var F = root.firebase && root.firebase.firestore && root.firebase.firestore.FieldValue;
+      return (F && typeof F.delete === "function") ? F.delete() : null;
+    } catch (e) { return null; }
+  }
   function syncCycleWith(d, u) {
     if (!d || !u) { setStatus("Sync offline"); return Promise.resolve(false); }
     setStatus("Syncing\u2026");
-    var ref;
-    try { ref = userDoc(d, u); } catch (e) { setStatus("Sync offline"); return Promise.resolve(false); }
+    var ref, wsRef;
+    try { ref = userDoc(d, u); wsRef = workspaceDoc(d, u); } catch (e) { setStatus("Sync offline"); return Promise.resolve(false); }
+    // The main payload never carries the workspace anymore; when the
+    // cloud doc still has the legacy inline field, a FieldValue.delete
+    // sentinel in the same merge-write removes it (migration). Where
+    // no sentinel is available (test rigs), the field is simply left
+    // in place — the fold keeps reading it correctly either way.
+    function mainPayload(m, legacyPresent) {
+      if (!legacyPresent) return m.payload;
+      var del = deleteSentinel();
+      if (!del) return m.payload;
+      var pl = Object.assign({}, m.payload);
+      pl.workspace = del;
+      return pl;
+    }
+    function wsWriteNeeded(m, wsSnap) {
+      return !!(m.wsPayload && (m.wsChanged || !(wsSnap && wsSnap.exists)));
+    }
+    function finishCycle(m) {
+      if (m.workspace && m.workspace.updatedAt > wsCloudStamp) wsCloudStamp = m.workspace.updatedAt;
+      return applyMerged(m);
+    }
     if (d.runTransaction && typeof d.runTransaction === "function") {
       return d.runTransaction(function (tx) {
         return tx.get(ref).then(function (snap) {
-          var data = (snap && snap.exists) ? snap.data() : {};
-          var m = buildMerged(data);
-          tx.set(ref, m.payload, { merge: true });
-          return m;
+          var data = (snap && snap.exists) ? (snap.data() || {}) : {};
+          return tx.get(wsRef).then(function (wsSnap) {
+            var wsData = (wsSnap && wsSnap.exists) ? wsSnap.data() : null;
+            var m = buildMerged(data, wsData);
+            tx.set(ref, mainPayload(m, !!data.workspace), { merge: true });
+            if (wsWriteNeeded(m, wsSnap)) tx.set(wsRef, m.wsPayload);
+            return m;
+          });
         });
-      }).then(function (m) {
-        return applyMerged(m);
-      }).catch(function () {
+      }).then(finishCycle).catch(function () {
         setStatus("Sync offline");
         return false;
       });
@@ -1163,15 +1242,25 @@
     // write, so a concurrent edit is merged in instead of overwritten.
     return ref.get()
       .then(function (snap) {
-        var data = (snap && snap.exists) ? snap.data() : {};
-        var m = buildMerged(data);
-        return ref.get().then(function (snap2) {
-          var data2 = (snap2 && snap2.exists) ? snap2.data() : {};
-          if (!deepEq(data, data2)) m = buildMerged(data2);
-          return ref.set(m.payload, { merge: true }).then(function () { return m; });
+        var data = (snap && snap.exists) ? (snap.data() || {}) : {};
+        return wsRef.get().then(function (wsSnap) {
+          var wsData = (wsSnap && wsSnap.exists) ? wsSnap.data() : null;
+          var m = buildMerged(data, wsData);
+          return ref.get().then(function (snap2) {
+            var data2 = (snap2 && snap2.exists) ? (snap2.data() || {}) : {};
+            if (!deepEq(data, data2)) m = buildMerged(data2, wsData);
+            // Sequential .then chaining (never Promise.all): sync.js
+            // runs against whatever promise dialect the SDK — or a
+            // test rig's synchronous thenables — provides.
+            var mainWrite = ref.set(mainPayload(m, !!data.workspace || !!data2.workspace), { merge: true });
+            if (wsWriteNeeded(m, wsSnap)) {
+              return mainWrite.then(function () { return wsRef.set(m.wsPayload); }).then(function () { return m; });
+            }
+            return mainWrite.then(function () { return m; });
+          });
         });
       })
-      .then(function (m) { return applyMerged(m); })
+      .then(finishCycle)
       .catch(function () {
         setStatus("Sync offline");
         return false;
@@ -1198,6 +1287,31 @@
      changes push via syncCycle/markDirty. hasPendingWrites skips the
      echo of our own writes, so this cannot loop. */
   var unsubSnap = null;
+  // The wsUpdatedAt stamp of the workspace doc this device has
+  // already merged (via a cycle or a pointer-triggered fetch).
+  var wsCloudStamp = 0;
+  function fireSyncEvent() {
+    try {
+      if (typeof CustomEvent === "function")
+        window.dispatchEvent(new CustomEvent("skillzify-sync", { detail: { at: Date.now() } }));
+    } catch (e) {}
+  }
+  function maybePullWorkspace(data) {
+    var stamp = (data && typeof data.wsUpdatedAt === "number") ? data.wsUpdatedAt : 0;
+    if (!stamp || stamp <= wsCloudStamp) return;
+    var d, u;
+    try { d = db(); u = uid(); } catch (e) { return; }
+    if (!d || !u) return;
+    wsCloudStamp = stamp; // claim up-front so snapshot bursts don't refetch
+    try {
+      workspaceDoc(d, u).get().then(function (snap) {
+        if (!snap || !snap.exists) return;
+        writeLocalWorkspace(mergeWorkspace(readLocalWorkspace(), snap.data() || null));
+        setStatus("Synced \u2713 " + fmtTime(Date.now()));
+        fireSyncEvent();
+      }).catch(function () {});
+    } catch (e) {}
+  }
   function pullOnly(data) {
     var cloud = [data.profile || null, data.progress || null, data.exercises || null];
     writeLocalProfile(mergeProfile(readLocalProfile(), cloud[0]));
@@ -1205,7 +1319,11 @@
     writeLocalExercises(mergeExercises(readLocalExercises(), cloud[2]));
     writeLocalPaths(mergePaths(readLocalPaths(), data.paths || null));
     writeLocalCustomPaths(mergeCustomPaths(readLocalCustomPaths(), data.customPaths || null));
-    writeLocalWorkspace(mergeWorkspace(readLocalWorkspace(), data.workspace || null));
+    // Workspace: the inline field is legacy (pre-v23 writers) — fold
+    // it when present; the live copy sits in its own doc, fetched
+    // only when the wsUpdatedAt pointer says it changed.
+    if (data.workspace) writeLocalWorkspace(mergeWorkspace(readLocalWorkspace(), data.workspace || null));
+    maybePullWorkspace(data);
     writeLocalReviews(mergeReviews(readLocalReviews(), data.reviews || null));
     writeLocalProjects(mergeProjects(readLocalProjects(), data.projects || null));
     writeLocalPlacement(mergePlacement(readLocalPlacement(), data.placement || null));
@@ -1306,7 +1424,14 @@
         try {
           if (u) {
             lsSet(LS.LAST_UID, u.uid); // remember: this device had a signed-in session
-            syncCycle(); startListener();
+            // On lazy pages the Firestore SDK may not have loaded yet;
+            // fetch it first, then start exactly as before. The initial
+            // syncCycle reads local state at push time, so mutations
+            // made during the brief load are included.
+            ensureFirestore(function (ok) {
+              if (ok) { syncCycle(); startListener(); }
+              else setStatus("Sync offline");
+            });
           } else {
             stopListener();
             if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
@@ -1328,10 +1453,23 @@
                   else setStatus("Sync failed \u2014 progress kept on this device");
                 });
               } else {
-                // No Firestore handle at all, so no push can be attempted
-                // (in production a signed-in session always has one);
-                // wipe as before rather than stranding the data.
-                clearLocalUserData();
+                // No Firestore handle yet — on lazy pages the SDK may
+                // simply not have loaded. Load it and retry the last
+                // push; wipe only after a successful push. If the SDK
+                // cannot load, keep the data (same philosophy as
+                // handleLogout) so a later sign-in can retry the push
+                // instead of the progress being deleted unuploaded.
+                ensureFirestore(function (loaded) {
+                  var d2 = loaded ? db() : null;
+                  if (d2) {
+                    syncCycleWith(d2, lastUid).then(function (ok) {
+                      if (ok) clearLocalUserData();
+                      else setStatus("Sync failed \u2014 progress kept on this device");
+                    });
+                  } else {
+                    setStatus("Sync failed \u2014 progress kept on this device");
+                  }
+                });
               }
             }
             setStatus("Sync offline"); // stop syncing; keep cloud data

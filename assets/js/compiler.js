@@ -27,6 +27,21 @@
 
   var pyodide = null;
   var pyodideLoading = false; // guards double-load + retry (P2-35)
+  /* Worker engine (19 Nov 2026): Pyodide runs in a Web Worker by
+     default, so a runaway loop can no longer freeze the tab and Stop
+     truly kills the interpreter (terminate + respawn). The classic
+     main-thread engine below remains as the automatic fallback when
+     a Worker cannot start, and can be forced with
+     localStorage skillzify_engine="main". */
+  var PY_BASE = (typeof window !== "undefined" && window.SKILLZIFY_PYODIDE_BASE) || "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/";
+  var pyWorker = null, workerReady = false, workerBooting = false, workerBootTimer = null;
+  var workerRunSettle = null, checkSeq = 0, pendingChecks = {}, pendingInstalls = {};
+  function workerActive() { return !!pyWorker && workerReady; }
+  function engineReady() { return !!(pyodide || workerReady); }
+  function enginePref() {
+    try { if (window.localStorage.getItem("skillzify_engine") === "main") return "main"; } catch (e) {}
+    return (typeof Worker !== "undefined") ? "worker" : "main";
+  }
   var editor = null;           // facade: Monaco adapter OR textarea fallback
   var monacoEd = null;         // raw Monaco editor instance (null in fallback mode)
   var monacoDiffEd = null;     // diff editor while an AI proposal is shown
@@ -911,19 +926,107 @@
 
   /* ================= Pyodide ================= */
   function setRunUI(running) {
-    document.getElementById("run-btn").disabled = running || !pyodide;
+    document.getElementById("run-btn").disabled = running || !engineReady();
     document.getElementById("stop-btn").disabled = !running;
     // P1-9: the Check button must not be usable before the runtime
     // exists — and its label must not claim "0 problems" meanwhile.
     var chk = document.getElementById("st-check");
     if (chk) {
-      chk.disabled = !pyodide;
-      if (!pyodide) chk.textContent = "✓ Check";
+      chk.disabled = !engineReady();
+      if (!engineReady()) chk.textContent = "✓ Check";
     }
     var sr = document.getElementById("st-run");
     if (sr) sr.innerHTML = running ? "⏹" : "▶";
   }
+  /* ---------- worker engine ---------- */
+  function terminateWorker() {
+    if (workerBootTimer) { clearTimeout(workerBootTimer); workerBootTimer = null; }
+    if (pyWorker) { try { pyWorker.terminate(); } catch (e) {} pyWorker = null; }
+    workerReady = false; workerBooting = false; workerRunSettle = null;
+  }
+  function respawnWorker() { terminateWorker(); bootWorker(true); }
+  function onWorkerError() {
+    if (!workerBooting && !workerReady) return;
+    var wasBooting = workerBooting;
+    var settle = workerRunSettle;
+    terminateWorker();
+    if (wasBooting) {
+      printLine("⚠ The worker runtime could not start — switching to the classic engine.", "dim");
+      loadMainThreadRuntime();
+    } else {
+      if (settle) settle(new Error("The Python worker stopped unexpectedly. Please run again."));
+      setRunUI(false);
+    }
+  }
+  function onWorkerMessage(e) {
+    var d = e.data || {};
+    try {
+      if (d.t === "booted") {
+        if (workerBootTimer) { clearTimeout(workerBootTimer); workerBootTimer = null; }
+        workerBooting = false; workerReady = true;
+        printLine("✅ Python 3.11 ready (Pyodide). Press ▶ Run.", "dim");
+        setRunUI(false);
+        checkProblems(true);
+      } else if (d.t === "boot-failed") {
+        onWorkerError();
+      } else if (d.t === "out") {
+        noteOutput(d.s);
+      } else if (d.t === "flush") {
+        drainOut();
+      } else if (d.t === "stdin") {
+        drainOut();
+        stdinResolver = function (v) {
+          if (pyWorker) { try { pyWorker.postMessage({ t: "stdin-reply", id: d.id, value: v }); } catch (e2) {} }
+        };
+        showStdinPrompt(d.prompt || "");
+      } else if (d.t === "done") {
+        var s1 = workerRunSettle; workerRunSettle = null; if (s1) s1(null);
+      } else if (d.t === "error") {
+        var s2 = workerRunSettle; workerRunSettle = null; if (s2) s2(new Error(d.message || "Python error"));
+      } else if (d.t === "autopkg") {
+        printLine("📦 Auto-loaded package(s): " + (d.names || []).join(", "), "dim");
+      } else if (d.t === "check") {
+        var pc = pendingChecks[d.id]; delete pendingChecks[d.id]; if (pc) pc(d.error);
+      } else if (d.t === "installed") {
+        var pi = pendingInstalls[d.name]; delete pendingInstalls[d.name]; if (pi) pi(d);
+      } else if (d.t === "pkg-state") {
+        pkgState[d.name] = d.state;
+        if (d.version) pkgVersion[d.name] = d.version;
+        renderPackages();
+      } else if (d.t === "pkg-forget") {
+        pkgForget(d.name); delete pkgState[d.name]; renderPackages();
+      } else if (d.t === "pkg-log") {
+        printLine(d.line, "dim");
+      }
+    } catch (e2) {}
+  }
+  function bootWorker(quiet) {
+    if (pyWorker || workerBooting) return;
+    workerBooting = true;
+    if (!quiet) printLine("⏳ Loading Python 3.11 runtime…", "dim");
+    var w = null;
+    try { w = new Worker("assets/js/py-worker.js?v=1"); } catch (e) { w = null; }
+    if (!w) { workerBooting = false; loadMainThreadRuntime(); return; }
+    pyWorker = w;
+    w.onmessage = onWorkerMessage;
+    w.onerror = function () { onWorkerError(); };
+    workerBootTimer = setTimeout(function () { if (!workerReady) onWorkerError(); }, 60000);
+    var remembered = {};
+    try { remembered = pkgLoadRemembered(); } catch (e) {}
+    try {
+      w.postMessage({
+        t: "init", scriptURL: PY_BASE + "pyodide.js", indexURL: PY_BASE,
+        bootstrap: BOOTSTRAP, files: (typeof ws !== "undefined" && ws && ws.files) || {},
+        remembered: remembered, pkgs: PKGS
+      });
+    } catch (e) { onWorkerError(); }
+  }
   function loadPyodideRuntime() {
+    if (pyodide || pyodideLoading || workerReady || workerBooting) return;
+    if (enginePref() === "worker") { bootWorker(false); return; }
+    loadMainThreadRuntime();
+  }
+  function loadMainThreadRuntime() {
     if (pyodide || pyodideLoading) return;
     pyodideLoading = true;
     printLine("⏳ Loading Python 3.11 runtime…", "dim");
@@ -932,7 +1035,7 @@
       // to throw here, leaving pyodideLoading true forever and Run
       // wedged on "still loading…". Guard it so a retry is possible.
       try {
-      window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/" }).then(function (py) {
+      window.loadPyodide({ indexURL: PY_BASE }).then(function (py) {
         pyodide = py;
         pyodideLoading = false;
         // Make every workspace file importable right away (Run also
@@ -964,7 +1067,7 @@
     // module loading (its modules call the global define as they
     // arrive over the network) and knocked the editor into its
     // fallback. Shadowing has no window and no race.
-    fetch("https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js").then(function (r) {
+    fetch(PY_BASE + "pyodide.js").then(function (r) {
       if (!r.ok) throw new Error("http " + r.status);
       return r.text();
     }).then(function (code) {
@@ -1080,6 +1183,9 @@
       recordRun(false, 15000);
       setRunUI(false);
       killTimer = null;
+      // Worker engine: the watchdog verdict is now enforceable — kill
+      // the frozen interpreter outright and boot a fresh one.
+      if (workerActive()) respawnWorker();
     }, RUN_TIMEOUT_MS);
   }
   function clearKillTimer() {
@@ -1195,10 +1301,10 @@
 
   /* ================= run ================= */
   function runCode() {
-    if (!pyodide) {
+    if (!engineReady()) {
       /* Retry the download instead of wedging on "still loading"
          forever after a failed load (P2-35). */
-      if (pyodideLoading) { toast("Python runtime is still loading…", "error"); return; }
+      if (pyodideLoading || workerBooting) { toast("Python runtime is still loading…", "error"); return; }
       printLine("⏳ Retrying the Python runtime download…", "dim");
       loadPyodideRuntime();
       toast("Python runtime failed to load — retrying the download…", "error");
@@ -1216,62 +1322,77 @@
     printLine("── ▶ " + ws.active + " · " + new Date().toLocaleTimeString() + " ──", "dim");
     printLine("$ python " + ws.active, "dim");
 
-    // make every workspace file importable
-    try {
-      Object.keys(ws.files).forEach(function (n) {
-        try { pyodide.FS.writeFile(n, ws.files[n]); } catch (e) {}
-      });
-    } catch (e) {}
+    // make every workspace file importable (the worker receives the
+    // files inside its run message instead)
+    if (!workerActive()) {
+      try {
+        Object.keys(ws.files).forEach(function (n) {
+          try { pyodide.FS.writeFile(n, ws.files[n]); } catch (e) {}
+        });
+      } catch (e) {}
+    }
 
     runOut = [];
     hadOutput = false;
-    pyodide.setStdout({ batched: noteOutput });
-    pyodide.setStderr({ batched: noteOutput });
-    // sys.stdin reads (not via input()) get immediate EOF; input() is interactive
-    try { pyodide.setStdin({ stdin: function () { return null; } }); } catch (e) {}
+    if (!workerActive()) {
+      pyodide.setStdout({ batched: noteOutput });
+      pyodide.setStderr({ batched: noteOutput });
+      // sys.stdin reads (not via input()) get immediate EOF; input() is interactive
+      try { pyodide.setStdin({ stdin: function () { return null; } }); } catch (e) {}
+    }
 
     var my = ++runToken;
     var t0 = performance.now();
     restartKillTimer();
 
-    // replacer FUNCTION: user code may contain $& / $' which replace() would otherwise interpret
-    var src = BOOTSTRAP.replace("__USER_CODE__", function () { return JSON.stringify(code); });
-    var p = loadImportsThenRun(src, code);
-    p.then(function () {
-      if (my !== runToken) return;
-      clearKillTimer();
-      cancelStdin();
-      var ms = Math.round(performance.now() - t0);
-      drainOut();
-      printLine("✅ Finished in " + ms + " ms · exit 0", "ok-meta");
-      lastError = "";
-      lastErrorInfo = null;
-      refreshAiChips();
-      pushOutHist(true, ms);
-      recordRun(true, ms);
-      saveCodeHistory();
-      checkProblems(true);
-      setRunUI(false);
-    }).catch(function (e) {
-      if (my !== runToken) return;
-      clearKillTimer();
-      cancelStdin();
-      var ms = Math.round(performance.now() - t0);
-      var rawMsg = String((e && e.message) || e);
-      var short = simplifyTraceback(rawMsg);
-      lastErrorInfo = parseTracebackFrame(rawMsg, ws.active);
-      drainOut();
-      printTraceback(short);
-      printLine("❌ Error after " + ms + " ms · exit 1 — see PROBLEMS or ask AI →", "err");
-      lastError = short;
-      refreshAiChips();
-      printAiFixRow();
-      pushOutHist(false, ms);
-      recordRun(false, ms);
-      saveCodeHistory();
-      checkProblems(true);
-      setRunUI(false);
-    });
+    /* One completion path for both engines: the main-thread promise
+       and the worker's done/error messages settle through here. */
+    function settle(err) {
+      if (!err) {
+        if (my !== runToken) return;
+        clearKillTimer();
+        cancelStdin();
+        var ms = Math.round(performance.now() - t0);
+        drainOut();
+        printLine("✅ Finished in " + ms + " ms · exit 0", "ok-meta");
+        lastError = "";
+        lastErrorInfo = null;
+        refreshAiChips();
+        pushOutHist(true, ms);
+        recordRun(true, ms);
+        saveCodeHistory();
+        checkProblems(true);
+        setRunUI(false);
+      } else {
+        if (my !== runToken) return;
+        clearKillTimer();
+        cancelStdin();
+        var ms2 = Math.round(performance.now() - t0);
+        var rawMsg = String((err && err.message) || err);
+        var short = simplifyTraceback(rawMsg);
+        lastErrorInfo = parseTracebackFrame(rawMsg, ws.active);
+        drainOut();
+        printTraceback(short);
+        printLine("❌ Error after " + ms2 + " ms · exit 1 — see PROBLEMS or ask AI →", "err");
+        lastError = short;
+        refreshAiChips();
+        printAiFixRow();
+        pushOutHist(false, ms2);
+        recordRun(false, ms2);
+        saveCodeHistory();
+        checkProblems(true);
+        setRunUI(false);
+      }
+    }
+    if (workerActive()) {
+      workerRunSettle = settle;
+      try { pyWorker.postMessage({ t: "run", code: code, files: ws.files }); }
+      catch (e) { workerRunSettle = null; settle(new Error("The Python worker is unavailable.")); }
+    } else {
+      // replacer FUNCTION: user code may contain $& / $' which replace() would otherwise interpret
+      var src = BOOTSTRAP.replace("__USER_CODE__", function () { return JSON.stringify(code); });
+      loadImportsThenRun(src, code).then(function () { settle(null); }, function (e) { settle(e); });
+    }
   }
   function stopRun() {
     if (!runToken) return;
@@ -1280,6 +1401,10 @@
     cancelStdin();
     drainOut();
     printLine("⏹ Stopped by user.", "err");
+    // Worker engine: terminate the interpreter mid-loop (a main-thread
+    // run could only be abandoned, never actually stopped) and bring
+    // back a fresh kernel, packages restored, files intact.
+    if (workerActive()) respawnWorker();
     setRunUI(false);
   }
 
@@ -1288,9 +1413,24 @@
      point); workspace files are kept and rewritten into the new
      filesystem by the loader's ready handler. */
   function restartKernel() {
+    if (workerActive()) {
+      runToken++;
+      clearKillTimer();
+      cancelStdin();
+      workerRunSettle = null;
+      lastErrorInfo = null;
+      refreshMarkers();
+      clearTerminal();
+      printLine("🔄 Kernel restarted — fresh Python runtime, your files are unchanged.", "dim");
+      setRunUI(false);
+      respawnWorker();
+      toast("Python kernel restarted 🔄", "success");
+      return;
+    }
     runToken++;
     clearKillTimer();
     cancelStdin();
+    if (pyWorker) terminateWorker(); // a still-booting worker must not block the reboot
     pyodide = null;
     pyodideLoading = false;
     lastErrorInfo = null;
@@ -1348,13 +1488,35 @@
     // P1-9: without the runtime the compile check below cannot run, so
     // reporting "no problems" would be a false pass. Say the runtime is
     // still loading instead — never a pass.
-    if (!pyodide) {
+    if (!engineReady()) {
       var host = document.getElementById("problems-list");
       if (host) host.innerHTML = '<div class="empty-note">⏳ Python runtime still loading — try again in a moment.</div>';
       var badge = document.getElementById("prob-badge");
       if (badge) badge.style.display = "none";
       var ab0 = document.getElementById("activity-problems");
       if (ab0) ab0.style.display = "none";
+      if (!silent) switchPtab("problems");
+      return problems;
+    }
+    if (workerActive()) {
+      // The compile check runs inside the worker; the reply renders
+      // through the same problems pipeline. A sequence number keeps a
+      // slow stale reply from overwriting a newer check.
+      if (ws.active) {
+        var wcid = ++checkSeq;
+        var wfile = ws.active;
+        pendingChecks[wcid] = function (errMsg) {
+          if (wcid !== checkSeq) return;
+          problems = [];
+          if (errMsg) {
+            var wm = errMsg.match(/line (\d+)/);
+            problems.push({ file: wfile, line: wm ? +wm[1] : null, msg: simplifyTraceback(errMsg).split("\n").slice(-2).join(" ") });
+          }
+          renderProblems();
+          refreshMarkers();
+        };
+        try { pyWorker.postMessage({ t: "check", id: wcid, code: ws.files[ws.active] }); } catch (e) {}
+      }
       if (!silent) switchPtab("problems");
       return problems;
     }
@@ -1972,6 +2134,7 @@
      (its shelf row becomes installable again) rather than lying. */
   var pkgRestoring = false;
   function restorePackages() {
+    if (workerActive()) return; // the worker restores its own kernel at boot
     if (!pyodide || pkgRestoring) return;
     var obj = pkgLoadRemembered();
     var names = Object.keys(obj);
@@ -2037,11 +2200,28 @@
     var p = null;
     PKGS.forEach(function (x) { if (x.name === name) p = x; });
     if (!p || pkgState[name]) return;
-    if (!pyodide) { toast("Python runtime is still loading — try again in a moment", "error"); return; }
+    if (!engineReady()) { toast("Python runtime is still loading — try again in a moment", "error"); return; }
     pkgState[name] = "installing";
     renderPackages();
     switchPtab("terminal");
     printLine("📦 Installing " + name + "…", "dim");
+    if (workerActive()) {
+      // The worker runs the install and snapshots it into IndexedDB;
+      // this side only keeps the localStorage memory + the shelf UI.
+      pendingInstalls[name] = function (d) {
+        if (d.ok) {
+          pkgState[name] = "installed";
+          if (d.version) pkgVersion[name] = d.version;
+          pkgRemember(name, pkgVersion[name] || "", p.how);
+        } else delete pkgState[name];
+        renderPackages();
+        printLine(d.ok ? "✅ " + name + " installed — `import " + name + "` works now."
+          : "❌ Could not install " + name + (d.message ? " — " + d.message : ""), d.ok ? "ok-meta" : "err");
+      };
+      try { pyWorker.postMessage({ t: "install", name: name, how: p.how }); }
+      catch (e) { var pi = pendingInstalls[name]; delete pendingInstalls[name]; if (pi) pi({ ok: false, message: "worker unavailable" }); }
+      return;
+    }
     // For pip installs, fingerprint site-packages first so the files
     // the install adds can be snapshotted for persistence.
     var snapRoot = "", snapBefore = null;
@@ -2746,7 +2926,7 @@
       editor.on("change", function () {
         clearTimeout(liveT);
         liveT = setTimeout(function () {
-          if (pyodide && ws.active) { persistActiveFile(); checkProblems(true); }
+          if (engineReady() && ws.active) { persistActiveFile(); checkProblems(true); }
         }, 900);
       });
       // outline: refresh shortly after typing stops; track the

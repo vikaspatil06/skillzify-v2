@@ -949,7 +949,7 @@
   function gdBuildSteps(topic) {
     var v = topic.voices;
     function line(i, field) { return { who: "bot", name: v[i].name + " · participant", text: v[i][field] }; }
-    return [
+    var steps = [
       line(0, "open"), line(1, "open"), line(2, "open"),
       { who: "user" },
       line(1, "follow"),
@@ -961,6 +961,12 @@
       { who: "user" },
       { who: "end" }
     ];
+    // The second participant's follow-up is the one AI-reactive slot
+    // (Tier 2, 19 Nov 2026): generated against the candidate's first
+    // contribution via the interview_gd mode; `text` stays as the
+    // scripted fallback whenever the AI is unavailable.
+    steps[4].aireact = 1;
+    return steps;
   }
 
   /* ---------------- local rubric scoring ---------------- */
@@ -1144,6 +1150,7 @@
       if (taG) { taG.addEventListener("keydown", function (e) { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") onSubmitAnswer(); }); taG.focus(); }
       return;
     }
+    if (sess.phase === "gd-wait") { el.innerHTML = '<p class="hint" style="margin-top:12px">💬 The discussion continues…</p>'; return; }
     if (sess.phase === "scoring") { el.innerHTML = '<p class="hint" style="margin-top:12px">⏳ Scoring this round…</p>'; return; }
     if (sess.phase === "done") { el.innerHTML = ""; return; }
     var placeholder = sess.phase === "approach" ? "Explain your approach: what was the core idea, and why does it work?"
@@ -1250,12 +1257,63 @@
     if (!sess || !round || round.kind !== "gd") return;
     renderProgress();
     while (round.gdStep < round.gdSteps.length) {
-      var st = round.gdSteps[round.gdStep++];
-      if (st.who === "bot") { pushBot(st.text, st.name); continue; }
+      var st = round.gdSteps[round.gdStep];
+      if (st.who === "bot" && st.aireact && round.gdAiState === "pending") {
+        // The AI reaction to the candidate's first point is still in
+        // flight — pause here (the step stays unconsumed) until it
+        // lands, or the timeout in gdStartAiReaction falls back to
+        // the scripted line. The discussion never stalls for good.
+        round.gdAiWaiting = true;
+        sess.phase = "gd-wait";
+        renderComposer();
+        if (!round.gdAiHintShown) {
+          round.gdAiHintShown = true;
+          var hintName = String(st.name || "").split(" · ")[0];
+          setTimeout(function () {
+            if (S.session === sess && currentRound() === round && round.gdAiWaiting) pushSys(hintName + " is typing…");
+          }, 900);
+        }
+        return;
+      }
+      round.gdStep++;
+      if (st.who === "bot") {
+        if (st.aireact && round.gdAiState === "ready" && round.gdAiText) pushBot(round.gdAiText, st.name);
+        else pushBot(st.text, st.name);
+        continue;
+      }
       if (st.who === "user") { sess.phase = "gd"; renderComposer(); return; }
       if (st.who === "end") { endRound(); return; }
     }
     endRound();
+  }
+  /* One AI-reactive exchange (Tier 2, 19 Nov 2026): after the
+     candidate's first contribution, the second participant's next
+     line is generated against what the candidate actually said
+     (server mode interview_gd — an interview mode, so it draws on
+     the shared pool like every interview call and has no per-user
+     cap). ANY failure — no AI, pool exhausted, bad shape, or a
+     12-second timeout — quietly falls back to the scripted line. */
+  function gdStartAiReaction(round, candidateText) {
+    round.gdAiUsed = true;
+    round.gdAiState = "pending";
+    var sess = S.session;
+    var voice = round.gdTopic.voices[1];
+    var payload = { topic: round.gdTopic.title, brief: round.gdTopic.brief, name: voice.name, stance: voice.stance, opening: voice.open };
+    var done = false;
+    function finish(text) {
+      if (done) return;
+      done = true;
+      if (S.session !== sess || currentRound() !== round) return;
+      round.gdAiState = text ? "ready" : "failed";
+      round.gdAiText = text || "";
+      if (round.gdAiWaiting) { round.gdAiWaiting = false; gdAdvance(); }
+    }
+    aiAsk({ mode: "interview_gd", code: JSON.stringify(payload), error: candidateText, json: true, cache: false }, function (err, res) {
+      var reply = "";
+      if (!err && res && res.data && typeof res.data.reply === "string") reply = res.data.reply.trim().slice(0, 700);
+      finish(reply || null);
+    });
+    setTimeout(function () { finish(null); }, 12000);
   }
   function gdSubmit(text) {
     var sess = S.session, round = currentRound();
@@ -1267,6 +1325,7 @@
     item.answerMs = sess.shownAt ? Date.now() - sess.shownAt : 0;
     round.items.push(item);
     pushMe(text);
+    if (round.items.length === 1 && !round.gdAiUsed) gdStartAiReaction(round, text);
     sess.shownAt = Date.now();
     gdAdvance();
   }
@@ -1358,7 +1417,22 @@
     item.fuQ = q;
     item.fuKind = kind;
     S.session.phase = "followup";
-    pushBot((say ? say + "\n\n" : "") + q, "Follow-up");
+    /* Some models repeat the follow-up question inside "say" even
+       though the prompt separates them — the bubble would then ask
+       the same question twice. Drop any sentence of "say" that is
+       (or contains, or is contained in) the question itself. */
+    var sayText = String(say || "").trim();
+    var qText = String(q || "").trim();
+    if (sayText && qText) {
+      var norm = function (s) { return s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim(); };
+      var nq = norm(qText);
+      var kept = sayText.split(/(?<=[.?!])\s+/).filter(function (sent) {
+        var ns = norm(sent);
+        return !!ns && ns !== nq && nq.indexOf(ns) === -1 && ns.indexOf(nq) === -1;
+      });
+      sayText = kept.join(" ").trim();
+    }
+    pushBot((sayText ? sayText + "\n\n" : "") + qText, "Follow-up");
     S.session.shownAt = Date.now();
     renderComposer();
   }

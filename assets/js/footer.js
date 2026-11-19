@@ -47,3 +47,13 @@
     "  </div>\n" +
     "</footer>\n";
 })();
+
+/* PWA (Tier 2, 19 Nov 2026): register the service worker that powers
+   the offline shell. Separate from the footer mount above so a page
+   without the mount still registers. Fail-silent: browsers without
+   service workers simply skip it. */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    try { navigator.serviceWorker.register("sw.js").catch(function () {}); } catch (e) {}
+  });
+}
