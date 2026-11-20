@@ -49,6 +49,9 @@ class Store(ctx: Context) {
     /** Same rule as the web app: consecutive calendar days. Returns current count. */
     fun bumpStreak(): Int {
         val today = dayString(0)
+        // App 2.0 Phase B: every progress event also feeds the activity
+        // heatmap counts (web activityDays semantics: actions per day).
+        bumpActivityCount(today)
         val last = prefs.getString("streak_last", null)
         // Web P2-24: a future-dated `last` (clock skew / timezone travel)
         // is ignored, not a broken streak — the count stands and the
@@ -287,6 +290,57 @@ class Store(ctx: Context) {
 
     fun activeDays(): Set<String> = stringSet("active_days")
 
+    /** App 2.0 A4: union of synced activity days (web activityDays merge). */
+    fun applySyncedActiveDays(days: Set<String>) {
+        if (days.isEmpty()) return
+        val s = stringSet("active_days").toMutableSet()
+        if (s.addAll(days)) prefs.edit().putStringSet("active_days", s).apply()
+    }
+
+    /* ---------- activity counts per day (App 2.0 Phase B heatmap) ---------- */
+
+    /** Per-day activity counts {yyyy-MM-dd: actions}, the heatmap's data. */
+    fun activityCounts(): Map<String, Int> {
+        val raw = prefs.getString("activity_counts", null) ?: return emptyMap()
+        return try {
+            val o = JSONObject(raw)
+            val out = mutableMapOf<String, Int>()
+            val keys = o.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                out[k] = o.optInt(k, 0)
+            }
+            out
+        } catch (e: Exception) { emptyMap() }
+    }
+
+    private fun bumpActivityCount(day: String) {
+        val counts = activityCounts().toMutableMap()
+        counts[day] = (counts[day] ?: 0) + 1
+        val o = JSONObject()
+        for ((k, v) in counts) o.put(k, v)
+        prefs.edit().putString("activity_counts", o.toString()).apply()
+    }
+
+    /** Sync merge for counts: per-day MAX, the A4 activityDays rule. */
+    fun applySyncedActivityCounts(cloud: Map<String, Long>) {
+        if (cloud.isEmpty()) return
+        val counts = activityCounts().toMutableMap()
+        var changed = false
+        for ((day, c) in cloud) {
+            val v = c.toInt()
+            if (v > (counts[day] ?: 0)) {
+                counts[day] = v
+                changed = true
+            }
+        }
+        if (changed) {
+            val o = JSONObject()
+            for ((k, v) in counts) o.put(k, v)
+            prefs.edit().putString("activity_counts", o.toString()).apply()
+        }
+    }
+
     /** Call on every code run: total counter + activity day + night/early-bird flags. */
     fun recordRun() {
         val now = System.currentTimeMillis()
@@ -379,18 +433,253 @@ class Store(ctx: Context) {
         for ((k, v) in cur) o.put(k, v)
         o.put(name, code)
         prefs.edit().putString("workspace_files", o.toString()).apply()
+        // A4 sync metadata: a save stamps the file's mtime and clears
+        // any tombstone for it (an edit after a deletion resurrects
+        // the file — the web mergeWorkspace rule).
+        val now = System.currentTimeMillis()
+        val m = workspaceMeta()
+        saveWorkspaceMeta(
+            WorkspaceMeta(
+                mtimes = m.mtimes + (name to now),
+                deleted = m.deleted - name,
+                updatedAt = now
+            )
+        )
     }
 
     fun deleteWorkspaceFile(name: String) {
         val o = JSONObject()
         for ((k, v) in workspaceFiles()) if (k != name) o.put(k, v)
         prefs.edit().putString("workspace_files", o.toString()).apply()
+        // A4: a deletion is a tombstone, not an absence — without it a
+        // stale device re-saving its old file set would resurrect the
+        // file on every other device.
+        val now = System.currentTimeMillis()
+        val m = workspaceMeta()
+        saveWorkspaceMeta(
+            WorkspaceMeta(
+                mtimes = m.mtimes - name,
+                deleted = m.deleted + (name to now),
+                updatedAt = now
+            )
+        )
     }
 
     fun renameWorkspaceFile(old: String, new: String) {
         val o = JSONObject()
         for ((k, v) in workspaceFiles()) o.put(if (k == old) new else k, v)
         prefs.edit().putString("workspace_files", o.toString()).apply()
+        // A4: a rename is a delete of the old name plus a fresh edit
+        // of the new one, so tombstone/mtime bookkeeping stays exact.
+        val now = System.currentTimeMillis()
+        val m = workspaceMeta()
+        saveWorkspaceMeta(
+            WorkspaceMeta(
+                mtimes = (m.mtimes - old) + (new to now),
+                deleted = (m.deleted + (old to now)) - new,
+                updatedAt = now
+            )
+        )
+    }
+
+    /** Workspace sync metadata (App 2.0 A4): per-file mtimes, deletion
+        tombstones and the doc-level updatedAt — the local mirror of
+        the web cloud shape {mtimes, deleted, updatedAt}. Files saved
+        before A4 simply have no mtime (treated as 0, like the web's
+        pre-timestamp workspaces). */
+    data class WorkspaceMeta(
+        val mtimes: Map<String, Long> = emptyMap(),
+        val deleted: Map<String, Long> = emptyMap(),
+        val updatedAt: Long = 0
+    )
+
+    fun workspaceMeta(): WorkspaceMeta {
+        val raw = prefs.getString("workspace_meta", null) ?: return WorkspaceMeta()
+        return try {
+            val o = JSONObject(raw)
+            fun tsMap(key: String): Map<String, Long> {
+                val sub = o.optJSONObject(key) ?: return emptyMap()
+                val out = LinkedHashMap<String, Long>()
+                val keys = sub.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    val v = sub.optLong(k, 0)
+                    if (v > 0) out[k] = v
+                }
+                return out
+            }
+            WorkspaceMeta(tsMap("mtimes"), tsMap("deleted"), o.optLong("updatedAt", 0))
+        } catch (e: Exception) { WorkspaceMeta() }
+    }
+
+    private fun saveWorkspaceMeta(m: WorkspaceMeta) {
+        fun tsObj(map: Map<String, Long>): JSONObject {
+            val o = JSONObject()
+            for ((k, v) in map) o.put(k, v)
+            return o
+        }
+        val o = JSONObject()
+        o.put("mtimes", tsObj(m.mtimes))
+        o.put("deleted", tsObj(m.deleted))
+        o.put("updatedAt", m.updatedAt)
+        prefs.edit().putString("workspace_meta", o.toString()).apply()
+    }
+
+    /** Applies a merged workspace from sync (A4): the local file set
+        and its metadata are replaced wholesale by the merge result. */
+    fun applySyncedWorkspace(files: Map<String, String>, meta: WorkspaceMeta) {
+        val o = JSONObject()
+        for ((k, v) in files) o.put(k, v)
+        prefs.edit().putString("workspace_files", o.toString()).apply()
+        saveWorkspaceMeta(meta)
+    }
+
+    /* ---------- interview history (App 2.0 Phase B, local-only) ----------
+       A capped list of finished interviews {date, role, type, score,
+       offline}. Local-only in this phase (the web keeps its history
+       client-side too); institution sharing is opt-in per interview
+       on the web and is a later step here. */
+
+    fun interviewHistory(): List<InterviewRecord> {
+        val raw = prefs.getString("interview_history", null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map {
+                val o = arr.getJSONObject(it)
+                InterviewRecord(
+                    date = o.optLong("date", 0),
+                    role = o.optString("role", ""),
+                    type = o.optString("type", ""),
+                    score = o.optInt("score", 0),
+                    offline = o.optBoolean("offline", false)
+                )
+            }
+        } catch (e: Exception) { emptyList() }
+    }
+
+    fun addInterviewRecord(rec: InterviewRecord) {
+        val list = interviewHistory().toMutableList()
+        list.add(0, rec)
+        val arr = JSONArray()
+        for (r in list.take(50)) {
+            arr.put(JSONObject().apply {
+                put("date", r.date)
+                put("role", r.role)
+                put("type", r.type)
+                put("score", r.score)
+                put("offline", r.offline)
+            })
+        }
+        prefs.edit().putString("interview_history", arr.toString()).apply()
+    }
+
+    /* ---------- Studio 2.0 editor preference (local-only) ---------- */
+
+    fun studioFontSize(): Int = prefs.getInt("studio_font_size", 13)
+
+    fun setStudioFontSize(size: Int) {
+        prefs.edit().putInt("studio_font_size", size.coerceIn(11, 20)).apply()
+    }
+
+    /* ---------- spaced reviews (App 2.0 Phase B; web review.js shape) ----------
+       { lessonId: {interval (days), due (epoch ms), updatedAt (epoch ms)} }
+       — the exact shape the website syncs as users/{uid}.reviews, so the
+       app and the web share ONE review schedule per learner. Completing
+       a lesson schedules its first review in 1 day; a correct recall
+       advances the interval up the ladder [1, 3, 7, 14, 30, 60], a miss
+       resets it to 1 day (review.js, mirrored). Reviews are what lift
+       section mastery past the 70% never-reviewed ceiling. */
+
+    fun reviews(): Map<String, ReviewEntry> {
+        val raw = prefs.getString("reviews", null) ?: return emptyMap()
+        return try {
+            val o = JSONObject(raw)
+            val out = mutableMapOf<String, ReviewEntry>()
+            val keys = o.keys()
+            while (keys.hasNext()) {
+                val id = keys.next()
+                val e = o.optJSONObject(id) ?: continue
+                val interval = e.optInt("interval", 0)
+                val due = e.optLong("due", 0)
+                val updatedAt = e.optLong("updatedAt", 0)
+                if (interval > 0 && due > 0 && updatedAt > 0) {
+                    out[id] = ReviewEntry(interval, due, updatedAt)
+                }
+            }
+            out
+        } catch (e: Exception) { emptyMap() }
+    }
+
+    private fun saveReviews(map: Map<String, ReviewEntry>) {
+        val o = JSONObject()
+        for ((id, e) in map) {
+            o.put(id, JSONObject().apply {
+                put("interval", e.interval)
+                put("due", e.due)
+                put("updatedAt", e.updatedAt)
+            })
+        }
+        prefs.edit().putString("reviews", o.toString()).apply()
+    }
+
+    /** Schedules the FIRST review (due in 1 day). Idempotent — an
+        existing entry (from any device) is never reset. */
+    fun scheduleReview(id: String, now: Long = System.currentTimeMillis()) {
+        val map = reviews().toMutableMap()
+        if (id in map) return
+        map[id] = ReviewEntry(1, now + DAY_MS, now)
+        saveReviews(map)
+    }
+
+    /** Records one recall outcome: correct advances to the smallest
+        ladder interval strictly greater than the current one (cap 60);
+        a miss resets to 1 day. */
+    fun recordReview(id: String, correct: Boolean, now: Long = System.currentTimeMillis()) {
+        val map = reviews().toMutableMap()
+        val cur = map[id] ?: ReviewEntry(1, 0, 0)
+        val next = if (!correct) 1 else {
+            REVIEW_INTERVALS.firstOrNull { it > cur.interval } ?: REVIEW_INTERVALS.last()
+        }
+        map[id] = ReviewEntry(next, now + next * DAY_MS, now)
+        saveReviews(map)
+    }
+
+    /** Lesson ids whose review is due (due <= now), most overdue first. */
+    fun dueReviews(now: Long = System.currentTimeMillis()): List<String> =
+        reviews().filter { it.value.due <= now }
+            .entries.sortedBy { it.value.due }
+            .map { it.key }
+
+    /** Backfill for lessons completed before the review system
+        existed: an interval-1 entry due immediately, stamped
+        updatedAt = 1 so ANY real entry (web or a later review) wins
+        the sync merge over the backfill. */
+    fun backfillReviews(doneIds: Set<String>, now: Long = System.currentTimeMillis()) {
+        if (doneIds.isEmpty()) return
+        val map = reviews().toMutableMap()
+        var changed = false
+        for (id in doneIds) {
+            if (id !in map) {
+                map[id] = ReviewEntry(1, now, 1L)
+                changed = true
+            }
+        }
+        if (changed) saveReviews(map)
+    }
+
+    /** Sync merge: per-lesson last-write-wins by updatedAt, tie -> local. */
+    fun applySyncedReviews(cloud: Map<String, ReviewEntry>) {
+        if (cloud.isEmpty()) return
+        val map = reviews().toMutableMap()
+        var changed = false
+        for ((id, ce) in cloud) {
+            val le = map[id]
+            if (le == null || ce.updatedAt > le.updatedAt) {
+                map[id] = ce
+                changed = true
+            }
+        }
+        if (changed) saveReviews(map)
     }
 
     /* ---------- lesson completion times (syncs in progress.doneAt) ----------
@@ -655,3 +944,15 @@ data class Counters(
     val showcaseStarred: Boolean = false,
     val flowchartsDone: Int = 0
 )
+
+/** One spaced-review schedule entry (web review.js shape). */
+data class ReviewEntry(
+    val interval: Int,
+    val due: Long,
+    val updatedAt: Long
+)
+
+/** The review interval ladder in days (web review.js INTERVALS). */
+val REVIEW_INTERVALS = listOf(1, 3, 7, 14, 30, 60)
+
+const val DAY_MS: Long = 86_400_000L

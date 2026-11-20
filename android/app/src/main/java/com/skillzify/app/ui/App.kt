@@ -25,11 +25,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -38,12 +40,18 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -61,32 +69,34 @@ import com.skillzify.app.ui.theme.Bg
 import com.skillzify.app.ui.theme.CardBorder
 import com.skillzify.app.ui.theme.CodeBg
 import com.skillzify.app.ui.theme.GradientBrush
+import com.skillzify.app.ui.theme.Primary
 import com.skillzify.app.ui.theme.TextMuted
 
-/* Bottom bar mirrors the website nav (nav.js): Dashboard (the signed-in
-   home), Learn, Practice, Code Studio (compiler) and You (profile hub).
-   Library is not a tab — its hub route stays reachable from Dashboard
-   quick actions, the Learn page and the You screen, and its sub-routes
-   (paths / projects / reference / flowchart) are unchanged. */
+/* App 2.0 information architecture (Phase A3): five tabs —
+   Today (the dashboard, renamed), Learn (journey, lessons, paths,
+   reference, library hub), Studio (Code Studio, Flowchart Lab,
+   projects), Arena (practice, placement, community; interview and
+   leaderboard land here in Phase B) and Profile (the old You hub,
+   passport, concept map, admin). All pre-2.0 routes are unchanged;
+   only the grouping and labels moved. The global Ask AI floating
+   button opens AskAiSheet from every tab. */
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
 
 private val tabs = listOf(
-    Tab("dashboard", "Dashboard", Icons.Filled.Dashboard),
+    Tab("dashboard", "Today", Icons.Filled.Home),
     Tab("learn", "Learn", Icons.Filled.School),
-    Tab("practice", "Practice", Icons.Filled.FitnessCenter),
     Tab("compiler", "Studio", Icons.Filled.Terminal),
-    Tab("you", "You", Icons.Filled.Person)
+    Tab("arena", "Arena", Icons.Filled.FitnessCenter),
+    Tab("you", "Profile", Icons.Filled.Person)
 )
 
 /** Routes that belong to a tab, for bottom-bar highlighting. */
 private fun tabFor(route: String): String = when (route) {
-    "dashboard" -> "dashboard"
-    "learn" -> "learn"
-    "practice", "exercise" -> "practice"
-    "compiler" -> "compiler"
-    "you", "placement", "passport", "map", "community", "library", "admin",
-    "paths", "path", "projects", "project", "reference", "flowchart" -> "you"
-    "lesson" -> "learn"
+    "dashboard", "review" -> "dashboard"
+    "learn", "lesson", "paths", "path", "reference", "library" -> "learn"
+    "compiler", "flowchart", "projects", "project" -> "compiler"
+    "arena", "practice", "exercise", "placement", "community", "interview", "leaderboard" -> "arena"
+    "you", "passport", "map", "admin" -> "you"
     else -> route
 }
 
@@ -118,6 +128,7 @@ fun SkillzifyApp(vm: AppViewModel = viewModel()) {
     }
 
     val nav = rememberNavController()
+    var showAskAi by remember { mutableStateOf(false) }
     val backStack by nav.currentBackStackEntryAsState()
     val rawRoute = backStack?.destination?.route ?: "dashboard"
     val current = tabFor(
@@ -142,6 +153,16 @@ fun SkillzifyApp(vm: AppViewModel = viewModel()) {
                 }
             }
         },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showAskAi = true },
+                shape = RoundedCornerShape(16.dp),
+                containerColor = Primary,
+                contentColor = Color.White
+            ) {
+                Icon(Icons.Filled.AutoAwesome, contentDescription = "Ask AI")
+            }
+        },
         containerColor = Bg
     ) { pad ->
         // Screen transitions: a short slide + fade on every navigation, so
@@ -164,7 +185,10 @@ fun SkillzifyApp(vm: AppViewModel = viewModel()) {
                 slideOutHorizontally(tween(300), targetOffsetX = { it / 4 }) + fadeOut(tween(300))
             }
         ) {
-            composable("dashboard") { DashboardTab(vm, nav) }
+            // App 2.0 Phase B: Today replaces the Dashboard content
+            // (DashboardTab remains in the tree as the fallback).
+            composable("dashboard") { TodayScreen(vm, nav) }
+            composable("review") { ReviewScreen(vm, nav) }
             composable(
                 "learn?section={section}",
                 arguments = listOf(navArgument("section") {
@@ -173,6 +197,9 @@ fun SkillzifyApp(vm: AppViewModel = viewModel()) {
             ) { entry ->
                 LearnTab(vm, nav, entry.arguments?.getString("section"))
             }
+            composable("arena") { ArenaScreen(vm, nav) }
+            composable("interview") { InterviewScreen(vm, nav) }
+            composable("leaderboard") { LeaderboardScreen(vm, nav) }
             composable("practice") { PracticeTab(vm, nav) }
             composable("compiler") { CompilerTab(vm) }
             composable("you") { ProfileScreen(vm, nav) }
@@ -212,6 +239,13 @@ fun SkillzifyApp(vm: AppViewModel = viewModel()) {
             composable("flowchart") { FlowchartScreen(vm, nav) }
         }
     }
+
+    if (showAskAi) {
+        AskAiSheet(
+            contextLabel = tabs.firstOrNull { it.route == current }?.label ?: "Skillzify",
+            onDismiss = { showAskAi = false }
+        )
+    }
 }
 
 /* ================= Shared website-style components =================
@@ -234,7 +268,11 @@ fun WebCard(
         modifier = modifier
             .fillMaxWidth()
             .border(1.dp, CardBorder, RoundedCornerShape(16.dp))
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
+            // Accessibility: a tappable card announces as a Button.
+            .then(
+                if (onClick != null) Modifier.clickable(role = Role.Button) { onClick() }
+                else Modifier
+            ),
         content = { content() }
     )
 }
@@ -299,7 +337,11 @@ fun ScreenHeader(title: String, sub: String? = null, onBack: (() -> Unit)? = nul
                 modifier = Modifier.clickable { onBack() }.padding(vertical = 4.dp)
             )
         }
-        Text(title, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+        // Accessibility: page titles are TalkBack headings (Phase B retrofit).
+        Text(
+            title, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold,
+            modifier = Modifier.semantics { heading() }
+        )
         if (sub != null) {
             Text(sub, color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp,
                 modifier = Modifier.padding(top = 4.dp))

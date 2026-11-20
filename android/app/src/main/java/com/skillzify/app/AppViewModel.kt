@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.skillzify.app.data.AchievementDef
 import com.skillzify.app.data.AdminRepository
+import com.skillzify.app.data.AppGraph
 import com.skillzify.app.data.AiRepository
 import com.skillzify.app.data.AuthRepository
 import com.skillzify.app.data.AuthResult
@@ -15,6 +16,7 @@ import com.skillzify.app.data.Catalog
 import com.skillzify.app.data.Exercise
 import com.skillzify.app.data.ExerciseAttempt
 import com.skillzify.app.data.LearnPath
+import com.skillzify.app.data.LeaderboardRepository
 import com.skillzify.app.data.LessonNode
 import com.skillzify.app.data.PassportEntry
 import com.skillzify.app.data.PlacementRecord
@@ -34,6 +36,9 @@ import com.skillzify.app.data.computeSectionMastery
 import com.skillzify.app.data.computeTopicMastery
 import com.skillzify.app.data.lessonNodes
 import com.skillzify.app.data.levelFor
+import com.skillzify.app.core.PerfLog
+import com.skillzify.app.data.local.ContentRepository
+import com.skillzify.app.data.local.ProgressMirror
 import com.skillzify.app.data.loadAchievements
 import com.skillzify.app.data.loadCatalog
 import com.skillzify.app.data.loadExercises
@@ -94,6 +99,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     refreshFromStore()
                     syncStatus = syncRepo.lastStatus
                     if (!ok) syncStatus = "Sync offline"
+                    if (ok) publishPublicProfile(user.uid)
                     // Real-time: pull cloud changes as they happen (no re-login needed).
                     syncRepo.startListening(user.uid, viewModelScope) {
                         refreshFromStore()
@@ -162,13 +168,38 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             refreshFromStore()
             syncStatus = syncRepo.lastStatus
             if (!ok) syncStatus = "Sync offline"
+            if (ok) publishPublicProfile(uid)
             syncRefreshing = false
+        }
+    }
+
+    /** App 2.0 Phase B: keeps the public leaderboard profile fresh
+        (publicProfiles/{uid}, the web's community.js shape) after a
+        successful sync. Fire-and-forget — LeaderboardRepository.publish
+        swallows its own failures. */
+    private fun publishPublicProfile(uid: String) {
+        viewModelScope.launch {
+            LeaderboardRepository.publish(
+                uid = uid,
+                name = profileName().ifBlank {
+                    authRepo.currentUser()?.displayName ?: "Learner"
+                },
+                xp = xp.toLong(),
+                lessonsDone = doneIds.size.toLong(),
+                lessonsTotal = catalog.lessons.size.toLong(),
+                streak = currentStreak().toLong(),
+                achievements = achievements().filter { it.unlocked }.map { it.id }
+            )
         }
     }
 
     /** Re-reads UI state from the store after a sync merge. */
     private fun refreshFromStore() {
         doneIds = store.doneIds()
+        // Phase B: after a merge, any still-unscheduled completed
+        // lesson (e.g. finished on the web before reviews existed
+        // there) joins the review schedule locally.
+        store.backfillReviews(doneIds)
         xp = store.getXp()
         streak = store.getStreak()
         // Backfill (web learn.js/paths.js page-load checks): a section
@@ -179,8 +210,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         placement = store.getPlacement()
         starredLessons = store.starredLessons()
         pinnedLessons = store.pinnedLessons()
+        // A4: a sync can land a merged Studio workspace from another
+        // device — re-read it so the Compiler tab shows the merge.
+        workspaceFiles = store.workspaceFiles()
         if (::exercises.isInitialized) exerciseAttempts = exercises.associate { it.id to store.getAttempt(it.id) }
         refreshEnrollments()
+        mirrorProgressAsync()
+    }
+
+    /* A5: keep the Room progress mirror current after sync-driven
+       refreshes, throttled — refreshFromStore can fire in bursts from
+       the real-time listener, and the mirror is a few hundred rows. */
+    private var lastMirrorAt = 0L
+
+    private fun mirrorProgressAsync() {
+        val now = System.currentTimeMillis()
+        if (now - lastMirrorAt < 5000) return
+        lastMirrorAt = now
+        viewModelScope.launch(Dispatchers.IO) {
+            ProgressMirror.mirror(store, AppGraph.database(getApplication()))
+        }
     }
 
     init {
@@ -191,13 +240,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         PythonRunner.init(app)
         // Parse catalog JSON off the main thread (startup hitch fix).
         viewModelScope.launch(Dispatchers.IO) {
-            val c = loadCatalog(app)
-            val ach = loadAchievements(app) // fail-soft: empty until the asset lands
-            val sn = loadSnippets(app)
-            val ex = loadExercises(app)
-            val rf = loadReference(app)
-            val pa = loadPaths(app)
-            val pr = loadProjects(app)
+            // App 2.0 A2: the catalog is served by the Room content
+            // database (version-checked import from the bundled assets
+            // inside ContentRepository; any Room failure falls back to
+            // the asset parse, so startup can never break on this path).
+            val loaded = ContentRepository.load(app)
+            // A5: seed the Room progress mirror from Store at startup.
+            ProgressMirror.mirror(store, AppGraph.database(app))
+            val c = loaded.catalog
+            val ach = loaded.achievements
+            val sn = loaded.snippets
+            val ex = loaded.exercises
+            val rf = loaded.reference
+            val pa = loaded.paths
+            val pr = loaded.projects
             withContext(Dispatchers.Main) {
                 catalog = c; achievementDefs = ach; snippets = sn; exercises = ex
                 // Section → lessons index, built once at load so Learn /
@@ -208,7 +264,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 exerciseAttempts = ex.associate { it.id to store.getAttempt(it.id) }
                 refreshEnrollments()
                 catalogLoaded = true
+                PerfLog.mark("catalogLoaded")
                 checkCompletionBonuses() // startup backfill, web page-load parity
+                // Phase B: lessons completed before the review system
+                // existed join the schedule (see Store.backfillReviews).
+                store.backfillReviews(store.doneIds())
             }
         }
     }
@@ -337,13 +397,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private var sectionMasteryCache: List<SectionMastery>? = null
     private var sectionMasteryKey: Set<String>? = null
+    private var sectionMasteryReviewsKey: Map<String, com.skillzify.app.data.ReviewEntry>? = null
 
     fun sectionMastery(): List<SectionMastery> {
         if (!::catalog.isInitialized) return emptyList()
+        // Phase B: reviews feed mastery now, so the cache key includes
+        // the review schedule (a review changes scores without changing
+        // doneIds).
+        val revs = store.reviews()
         val hit = sectionMasteryCache
-        if (hit != null && sectionMasteryKey == doneIds) return hit
-        val fresh = computeSectionMastery(catalog, doneIds, { id -> store.getLessonDoneAt(id) })
+        if (hit != null && sectionMasteryKey == doneIds && sectionMasteryReviewsKey == revs) return hit
+        val fresh = computeSectionMastery(
+            catalog, doneIds,
+            { id -> store.getLessonDoneAt(id) },
+            { id -> revs[id]?.interval },
+            { id -> revs[id]?.updatedAt }
+        )
         sectionMasteryCache = fresh; sectionMasteryKey = doneIds
+        sectionMasteryReviewsKey = revs
         return fresh
     }
 
@@ -829,6 +900,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val gain = xpGain(quizFirstTries)
         xp = store.addXp(gain)
         store.markDone(id)
+        // App 2.0 Phase B: completing a lesson schedules its first
+        // spaced review (due in 1 day; idempotent — see Store).
+        store.scheduleReview(id)
         doneIds = store.doneIds()
         streak = store.bumpStreak()
         applyStreakMilestoneBonus()
@@ -849,6 +923,35 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         markDirty()
         return gain to (currentLevel().name != before)
     }
+
+    /* ---------- spaced reviews (App 2.0 Phase B) ---------- */
+
+    /** How many reviews are due right now (real lessons only). */
+    fun dueReviewCount(): Int {
+        if (!::catalog.isInitialized) return 0
+        val ids = catalog.lessons.map { it.id }.toSet()
+        return store.dueReviews().count { it in ids }
+    }
+
+    /** The due lessons, most overdue first, capped for one session. */
+    fun dueReviewLessons(limit: Int = 10): List<Lesson> {
+        if (!::catalog.isInitialized) return emptyList()
+        val byId = catalog.lessons.associateBy { it.id }
+        return store.dueReviews().mapNotNull { byId[it] }.take(limit)
+    }
+
+    /** Records a review outcome: reschedules the lesson, counts the
+        review, and schedules a sync (the schedule is shared with the
+        website via users/{uid}.reviews). */
+    fun recordReviewOutcome(id: String, correct: Boolean) {
+        store.recordReview(id, correct)
+        store.incReviewsCompleted()
+        markDirty()
+    }
+
+    /** The next upcoming review time (for the "all caught up" state). */
+    fun nextReviewDue(): Long? =
+        store.reviews().values.map { it.due }.filter { it > System.currentTimeMillis() }.minOrNull()
 
     fun addRun(code: String, ok: Boolean) {
         val preview = code.lines().firstOrNull()?.take(60) ?: "(empty)"

@@ -18,4 +18,6 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.0.20" apply false
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.20" apply false
     id("com.chaquo.python") version "15.0.1" apply false
+    // KSP must match the Kotlin version exactly (2.0.20 -> 2.0.20-1.0.25).
+    id("com.google.devtools.ksp") version "2.0.20-1.0.25" apply false
 }

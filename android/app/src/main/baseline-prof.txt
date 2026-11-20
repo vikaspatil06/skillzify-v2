@@ -1,0 +1,12 @@
+# Skillzify baseline profile (App 2.0 Phase A6).
+# Startup-critical classes, compiled AOT at install time via
+# androidx.profileinstaller. Deliberately conservative: the entry
+# activity, the app shell, the theme, the view model and the store —
+# the exact path from process start to first frame. Grows from
+# measured startup traces in later phases.
+Lcom/skillzify/app/MainActivity;
+Lcom/skillzify/app/AppViewModel;
+Lcom/skillzify/app/ui/AppKt;
+Lcom/skillzify/app/ui/theme/ThemeKt;
+Lcom/skillzify/app/data/Store;
+Lcom/skillzify/app/data/local/ContentRepository;

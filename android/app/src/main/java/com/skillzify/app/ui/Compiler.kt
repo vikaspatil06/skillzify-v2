@@ -29,6 +29,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import com.skillzify.app.AppViewModel
 import com.skillzify.app.data.Explainer
 import com.skillzify.app.data.PythonRunner
+import com.skillzify.app.ui.designsystem.heading
 import com.skillzify.app.data.RunResult
 import com.skillzify.app.ui.theme.BgSoft
 import com.skillzify.app.ui.theme.Card
@@ -90,6 +92,14 @@ fun CompilerTab(vm: AppViewModel) {
     if (activeFile !in effectiveFiles) activeFile = effectiveFiles.keys.first()
     var code by remember(activeFile) {
         mutableStateOf(effectiveFiles[activeFile] ?: "")
+    }
+    // Studio 2.0: persisted editor font size + the live file outline
+    // (AST symbols via studio_tools.py, refreshed as you type).
+    var editorFont by remember { mutableStateOf(vm.store.studioFontSize()) }
+    var outline by remember { mutableStateOf<List<PythonRunner.OutlineSymbol>>(emptyList()) }
+    androidx.compose.runtime.LaunchedEffect(code) {
+        kotlinx.coroutines.delay(500)
+        outline = withContext(Dispatchers.IO) { PythonRunner.outline(code) }
     }
     // One-shot handoff from Projects/Reference "Try in compiler": load the
     // code even when this tab was already in the back stack.
@@ -316,6 +326,18 @@ fun CompilerTab(vm: AppViewModel) {
                 OutlinedButton(onClick = { newFileName = ""; showAddFile = true }) {
                     Text("+ File", fontSize = 12.sp)
                 }
+                OutlinedButton(onClick = {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_SUBJECT, activeFile)
+                        putExtra(android.content.Intent.EXTRA_TEXT, code)
+                    }
+                    ctx.startActivity(
+                        android.content.Intent.createChooser(intent, "Share $activeFile")
+                    )
+                }) {
+                    Text("Share", fontSize = 12.sp)
+                }
             }
             if (showAddFile) {
                 AlertDialog(
@@ -373,6 +395,22 @@ fun CompilerTab(vm: AppViewModel) {
                 }
             }
 
+            // Studio 2.0: editor text-size stepper (accessibility —
+            // code text scales to the reader, persisted per device).
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Editor text size", color = TextMuted, fontSize = 12.sp)
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = {
+                    editorFont = (editorFont - 1).coerceAtLeast(11)
+                    vm.store.setStudioFontSize(editorFont)
+                }) { Text("A−") }
+                Text("${editorFont}sp", fontSize = 12.sp)
+                TextButton(onClick = {
+                    editorFont = (editorFont + 1).coerceAtMost(20)
+                    vm.store.setStudioFontSize(editorFont)
+                }) { Text("A+") }
+            }
+
             // Editor chrome (web Code Studio parity): dark --code-bg
             // surface, light code text, filename as the field label.
             OutlinedTextField(
@@ -389,9 +427,38 @@ fun CompilerTab(vm: AppViewModel) {
                     unfocusedLabelColor = TextMuted
                 ),
                 textStyle = androidx.compose.ui.text.TextStyle(
-                    fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 18.sp
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = editorFont.sp,
+                    lineHeight = (editorFont + 5).sp
                 )
             )
+
+            // Studio 2.0 Outline: the active file's symbols at a glance.
+            if (outline.isNotEmpty()) {
+                Text(
+                    "Outline · ${outline.size}",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.heading()
+                )
+                outline.take(10).forEach { s ->
+                    Row {
+                        Text(
+                            "${s.kind} ${s.name}",
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text("L${s.line}", color = TextMuted, fontSize = 12.sp)
+                    }
+                }
+                if (outline.size > 10) {
+                    Text(
+                        "…and ${outline.size - 10} more",
+                        color = TextMuted, fontSize = 12.sp
+                    )
+                }
+            }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (running) {

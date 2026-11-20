@@ -12,7 +12,7 @@ data class TestsOutcome(val codeOk: Boolean, val error: String, val results: Lis
     val allPassed: Boolean get() = codeOk && results.isNotEmpty() && results.all { it.ok }
 }
 
-data class FlowNode(val id: String, val type: String, val label: String)
+data class FlowNode(val id: String, val type: String, val label: String, val line: Int = 0)
 data class FlowEdge(val from: String, val to: String, val label: String)
 data class FlowGraph(val nodes: List<FlowNode>, val edges: List<FlowEdge>, val truncated: Boolean, val error: String?) {
     /** Mermaid `flowchart TD` text for copy/share (website export parity). */
@@ -82,7 +82,10 @@ object PythonRunner {
             val nodes = o.getJSONArray("nodes").let { arr ->
                 (0 until arr.length()).map {
                     val n = arr.getJSONObject(it)
-                    FlowNode(n.getString("id"), n.getString("type"), n.getString("label"))
+                    FlowNode(
+                        n.getString("id"), n.getString("type"), n.getString("label"),
+                        n.optInt("line", 0)
+                    )
                 }
             }
             val edges = o.getJSONArray("edges").let { arr ->
@@ -98,6 +101,78 @@ object PythonRunner {
                 "Flowchart failed: ${e.message ?: e.javaClass.simpleName}")
         }
     }
+    /* ---- Flowchart Lab 2.0: real execution trace (trace_lab.py) ---- */
+
+    data class TraceStep(val line: Int, val vars: Map<String, String>)
+
+    data class TraceResult(
+        val steps: List<TraceStep>,
+        val output: String,
+        val error: String?,
+        val truncated: Boolean
+    )
+
+    /** Executes `code` under the tracer: one step per source line with
+        a variable snapshot. Fail-soft like flowchart(): problems come
+        back in error instead of throwing. */
+    fun trace(code: String, stdinText: String = ""): TraceResult {
+        return try {
+            ensureStarted()
+            val mod = Python.getInstance().getModule("trace_lab")
+            val json = mod.callAttr("trace_json", code, stdinText).toString()
+            val o = JSONObject(json)
+            val stepsArr = o.optJSONArray("steps")
+            val steps = if (stepsArr == null) emptyList() else (0 until stepsArr.length()).map {
+                val s = stepsArr.getJSONObject(it)
+                val varsObj = s.optJSONObject("vars")
+                val vars = mutableMapOf<String, String>()
+                if (varsObj != null) {
+                    val keys = varsObj.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        vars[k] = varsObj.optString(k, "")
+                    }
+                }
+                TraceStep(s.optInt("line", 0), vars)
+            }
+            TraceResult(
+                steps = steps,
+                output = o.optString("output", ""),
+                error = if (o.isNull("error")) null else o.optString("error"),
+                truncated = o.optBoolean("truncated", false)
+            )
+        } catch (e: Exception) {
+            TraceResult(
+                emptyList(), "", "Trace failed: ${e.message ?: e.javaClass.simpleName}", false
+            )
+        }
+    }
+
+    /* ---- Studio 2.0: file outline (studio_tools.py) ---- */
+
+    data class OutlineSymbol(val kind: String, val name: String, val line: Int)
+
+    /** Symbols of a source file for the Studio outline. Fail-soft:
+        empty list on any problem (including mid-typing syntax errors). */
+    fun outline(code: String): List<OutlineSymbol> {
+        return try {
+            ensureStarted()
+            val mod = Python.getInstance().getModule("studio_tools")
+            val json = mod.callAttr("outline_json", code).toString()
+            val arr = JSONObject(json).optJSONArray("symbols") ?: return emptyList()
+            (0 until arr.length()).map {
+                val s = arr.getJSONObject(it)
+                OutlineSymbol(
+                    s.optString("kind", "def"),
+                    s.optString("name", ""),
+                    s.optInt("line", 0)
+                )
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     fun run(code: String, stdinText: String): RunResult {
         return try {
             ensureStarted()

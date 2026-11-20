@@ -105,26 +105,32 @@ data class SectionMastery(
 )
 
 /** Retention credit per completed lesson (mastery.js INTERVAL_RETENTION
-    via retentionFor()): never reviewed = 0.7. */
-private const val RETENTION_NEVER_REVIEWED: Double = 0.7
+    via retentionFor()): never reviewed = 0.7; a reviewed lesson earns
+    the retention of its current interval; an unknown interval = 0.6. */
+private val INTERVAL_RETENTION: Map<Int, Double> =
+    mapOf(60 to 1.0, 30 to 0.9, 14 to 0.8, 7 to 0.7, 3 to 0.6, 1 to 0.5)
+
+fun retentionFor(interval: Int?): Double = when {
+    interval == null -> 0.7
+    else -> INTERVAL_RETENTION[interval] ?: 0.6
+}
 
 /**
  * Mirrors mastery.js sectionMastery(): for each section (catalog.tracks
  * carries the 7 sections), score = round(100 * (done/total) * retention)
  * where retention is the average retentionFor(review interval) over the
- * done lessons.
- * SIMPLIFICATION: the app has no spaced-repetition review store, so
- * every done lesson's interval is null -> retention 0.7 exactly as the
- * web computes for a never-reviewed learner (section score caps at 70
- * until reviews exist). Rust: web uses last REVIEW activity plus an
- * overdue-review fallback; the app has no review dates, so rust falls
- * back to the most recent lesson completion time (lessonDoneAt) older
- * than RUST_DAYS. Sections are matched by Lesson.section.
+ * done lessons. Since App 2.0 Phase B the app has the full spaced-
+ * review system (Store.reviews, web review.js shape), so reviewed
+ * lessons lift their section past the 70% never-reviewed ceiling —
+ * interval 60 earns full retention. Rust uses the most recent of
+ * lesson completion and review activity, like the web.
  */
 fun computeSectionMastery(
     catalog: Catalog,
     doneIds: Set<String>,
     lessonDoneAt: (String) -> Long? = { null },
+    reviewInterval: (String) -> Int? = { null },
+    reviewUpdatedAt: (String) -> Long? = { null },
     nowMs: Long = System.currentTimeMillis()
 ): List<SectionMastery> {
     return catalog.tracks.map { sec ->
@@ -132,12 +138,15 @@ fun computeSectionMastery(
         val total = lessons.size
         val doneList = lessons.filter { it.id in doneIds }
         val done = doneList.size
+        val avgRetention = if (done > 0)
+            doneList.sumOf { retentionFor(reviewInterval(it.id)) } / done
+        else 0.0
         val score = if (done > 0 && total > 0)
-            (100.0 * (done.toDouble() / total) * RETENTION_NEVER_REVIEWED).roundToInt()
+            (100.0 * (done.toDouble() / total) * avgRetention).roundToInt()
         else 0
         var lastMs = 0L
         for (l in doneList) {
-            val at = lessonDoneAt(l.id) ?: 0L
+            val at = maxOf(lessonDoneAt(l.id) ?: 0L, reviewUpdatedAt(l.id) ?: 0L)
             if (at > lastMs) lastMs = at
         }
         SectionMastery(

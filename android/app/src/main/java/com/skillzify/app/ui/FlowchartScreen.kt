@@ -79,10 +79,31 @@ fun FlowchartScreen(vm: AppViewModel, nav: NavController) {
     var tracing by remember { mutableStateOf(false) }
     var step by remember { mutableStateOf(0) }
     var copied by remember { mutableStateOf(false) }
+    // Flowchart Lab 2.0: real execution trace state.
+    var stdinText by remember { mutableStateOf("5") }
+    var execTrace by remember { mutableStateOf<PythonRunner.TraceResult?>(null) }
+    var execStep by remember { mutableStateOf(0) }
+    var execBusy by remember { mutableStateOf(false) }
+
+    fun runExecTrace() {
+        val src = if (mode == 2) aiCode else input
+        if (execBusy || src.isNullOrBlank()) return
+        execBusy = true
+        scope.launch(Dispatchers.IO) {
+            val t = PythonRunner.trace(src, stdinText)
+            withContext(Dispatchers.Main) {
+                execBusy = false
+                execTrace = t
+                execStep = 0
+                tracing = false
+            }
+        }
+    }
 
     fun generate() {
         if (busy || input.isBlank()) return
         busy = true; error = null; graph = null; aiCode = null; tracing = false; step = 0
+        execTrace = null; execStep = 0
         scope.launch(Dispatchers.IO) {
             if (mode == 2) {
                 val res = AiRepository.ask(input, mode = "flowchart")
@@ -136,6 +157,7 @@ fun FlowchartScreen(vm: AppViewModel, nav: NavController) {
                             else -> "check whether a number is even or odd"
                         }
                         graph = null; aiCode = null; error = null; tracing = false
+                        execTrace = null; execStep = 0
                     },
                     label = { Text(label, fontSize = 12.sp, maxLines = 1) }
                 )
@@ -149,6 +171,17 @@ fun FlowchartScreen(vm: AppViewModel, nav: NavController) {
                 fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 18.sp
             )
         )
+        if (mode != 1) {
+            OutlinedTextField(
+                value = stdinText, onValueChange = { stdinText = it },
+                label = { Text("Input for Run & trace (stdin)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    fontFamily = FontFamily.Monospace, fontSize = 13.sp
+                )
+            )
+        }
         Button(
             onClick = ::generate, enabled = !busy && input.isNotBlank(),
             modifier = Modifier.fillMaxWidth()
@@ -176,8 +209,13 @@ fun FlowchartScreen(vm: AppViewModel, nav: NavController) {
                         copied = true
                         scope.launch { kotlinx.coroutines.delay(2000); copied = false }
                     }) { Text(if (copied) "✓ Copied" else "📋 Mermaid", fontSize = 12.sp, maxLines = 1) }
-                    OutlinedButton(onClick = { tracing = !tracing; step = 0 }) {
+                    OutlinedButton(onClick = { tracing = !tracing; step = 0; if (tracing) execTrace = null }) {
                         Text(if (tracing) "⏹ Stop trace" else "▶ Trace", fontSize = 12.sp, maxLines = 1)
+                    }
+                    if (mode != 1) {
+                        OutlinedButton(onClick = { runExecTrace() }, enabled = !execBusy) {
+                            Text(if (execBusy) "Tracing…" else "▶ Run & trace", fontSize = 12.sp, maxLines = 1)
+                        }
                     }
                 }
             }
@@ -202,9 +240,68 @@ fun FlowchartScreen(vm: AppViewModel, nav: NavController) {
                     }
                 }
             }
+            val et = execTrace
+            if (et != null) {
+                Card(colors = CardDefaults.cardColors(containerColor = Card), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                        if (et.steps.isNotEmpty()) {
+                            val cur = et.steps[execStep]
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedButton(
+                                    onClick = { if (execStep > 0) execStep-- },
+                                    enabled = execStep > 0
+                                ) { Text("← Prev", fontSize = 12.sp, maxLines = 1) }
+                                Text(
+                                    "Step ${execStep + 1} / ${et.steps.size} · Line ${cur.line}",
+                                    fontSize = 13.sp, fontWeight = FontWeight.Bold
+                                )
+                                OutlinedButton(
+                                    onClick = { if (execStep < et.steps.size - 1) execStep++ },
+                                    enabled = execStep < et.steps.size - 1
+                                ) { Text("Next →", fontSize = 12.sp, maxLines = 1) }
+                            }
+                            if (cur.vars.isNotEmpty()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    cur.vars.entries.joinToString(" · ") { "${it.key} = ${it.value}" },
+                                    fontFamily = FontFamily.Monospace, fontSize = 12.sp
+                                )
+                            }
+                            if (execStep == et.steps.size - 1 && et.error == null && et.output.isNotBlank()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text("Output: ${et.output.trim()}", fontSize = 12.sp)
+                            }
+                        } else {
+                            Text("No steps recorded.", fontSize = 13.sp)
+                        }
+                        if (et.error != null) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(et.error, color = Danger, fontSize = 12.sp)
+                        }
+                        if (et.truncated) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "Trace capped at ${et.steps.size} recorded steps — the run itself completed.",
+                                color = TextMuted, fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            }
             val byId = g.nodes.associateBy { it.id }
+            // Lab 2.0: during an execution trace, the active node is the
+            // last node whose source line is at or before the current
+            // execution line.
+            val execLine = et?.steps?.getOrNull(execStep)?.line
+            val execActiveIdx = if (et != null && execLine != null) {
+                g.nodes.indices.lastOrNull { idx -> g.nodes[idx].line in 1..execLine } ?: -1
+            } else -1
             g.nodes.forEachIndexed { i, n ->
-                val active = tracing && i == step
+                val active = if (et != null) i == execActiveIdx else (tracing && i == step)
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Card),
                     modifier = Modifier.fillMaxWidth()
@@ -217,7 +314,10 @@ fun FlowchartScreen(vm: AppViewModel, nav: NavController) {
                             Text(n.label, fontFamily = FontFamily.Monospace, fontSize = 13.sp,
                                 fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                                 modifier = Modifier.weight(1f))
-                            Text(n.type, color = TextMuted, fontSize = 11.sp)
+                            Text(
+                                if (n.line > 0) "${n.type} · L${n.line}" else n.type,
+                                color = TextMuted, fontSize = 11.sp
+                            )
                         }
                         val outs = g.edges.filter { it.from == n.id }
                         if (outs.isNotEmpty()) {

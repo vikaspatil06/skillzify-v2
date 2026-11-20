@@ -139,6 +139,23 @@ fun ProfileScreen(vm: AppViewModel, nav: NavController) {
             )
         }
 
+        // ---- Activity heatmap (App 2.0 Phase B) ----
+        WebCard {
+            Column(Modifier.padding(16.dp)) {
+                Text("📅 Activity", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Spacer(Modifier.height(8.dp))
+                com.skillzify.app.ui.designsystem.ActivityHeatmap(
+                    counts = vm.store.activityCounts(),
+                    activeDays = vm.store.activeDays()
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Your last 16 weeks — a darker cell means more learning that day. Rest days are part of the plan, not a broken chain.",
+                    color = TextMuted, fontSize = 12.sp
+                )
+            }
+        }
+
         // ---- Level + XP / streak stats ----
         WebCard {
             Column(Modifier.padding(16.dp)) {

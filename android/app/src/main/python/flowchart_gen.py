@@ -46,6 +46,10 @@ class FlowchartBuilder:
         self._n = 0
         self.budget = budget
         self.truncated = False
+        # App 2.0 (Flowchart Lab 2.0): the source line of the statement
+        # currently being walked — stamped onto every node so the
+        # execution tracer can light nodes up as the program runs.
+        self._line = 0
 
     def _next_id(self):
         return "n%d" % (self._n + 1)
@@ -56,7 +60,7 @@ class FlowchartBuilder:
             return None
         self._n += 1
         nid = "n%d" % self._n
-        self.nodes.append({"id": nid, "type": ntype, "label": label})
+        self.nodes.append({"id": nid, "type": ntype, "label": label, "line": self._line})
         return nid
 
     def add_edge(self, frm, to, label=""):
@@ -77,6 +81,7 @@ class FlowchartBuilder:
         """Chain statements after `entry`. Returns list of tails."""
         tails = [entry]
         for s in stmts:
+            self._line = getattr(s, "lineno", 0) or 0
             new_tails = []
             for t in tails:
                 if isinstance(t, tuple):
@@ -235,6 +240,7 @@ def flowchart_json(code, budget=NODE_BUDGET):
     b = FlowchartBuilder(budget=budget)
     start = b.add_node("start", "Start")
     tails = b.walk_body(tree.body, start) if start else []
+    b._line = (code.count("\n") + 1) if code.strip() else 0
     end = b.add_node("end", "End")
     if end:
         b._connect(tails, end)

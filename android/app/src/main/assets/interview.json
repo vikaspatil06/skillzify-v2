@@ -1,0 +1,2958 @@
+{
+  "version": 4,
+  "technical": [
+    {
+      "id": "f1",
+      "topic": "fundamentals",
+      "skill": "Python Fundamentals",
+      "tier": 1,
+      "q": "What is the difference between a list and a tuple in Python? When would you use each?",
+      "points": [
+        "lists are mutable, tuples are immutable",
+        "tuples can be dictionary keys / hashed, lists cannot",
+        "lists suit data that changes; tuples suit fixed records like coordinates"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "A tuple containing a list — is that tuple really immutable? What can still change?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "Why exactly can a list not be used as a dictionary key, while a tuple can?"
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "topic": "fundamentals",
+      "skill": "Python Fundamentals",
+      "tier": 1,
+      "q": "If I write a = [1, 2], then b = a, then b.append(3) — what is a afterwards, and why?",
+      "points": [
+        "b is the same object as a, not a copy",
+        "a becomes [1, 2, 3]",
+        "assignment binds a name to an object; use list(a), a[:] or copy() for a real copy"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Now the list contains a nested list and I use copy.copy(). What is still shared, and how does deepcopy differ?"
+        },
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "How would you make b an independent copy so changing it never touches a?"
+        }
+      ]
+    },
+    {
+      "id": "f3",
+      "topic": "fundamentals",
+      "skill": "Python Fundamentals",
+      "tier": 2,
+      "q": "What goes wrong with def add_item(item, box=[]) — a mutable default argument — and how do you fix it?",
+      "points": [
+        "the default is created once, when the function is defined",
+        "the same list is shared across calls, so items leak between calls",
+        "fix: default to None and create the list inside the function"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Why does Python evaluate defaults once at definition time instead of on every call?"
+        },
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "Show me the standard fix — what does the signature and the first lines look like?"
+        }
+      ]
+    },
+    {
+      "id": "f4",
+      "topic": "fundamentals",
+      "skill": "Python Fundamentals",
+      "tier": 2,
+      "q": "What is the difference between == and is in Python? When must you use is?",
+      "points": [
+        "== compares values, is compares identity (same object)",
+        "interning makes small ints and short strings sometimes identical — an implementation detail, not a guarantee",
+        "use is for None and singletons; == for value comparison"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Why might x = 1000; y = 1000 give x is y as False while 10 is 10 gives True?"
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "In plain words: what does each operator actually compare?"
+        }
+      ]
+    },
+    {
+      "id": "f5",
+      "topic": "fundamentals",
+      "skill": "Python Fundamentals",
+      "tier": 1,
+      "q": "What is the difference between d[key] and d.get(key) for a dictionary? When do you prefer get?",
+      "points": [
+        "d[key] raises KeyError when the key is missing",
+        "get returns None or a supplied default instead of raising",
+        "get suits optional keys and counting patterns like counts.get(k, 0)"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "What does setdefault do that get does not, and when is that the better tool?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "What exactly does get return when the key is absent and no default is given?"
+        }
+      ]
+    },
+    {
+      "id": "f6",
+      "topic": "fundamentals",
+      "skill": "Python Fundamentals",
+      "tier": 3,
+      "q": "What is a generator in Python, and what problem does it solve compared with building a list?",
+      "points": [
+        "generators produce values lazily, one at a time, using yield",
+        "memory stays roughly constant instead of holding the whole sequence",
+        "a generator is a one-pass iterator — it is exhausted after one full pass"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "When would a generator actually be the wrong choice — what operations does it not support?"
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "What does the yield keyword do to a function's execution when it is reached?"
+        }
+      ]
+    },
+    {
+      "id": "f7",
+      "topic": "fundamentals",
+      "skill": "Python Fundamentals",
+      "tier": 1,
+      "q": "Which values are falsy in Python, and what does short-circuit evaluation mean for and / or?",
+      "points": [
+        "falsy: False, None, 0, empty string, empty list/dict/set",
+        "and / or return one of their operands, not always True or False",
+        "evaluation stops as soon as the result is decided — the right side may never run"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "What does the expression x or 'default' actually return when x is an empty string, and why is that useful?"
+        },
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "Give me an example where short-circuiting prevents an error."
+        }
+      ]
+    },
+    {
+      "id": "f8",
+      "topic": "fundamentals",
+      "skill": "Python Fundamentals",
+      "tier": 3,
+      "q": "Explain *args and **kwargs. What types do they collect into, and what ordering rules apply in a call?",
+      "points": [
+        "*args collects extra positional arguments into a tuple",
+        "**kwargs collects extra keyword arguments into a dict",
+        "order in a definition: positional, *args, keyword-only, **kwargs; unpacking with * and ** also works in calls"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "How do you force an argument to be keyword-only, and why would an API designer do that?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "If a caller passes name='x', age=3 — where do those land, and in what data structure?"
+        }
+      ]
+    },
+    {
+      "id": "o1",
+      "topic": "oop",
+      "skill": "OOP",
+      "tier": 1,
+      "q": "What is the difference between a class attribute and an instance attribute in Python?",
+      "points": [
+        "class attributes are shared by all instances and live on the class",
+        "instance attributes belong to one object and shadow the class attribute of the same name",
+        "mutating a mutable class attribute through an instance changes it for everyone"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "When is a shared class attribute actually the right design, rather than a bug waiting to happen?"
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "If I read obj.x and the instance has no x, where does Python look next?"
+        }
+      ]
+    },
+    {
+      "id": "o2",
+      "topic": "oop",
+      "skill": "OOP",
+      "tier": 1,
+      "q": "Explain inheritance in Python. What does super() do, and when would you choose composition instead?",
+      "points": [
+        "a subclass reuses and extends a parent class (is-a relationship)",
+        "super() calls the parent implementation, e.g. parent __init__ or an overridden method",
+        "composition (has-a) is looser and avoids deep hierarchies when there is no true is-a relationship"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "What can go wrong with a deep inheritance hierarchy as a codebase grows?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "Inside a child's __init__, what exactly does super().__init__() run?"
+        }
+      ]
+    },
+    {
+      "id": "o3",
+      "topic": "oop",
+      "skill": "OOP",
+      "tier": 2,
+      "q": "Python has no true private variables. How is encapsulation usually done, and what does @property add?",
+      "points": [
+        "a single underscore is a convention: internal, touch at your own risk",
+        "double underscore triggers name mangling — it is about avoiding subclass clashes, not real privacy",
+        "@property turns attribute access into a method call, allowing validation while keeping the .attr syntax"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Why does Python prefer convention over enforced privacy — what is the philosophy behind it?"
+        },
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "With a property setter, what can you enforce that a plain attribute cannot?"
+        }
+      ]
+    },
+    {
+      "id": "o4",
+      "topic": "oop",
+      "skill": "OOP",
+      "tier": 2,
+      "q": "What are dunder methods? Contrast __str__ and __repr__, and say what __eq__ changes by default.",
+      "points": [
+        "dunder methods hook objects into Python's protocols (len, str, +, ==, iteration)",
+        "__str__ is the human-readable form; __repr__ is the developer/debug form and should be unambiguous",
+        "by default == is identity; defining __eq__ compares by value — and makes instances unhashable unless __hash__ is also defined"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Why does defining __eq__ set __hash__ to None, and what breaks when you then put objects in a set?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "When you print a list of your objects, which of the two methods does Python actually call on each?"
+        }
+      ]
+    },
+    {
+      "id": "o5",
+      "topic": "oop",
+      "skill": "OOP",
+      "tier": 3,
+      "q": "What is the MRO in Python, and how does it solve the diamond problem in multiple inheritance?",
+      "points": [
+        "the Method Resolution Order is the linearised order Python searches classes for a method",
+        "Python uses C3 linearisation, which keeps local precedence and monotonicity",
+        "in a diamond, each class is visited exactly once, so the shared ancestor's method runs once via cooperative super()"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "What makes multiple inheritance cooperative — what must every class in the chain do with super()?"
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "How can you inspect a class's MRO at runtime?"
+        }
+      ]
+    },
+    {
+      "id": "o6",
+      "topic": "oop",
+      "skill": "OOP",
+      "tier": 2,
+      "q": "Contrast instance methods, @classmethod and @staticmethod. When is each the right choice?",
+      "points": [
+        "instance methods receive self and work on one object's state",
+        "classmethod receives cls — used for alternative constructors / factory methods",
+        "staticmethod receives neither — a namespaced function that logically belongs to the class"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Why does a classmethod factory behave better than a plain constructor when subclasses get involved?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "Give me a concrete factory example — what would the classmethod's body look like?"
+        }
+      ]
+    },
+    {
+      "id": "d1",
+      "topic": "dsa",
+      "skill": "Data Structures & Algorithms",
+      "tier": 1,
+      "q": "For a Python list, what is the time complexity of append, indexing lst[i], insert(0, x), and checking x in lst?",
+      "points": [
+        "append is amortised O(1); indexing is O(1)",
+        "insert at the front is O(n) — every element shifts",
+        "membership test is O(n) — it scans until it finds the value"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "If you need a queue with fast pops from the front, what do you use instead of a list, and why?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "Why is inserting at the front expensive while appending is cheap — what physically happens in memory?"
+        }
+      ]
+    },
+    {
+      "id": "d2",
+      "topic": "dsa",
+      "skill": "Data Structures & Algorithms",
+      "tier": 2,
+      "q": "How does a Python dictionary find a value by key so fast? What can make it slow down?",
+      "points": [
+        "the key is hashed and the hash picks a bucket/slot — average lookup O(1)",
+        "collisions (different keys, same slot) must be resolved and degrade lookups",
+        "keys must be hashable/immutable; worst case degrades toward O(n)"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Why must dictionary keys be immutable — what breaks if a key changes after insertion?"
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "Walk me through a lookup step by step, from d[k] to the value."
+        }
+      ]
+    },
+    {
+      "id": "d3",
+      "topic": "dsa",
+      "skill": "Data Structures & Algorithms",
+      "tier": 1,
+      "q": "Stack versus queue: what is the ordering difference, and what does Python offer for each?",
+      "points": [
+        "stack is LIFO (last in, first out); queue is FIFO (first in, first out)",
+        "a list works as a stack with append/pop at the end",
+        "use collections.deque for a queue — popleft is O(1), while list.pop(0) is O(n)"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Name one real algorithm that needs a stack and one that needs a queue."
+        },
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "Why is list.pop(0) slow, exactly?"
+        }
+      ]
+    },
+    {
+      "id": "d4",
+      "topic": "dsa",
+      "skill": "Data Structures & Algorithms",
+      "tier": 2,
+      "q": "What must be true of the data for binary search to work, and why is it O(log n)?",
+      "points": [
+        "the data must be sorted (on the key being searched)",
+        "each comparison discards half the remaining range",
+        "the range halves every step, so the number of steps grows logarithmically"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Your array is unsorted and you must answer many searches. When is sorting first worth it?"
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "What goes wrong if you run binary search on unsorted data — does it error, or silently mislead?"
+        }
+      ]
+    },
+    {
+      "id": "d5",
+      "topic": "dsa",
+      "skill": "Data Structures & Algorithms",
+      "tier": 2,
+      "q": "What two things must every recursive function have, and what happens in Python if the recursion goes too deep?",
+      "points": [
+        "a base case that stops the recursion",
+        "each call must move toward the base case",
+        "deep recursion hits Python's recursion limit / overflows the call stack — Python does no tail-call optimisation"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "What is memoisation, and which recursive function does it famously rescue?"
+        },
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "Roughly how deep can Python recursion go by default, and what error do you get?"
+        }
+      ]
+    },
+    {
+      "id": "d6",
+      "topic": "dsa",
+      "skill": "Data Structures & Algorithms",
+      "tier": 3,
+      "q": "BFS versus DFS on a graph: how do they differ mechanically, and when is BFS the only correct choice?",
+      "points": [
+        "BFS explores level by level using a queue; DFS dives deep using a stack or recursion",
+        "BFS finds the shortest path (fewest edges) in an unweighted graph",
+        "DFS suits topological ordering, cycle detection and backtracking; memory profiles differ"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Why does DFS not guarantee the shortest path in an unweighted graph?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "In an unweighted graph, why does the first time BFS reaches a node give the shortest route?"
+        }
+      ]
+    },
+    {
+      "id": "d7",
+      "topic": "dsa",
+      "skill": "Data Structures & Algorithms",
+      "tier": 3,
+      "q": "What does it mean that Python's sort is stable, and why does that matter? Also: sorted() versus list.sort()?",
+      "points": [
+        "stable = equal elements keep their original relative order",
+        "stability lets you sort by multiple keys in successive passes (least significant first)",
+        "sorted() returns a new list; list.sort() sorts in place and returns None; both are O(n log n) Timsort"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "How would you sort students by grade, then by name within a grade — two ways, using stability or a key tuple?"
+        },
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "A classic beginner bug: x = lst.sort(). What is x?"
+        }
+      ]
+    },
+    {
+      "id": "d8",
+      "topic": "dsa",
+      "skill": "Data Structures & Algorithms",
+      "tier": 2,
+      "q": "Explain the two-pointer technique with an example, and what it improves over the brute-force approach.",
+      "points": [
+        "two indices move through the data (often toward each other or as a window) instead of nested loops",
+        "classic example: pair with a target sum in a sorted array, or a sliding window over a subarray",
+        "it typically cuts O(n^2) brute force down to O(n) by never moving a pointer backwards"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "In the sorted pair-sum problem, why is it safe to move the right pointer left when the sum is too big?"
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "What property of the data makes the two-pointer trick valid for pair-sum?"
+        }
+      ]
+    },
+    {
+      "id": "s1",
+      "topic": "dbms",
+      "skill": "Databases & SQL",
+      "tier": 1,
+      "q": "What is the difference between a primary key and a foreign key?",
+      "points": [
+        "a primary key uniquely identifies a row — unique and never NULL, one per table",
+        "a foreign key stores a primary key of another table, linking rows across tables",
+        "foreign keys enforce referential integrity — no orphan references"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "What should happen to orders when the customer they belong to is deleted — and which mechanisms express that?"
+        },
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "What does referential integrity actually prevent?"
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "topic": "dbms",
+      "skill": "Databases & SQL",
+      "tier": 2,
+      "q": "Explain INNER JOIN versus LEFT JOIN. What do you get in each result for rows with no match?",
+      "points": [
+        "INNER JOIN keeps only rows that match on both sides",
+        "LEFT JOIN keeps every left row; unmatched right-side columns come back NULL",
+        "finding left rows with NO match = LEFT JOIN plus WHERE right-key IS NULL"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "How would you list customers who have never placed an order, in SQL?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "In a LEFT JOIN, what appears in the columns of the right table when there is no match?"
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "topic": "dbms",
+      "skill": "Databases & SQL",
+      "tier": 2,
+      "q": "What is a database index? Why not simply index every column?",
+      "points": [
+        "an index (typically a B-tree) lets the database find rows by a value without scanning the whole table",
+        "reads on indexed columns get much faster, especially joins and filters",
+        "each index costs storage and slows writes — every insert/update must maintain it"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Which columns in an orders table would you index first, and why those?"
+        },
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "Explain the write cost: what exactly must the database update on each INSERT?"
+        }
+      ]
+    },
+    {
+      "id": "s4",
+      "topic": "dbms",
+      "skill": "Databases & SQL",
+      "tier": 3,
+      "q": "What is normalisation trying to achieve? And when would you deliberately denormalise?",
+      "points": [
+        "it removes duplicated data by splitting it into related tables",
+        "that prevents update/insert/delete anomalies — one fact, one place",
+        "denormalisation duplicates data on purpose to make hot reads faster, accepting the consistency burden"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Give me an example of an update anomaly in an un-normalised table."
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "In one line, what does the first normal form demand of a column's values?"
+        }
+      ]
+    },
+    {
+      "id": "s5",
+      "topic": "dbms",
+      "skill": "Databases & SQL",
+      "tier": 2,
+      "q": "What is a transaction, and what do the four ACID properties each guarantee?",
+      "points": [
+        "a transaction groups statements into one all-or-nothing unit of work",
+        "Atomicity: everything commits or everything rolls back; Consistency: the database moves between valid states",
+        "Isolation: concurrent transactions do not corrupt each other; Durability: committed data survives a crash"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Walk a bank transfer through ACID — which property saves you if the server crashes mid-transfer?"
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "Concretely, what does rollback undo, and when does it happen automatically?"
+        }
+      ]
+    },
+    {
+      "id": "s6",
+      "topic": "dbms",
+      "skill": "Databases & SQL",
+      "tier": 3,
+      "q": "SQL versus NoSQL: how do you decide which fits a new project?",
+      "points": [
+        "relational suits structured, interrelated data and strong consistency; document/NoSQL suits flexible schemas and simple access patterns at scale",
+        "the deciding factor is the data's relationships and how it is queried, not fashion",
+        "scaling models differ: vertical + read replicas versus horizontal sharding, with consistency trade-offs"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "A social feed and a payments ledger — which store for each, and what drives the difference?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "What question about the data do you ask first when choosing?"
+        }
+      ]
+    },
+    {
+      "id": "p1",
+      "topic": "os",
+      "skill": "Operating Systems",
+      "tier": 1,
+      "q": "What is the difference between a process and a thread?",
+      "points": [
+        "a process has its own private memory space; threads share the memory of their process",
+        "processes are expensive to create and isolate crashes; threads are cheap and communicate easily",
+        "threads sharing memory means race conditions — synchronisation is the programmer's problem"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "If threads are cheaper and share memory, why do servers like browsers still use multiple processes?"
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "Concretely: can two threads of one process read the same global variable? Can two processes?"
+        }
+      ]
+    },
+    {
+      "id": "p2",
+      "topic": "os",
+      "skill": "Operating Systems",
+      "tier": 2,
+      "q": "What is Python's GIL, and what does it mean for using threads on a CPU-bound task?",
+      "points": [
+        "the Global Interpreter Lock lets only one thread execute Python bytecode at a time in CPython",
+        "threads still help I/O-bound work because the GIL is released while waiting",
+        "for CPU-bound parallelism in Python you use multiprocessing (separate processes, separate GILs)"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Your web scraper uses 20 threads and is fast; your image filter uses 4 threads and gains nothing. Explain both."
+        },
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "What does multiprocessing give up in exchange for true parallelism?"
+        }
+      ]
+    },
+    {
+      "id": "p3",
+      "topic": "os",
+      "skill": "Operating Systems",
+      "tier": 2,
+      "q": "What is a deadlock? Describe a minimal two-thread example and one way to prevent it.",
+      "points": [
+        "two or more threads each hold a resource the other needs, so all wait forever (circular wait)",
+        "example: thread A locks X then wants Y; thread B locks Y then wants X",
+        "prevention: always acquire locks in the same global order (or use timeouts / one lock)"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Deadlock needs four conditions at once. Name any two and how breaking one prevents it."
+        },
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "Why does a fixed lock ordering actually break the circular wait?"
+        }
+      ]
+    },
+    {
+      "id": "p4",
+      "topic": "os",
+      "skill": "Operating Systems",
+      "tier": 3,
+      "q": "Explain virtual memory and paging in about a minute, as you would to a junior developer.",
+      "points": [
+        "each process sees its own virtual address space, translated to physical memory in pages",
+        "pages not currently needed can live on disk; a page fault loads them on demand",
+        "if the working set exceeds RAM the system thrashes — constantly paging instead of working"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "How can the sum of all processes' memory exceed the machine's RAM without everything crashing immediately?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "What exactly happens, step by step, on a page fault?"
+        }
+      ]
+    },
+    {
+      "id": "p5",
+      "topic": "os",
+      "skill": "Operating Systems",
+      "tier": 2,
+      "q": "What is a context switch, why does it cost time, and who decides which process runs next?",
+      "points": [
+        "a context switch saves one process/thread's CPU state and restores another's",
+        "the cost is the state save/restore plus cache/TLB disruption — the CPU does no useful work meanwhile",
+        "the OS scheduler decides, using priorities and time slices (preemptive scheduling)"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "How is cooperative scheduling — like Python's asyncio — different in who decides to switch?"
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "What state must be saved for a thread to resume exactly where it stopped?"
+        }
+      ]
+    },
+    {
+      "id": "n1",
+      "topic": "cn",
+      "skill": "Computer Networks",
+      "tier": 1,
+      "q": "TCP versus UDP — what do you gain and give up with each?",
+      "points": [
+        "TCP: connection-oriented, reliable, ordered delivery with retransmission",
+        "UDP: no connection, no delivery or ordering guarantee — minimal overhead and latency",
+        "TCP for web/files/payments; UDP for live media, games and DNS where a lost packet beats a late one"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "A video call uses UDP but adds its own sequencing. Why build reliability on top instead of just using TCP?"
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "What does TCP do when a packet is lost — how does the sender find out?"
+        }
+      ]
+    },
+    {
+      "id": "n2",
+      "topic": "cn",
+      "skill": "Computer Networks",
+      "tier": 2,
+      "q": "You type a URL into a browser and press Enter. Walk me through what happens, at a high level.",
+      "points": [
+        "DNS resolves the hostname to an IP address (often cached)",
+        "a TCP connection opens, plus a TLS handshake for HTTPS",
+        "the browser sends an HTTP request; the server responds; the browser parses and renders, fetching sub-resources"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Where can caching happen along that path, and what does each layer save?"
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "What exactly does DNS return, and what happens if the name does not exist?"
+        }
+      ]
+    },
+    {
+      "id": "n3",
+      "topic": "cn",
+      "skill": "Computer Networks",
+      "tier": 2,
+      "q": "Which HTTP status codes should every developer know cold? Give me the meaning of 200, 201, 301, 400, 401, 403, 404 and 500.",
+      "points": [
+        "200 OK; 201 Created (usually a successful POST)",
+        "301 permanent redirect; 400 the request itself is malformed/invalid",
+        "401 unauthenticated versus 403 authenticated but not allowed; 404 resource not found; 500 the server's own error"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "A user is logged in but opens an admin page. 401 or 403 — and why?"
+        },
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "What is the practical difference between 401 and 403 for the client developer?"
+        }
+      ]
+    },
+    {
+      "id": "n4",
+      "topic": "cn",
+      "skill": "Computer Networks",
+      "tier": 3,
+      "q": "What does HTTPS add over HTTP, and what does it NOT protect against?",
+      "points": [
+        "TLS encrypts traffic in transit — eavesdroppers see ciphertext, not content",
+        "certificates authenticate the server's identity, so you know who you are talking to",
+        "it does not make the site itself honest or secure — a phishing site can have a valid certificate"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "In the TLS handshake, how do two sides that never met end up with a shared secret over a public channel?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "What is a certificate authority's role in that identity check?"
+        }
+      ]
+    },
+    {
+      "id": "w1",
+      "topic": "web",
+      "skill": "Web & APIs",
+      "tier": 1,
+      "q": "What makes an API RESTful? Describe its core ideas.",
+      "points": [
+        "resources are nouns in URLs (/users/42), acted on with HTTP verbs (GET/POST/PUT/DELETE)",
+        "requests are stateless — each carries everything the server needs",
+        "responses use proper status codes and usually JSON representations"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Design the endpoints for a blog: posts and comments on posts. What do the URLs and verbs look like?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "What does stateless force the client to send with every request?"
+        }
+      ]
+    },
+    {
+      "id": "w2",
+      "topic": "web",
+      "skill": "Web & APIs",
+      "tier": 2,
+      "q": "Session-based auth versus token-based (JWT) auth — how do they differ, and what are the trade-offs?",
+      "points": [
+        "sessions: the server stores state and the browser holds an opaque session id in a cookie; JWT: a signed, self-contained token the server verifies without storage",
+        "sessions are easy to revoke; a JWT cannot be individually revoked before expiry without extra machinery",
+        "where the token lives matters: localStorage is readable by any script (XSS), an httpOnly cookie is not"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "A user's JWT is stolen an hour before it expires. What are your options, and what does that tell you about token lifetimes?"
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "If the server stores nothing for a JWT, how does it know the token was not forged?"
+        }
+      ]
+    },
+    {
+      "id": "w3",
+      "topic": "web",
+      "skill": "Web & APIs",
+      "tier": 2,
+      "q": "What does idempotent mean? Which HTTP methods are idempotent, and why does it matter in practice?",
+      "points": [
+        "idempotent = making the same request multiple times has the same effect as making it once",
+        "GET, PUT and DELETE are idempotent; POST is not",
+        "it makes retries safe — crucial for payments and flaky networks; POST endpoints add idempotency keys to fake it"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "A payment POST times out on the client. Why is blindly retrying dangerous, and how does an idempotency key fix it?"
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "DELETE /users/42 runs twice. What should the second call do, and is that idempotent?"
+        }
+      ]
+    },
+    {
+      "id": "w4",
+      "topic": "web",
+      "skill": "Web & APIs",
+      "tier": 3,
+      "q": "Your API endpoint gets slow as users grow toward 10,000. What are the first things you check, and in what order?",
+      "points": [
+        "measure first — profile/logs to find whether the time is in the database, the app or the network",
+        "database causes first: missing indexes, N+1 queries, unbounded result sets (add pagination)",
+        "then caching for hot reads and removing repeated work — before scaling hardware"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "What is an N+1 query problem, and how do you spot one in logs?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "Why is an unbounded SELECT on a growing table a time bomb, and what is the standard fix?"
+        }
+      ]
+    },
+    {
+      "id": "w5",
+      "topic": "web",
+      "skill": "Web & APIs",
+      "tier": 1,
+      "q": "Why do APIs exchange JSON, and in Python what do json.loads and json.dumps each do?",
+      "points": [
+        "JSON is a language-agnostic text format that maps naturally to dicts and lists",
+        "loads parses JSON text into Python objects; dumps serialises Python objects into JSON text",
+        "not everything is serialisable by default — dates, sets and custom objects need conversion"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Your API must return a datetime. What happens with plain json.dumps, and what are your options?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "Mnemonic check: which of loads/dumps deals with a string, and how do you remember?"
+        }
+      ]
+    },
+    {
+      "id": "da1",
+      "topic": "data",
+      "skill": "Data & pandas",
+      "tier": 2,
+      "q": "In pandas, what is a Series versus a DataFrame, and why does the index matter?",
+      "points": [
+        "a Series is one labelled 1-D column; a DataFrame is a 2-D table of Series sharing an index",
+        "operations align on the index, not on position — mismatched indexes produce NaN",
+        "vectorised operations on whole columns replace slow Python loops"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "You add two Series with different indexes and get NaNs everywhere. What happened?"
+        },
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "Why is df['x'] * 2 faster than looping over rows in pure Python?"
+        }
+      ]
+    },
+    {
+      "id": "da2",
+      "topic": "data",
+      "skill": "Data & pandas",
+      "tier": 2,
+      "q": "Explain groupby in one line, then unpack it: what are the three phases happening under the hood?",
+      "points": [
+        "groupby computes a summary per group — split, apply, combine",
+        "split: rows are divided by the grouping key; apply: an aggregation runs per group",
+        "combine: the per-group results are assembled into one result indexed by the key"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "groupby('city').mean() on a table with text columns — what happens to those columns, and why does it surprise people?"
+        },
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "What is the SQL equivalent of a pandas groupby with an aggregation?"
+        }
+      ]
+    },
+    {
+      "id": "da3",
+      "topic": "data",
+      "skill": "Data & pandas",
+      "tier": 3,
+      "q": "Why do we split data into train and test sets, and what is data leakage?",
+      "points": [
+        "the test set estimates performance on unseen data — tuning on the test set inflates the estimate",
+        "leakage: information from the future or from the target leaks into the features, giving impossible accuracy",
+        "defences: split before any fitting, fit preprocessing on train only, stratify for classification"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Your model scores 99% in training and 61% in production. Leakage or something else — how do you investigate?"
+        },
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "Give me one concrete leakage example in a sales-prediction dataset."
+        }
+      ]
+    }
+  ],
+  "hr": [
+    {
+      "id": "h1",
+      "topic": "hr",
+      "skill": "Communication & HR",
+      "tier": 1,
+      "q": "Tell me about yourself.",
+      "points": [
+        "a concrete, real situation (not a hypothetical)",
+        "their own task or responsibility in it",
+        "specific actions they personally took",
+        "a result or outcome",
+        "a reflection — what they learned or would do differently"
+      ],
+      "focus": "a structured 60-90 second arc: present role/studies, relevant skills, one proof point, and why this role",
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "You mentioned your skills — which single project or result best proves them?"
+        }
+      ]
+    },
+    {
+      "id": "h2",
+      "topic": "hr",
+      "skill": "Communication & HR",
+      "tier": 1,
+      "q": "Why should we hire you for this role?",
+      "points": [
+        "a concrete, real situation (not a hypothetical)",
+        "their own task or responsibility in it",
+        "specific actions they personally took",
+        "a result or outcome",
+        "a reflection — what they learned or would do differently"
+      ],
+      "focus": "a direct match between the role's needs and their demonstrated skills, with evidence rather than adjectives",
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 3,
+          "q": "What result have you produced that is closest to what this role needs?"
+        }
+      ]
+    },
+    {
+      "id": "h3",
+      "topic": "hr",
+      "skill": "Communication & HR",
+      "tier": 1,
+      "q": "What is your greatest strength? Give me an example of it in action.",
+      "points": [
+        "a concrete, real situation (not a hypothetical)",
+        "their own task or responsibility in it",
+        "specific actions they personally took",
+        "a result or outcome",
+        "a reflection — what they learned or would do differently"
+      ],
+      "focus": "one real strength backed by a story, not a list of adjectives",
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "Walk me through that example — what did you personally do?"
+        }
+      ]
+    },
+    {
+      "id": "h4",
+      "topic": "hr",
+      "skill": "Communication & HR",
+      "tier": 2,
+      "q": "Tell me about a real weakness of yours. What are you doing about it?",
+      "points": [
+        "a concrete, real situation (not a hypothetical)",
+        "their own task or responsibility in it",
+        "specific actions they personally took",
+        "a result or outcome",
+        "a reflection — what they learned or would do differently"
+      ],
+      "focus": "an honest, non-fatal weakness plus a concrete improvement practice already under way",
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 4,
+          "q": "How will I be able to tell, in three months, that this weakness is improving?"
+        }
+      ]
+    },
+    {
+      "id": "h5",
+      "topic": "hr",
+      "skill": "Communication & HR",
+      "tier": 2,
+      "q": "Describe a time you failed at something that mattered to you. What happened?",
+      "points": [
+        "a concrete, real situation (not a hypothetical)",
+        "their own task or responsibility in it",
+        "specific actions they personally took",
+        "a result or outcome",
+        "a reflection — what they learned or would do differently"
+      ],
+      "focus": "ownership without blaming others, and a lesson that visibly changed later behaviour",
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 4,
+          "q": "What do you do differently now because of that failure?"
+        }
+      ]
+    },
+    {
+      "id": "h6",
+      "topic": "hr",
+      "skill": "Communication & HR",
+      "tier": 2,
+      "q": "Tell me about a conflict you had with a teammate or classmate. How did you handle it?",
+      "points": [
+        "a concrete, real situation (not a hypothetical)",
+        "their own task or responsibility in it",
+        "specific actions they personally took",
+        "a result or outcome",
+        "a reflection — what they learned or would do differently"
+      ],
+      "focus": "they addressed the issue directly and respectfully, focused on the work, and reached a working outcome",
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "What did you say in the first conversation about it — how did you open it?"
+        }
+      ]
+    },
+    {
+      "id": "h7",
+      "topic": "hr",
+      "skill": "Communication & HR",
+      "tier": 2,
+      "q": "Describe a time you had to deliver under serious time pressure. How did you manage it?",
+      "points": [
+        "a concrete, real situation (not a hypothetical)",
+        "their own task or responsibility in it",
+        "specific actions they personally took",
+        "a result or outcome",
+        "a reflection — what they learned or would do differently"
+      ],
+      "focus": "prioritisation, communication about trade-offs, and a delivered result — not just working longer hours",
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 1,
+          "q": "What did you deliberately choose NOT to do when time ran short?"
+        }
+      ]
+    },
+    {
+      "id": "h8",
+      "topic": "hr",
+      "skill": "Communication & HR",
+      "tier": 1,
+      "q": "Tell me about the project you are most proud of. What was your exact contribution?",
+      "points": [
+        "a concrete, real situation (not a hypothetical)",
+        "their own task or responsibility in it",
+        "specific actions they personally took",
+        "a result or outcome",
+        "a reflection — what they learned or would do differently"
+      ],
+      "focus": "a specific personal contribution, distinguishable from the team's work",
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "If I removed your contribution, what would the project have lost?"
+        }
+      ]
+    },
+    {
+      "id": "h9",
+      "topic": "hr",
+      "skill": "Communication & HR",
+      "tier": 3,
+      "q": "You discover, two days before a deadline, that your approach is fundamentally wrong. What do you do?",
+      "points": [
+        "a concrete, real situation (not a hypothetical)",
+        "their own task or responsibility in it",
+        "specific actions they personally took",
+        "a result or outcome",
+        "a reflection — what they learned or would do differently"
+      ],
+      "focus": "early escalation with options and a recommendation, not silent heroics or hiding the problem",
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "What exactly do you tell your lead in that first conversation?"
+        }
+      ]
+    },
+    {
+      "id": "h10",
+      "topic": "hr",
+      "skill": "Communication & HR",
+      "tier": 2,
+      "q": "Tell me about a time you had to learn something completely new, fast. How did you approach it?",
+      "points": [
+        "a concrete, real situation (not a hypothetical)",
+        "their own task or responsibility in it",
+        "specific actions they personally took",
+        "a result or outcome",
+        "a reflection — what they learned or would do differently"
+      ],
+      "focus": "a learning strategy: sources, practice, feedback loops — and a usable result at the end",
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 3,
+          "q": "How did you verify you had actually learned it, rather than just read about it?"
+        }
+      ]
+    },
+    {
+      "id": "h11",
+      "topic": "hr",
+      "skill": "Communication & HR",
+      "tier": 1,
+      "q": "Where do you see yourself in five years?",
+      "points": [
+        "a concrete, real situation (not a hypothetical)",
+        "their own task or responsibility in it",
+        "specific actions they personally took",
+        "a result or outcome",
+        "a reflection — what they learned or would do differently"
+      ],
+      "focus": "a plausible growth direction connected to this role, showing intent to stay and grow",
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "What is the first step of that plan that you have already started?"
+        }
+      ]
+    },
+    {
+      "id": "h12",
+      "topic": "hr",
+      "skill": "Communication & HR",
+      "tier": 2,
+      "q": "Tell me about a time you received tough feedback. How did you respond?",
+      "points": [
+        "a concrete, real situation (not a hypothetical)",
+        "their own task or responsibility in it",
+        "specific actions they personally took",
+        "a result or outcome",
+        "a reflection — what they learned or would do differently"
+      ],
+      "focus": "they listened without defensiveness, extracted the useful part, and changed something concrete",
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 4,
+          "q": "What did you change in the following weeks because of it?"
+        }
+      ]
+    },
+    {
+      "id": "h13",
+      "topic": "hr",
+      "skill": "Communication & HR",
+      "tier": 1,
+      "q": "Why do you want to join our company, specifically?",
+      "points": [
+        "a concrete, real situation (not a hypothetical)",
+        "their own task or responsibility in it",
+        "specific actions they personally took",
+        "a result or outcome",
+        "a reflection — what they learned or would do differently"
+      ],
+      "focus": "specific, researched reasons tied to the company's work — not interchangeable flattery",
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "What is one thing about our work that a generic applicant would not know?"
+        }
+      ]
+    },
+    {
+      "id": "h14",
+      "topic": "hr",
+      "skill": "Communication & HR",
+      "tier": 3,
+      "q": "Describe a time you took ownership of something that was not officially your job.",
+      "points": [
+        "a concrete, real situation (not a hypothetical)",
+        "their own task or responsibility in it",
+        "specific actions they personally took",
+        "a result or outcome",
+        "a reflection — what they learned or would do differently"
+      ],
+      "focus": "they noticed a problem, acted without being asked, and followed through to a result",
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 3,
+          "q": "What was the measurable outcome of stepping in?"
+        }
+      ]
+    },
+    {
+      "id": "h15",
+      "topic": "hr",
+      "skill": "Communication & HR",
+      "tier": 1,
+      "q": "Do you have any questions for us?",
+      "points": [
+        "a concrete, real situation (not a hypothetical)",
+        "their own task or responsibility in it",
+        "specific actions they personally took",
+        "a result or outcome",
+        "a reflection — what they learned or would do differently"
+      ],
+      "focus": "thoughtful questions about the role, team and growth — asking none reads as disinterest; the rubric here scores the questions they pose",
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 0,
+          "q": "Of everything you could ask, why did you pick those questions?"
+        }
+      ]
+    }
+  ],
+  "coding": [
+    {
+      "id": "c1",
+      "title": "Second Largest (distinct)",
+      "topic": "coding",
+      "skill": "Coding",
+      "tier": 1,
+      "minutes": 10,
+      "prompt": "Write second_largest(nums) that returns the second-largest DISTINCT value in a list of numbers. If there is no second distinct value (empty list, one element, or all elements equal), return None.",
+      "starter": "def second_largest(nums):\n    # your code here\n    pass\n",
+      "visible": [
+        {
+          "run": "second_largest([3, 1, 4, 1, 5])",
+          "expect": "4"
+        },
+        {
+          "run": "second_largest([10, 10, 9])",
+          "expect": "9"
+        }
+      ],
+      "hidden": [
+        {
+          "run": "second_largest([7])",
+          "expect": "None"
+        },
+        {
+          "run": "second_largest([-5, -2, -9])",
+          "expect": "-5"
+        },
+        {
+          "run": "second_largest([2, 2, 2])",
+          "expect": "None"
+        },
+        {
+          "run": "second_largest([0, -1])",
+          "expect": "-1"
+        }
+      ],
+      "solution": "def second_largest(nums):\n    uniq = sorted(set(nums), reverse=True)\n    return uniq[1] if len(uniq) > 1 else None\n",
+      "optimalTime": "O(n)",
+      "optimalSpace": "O(n)",
+      "ideaPoints": [
+        "distinct values (set or track two maxima)",
+        "single pass tracking the top two, or sort the unique values",
+        "fewer than two distinct values returns None"
+      ]
+    },
+    {
+      "id": "c2",
+      "title": "Two Sum",
+      "topic": "coding",
+      "skill": "Coding",
+      "tier": 1,
+      "minutes": 12,
+      "prompt": "Write two_sum(nums, target) that returns the indices of the two numbers that add up to target, as a list [i, j] with i < j. Exactly one solution exists, and the same element may not be used twice.",
+      "starter": "def two_sum(nums, target):\n    # your code here\n    pass\n",
+      "visible": [
+        {
+          "run": "two_sum([2, 7, 11, 15], 9)",
+          "expect": "[0, 1]"
+        },
+        {
+          "run": "two_sum([3, 2, 4], 6)",
+          "expect": "[1, 2]"
+        }
+      ],
+      "hidden": [
+        {
+          "run": "two_sum([3, 3], 6)",
+          "expect": "[0, 1]"
+        },
+        {
+          "run": "two_sum([-1, -2, -3], -5)",
+          "expect": "[1, 2]"
+        },
+        {
+          "run": "two_sum([0, 4, 3, 0], 0)",
+          "expect": "[0, 3]"
+        }
+      ],
+      "solution": "def two_sum(nums, target):\n    seen = {}\n    for i, n in enumerate(nums):\n        if target - n in seen:\n            return [seen[target - n], i]\n        seen[n] = i\n",
+      "optimalTime": "O(n)",
+      "optimalSpace": "O(n)",
+      "ideaPoints": [
+        "hash map / dictionary of seen values",
+        "one pass",
+        "look up the complement (target - current)"
+      ]
+    },
+    {
+      "id": "c3",
+      "title": "Balanced Brackets",
+      "topic": "coding",
+      "skill": "Coding",
+      "tier": 2,
+      "minutes": 12,
+      "prompt": "Write is_balanced(s) that returns True if every opening bracket in s — ( [ { — is closed by the matching bracket in the correct order, and False otherwise. The string contains only bracket characters.",
+      "starter": "def is_balanced(s):\n    # your code here\n    pass\n",
+      "visible": [
+        {
+          "run": "is_balanced('()[]{}')",
+          "expect": "True"
+        },
+        {
+          "run": "is_balanced('(]')",
+          "expect": "False"
+        }
+      ],
+      "hidden": [
+        {
+          "run": "is_balanced('([{}])')",
+          "expect": "True"
+        },
+        {
+          "run": "is_balanced('(((')",
+          "expect": "False"
+        },
+        {
+          "run": "is_balanced('')",
+          "expect": "True"
+        },
+        {
+          "run": "is_balanced('}{')",
+          "expect": "False"
+        }
+      ],
+      "solution": "def is_balanced(s):\n    pairs = {')': '(', ']': '[', '}': '{'}\n    stack = []\n    for ch in s:\n        if ch in '([{':\n            stack.append(ch)\n        elif not stack or stack.pop() != pairs[ch]:\n            return False\n    return not stack\n",
+      "optimalTime": "O(n)",
+      "optimalSpace": "O(n)",
+      "ideaPoints": [
+        "stack (LIFO)",
+        "push opening brackets, match each closing bracket against the top",
+        "stack must be empty at the end"
+      ]
+    },
+    {
+      "id": "c4",
+      "title": "First Non-Repeating Character",
+      "topic": "coding",
+      "skill": "Coding",
+      "tier": 2,
+      "minutes": 12,
+      "prompt": "Write first_unique(s) that returns the first character of s that occurs exactly once in the string. Return an empty string if every character repeats.",
+      "starter": "def first_unique(s):\n    # your code here\n    pass\n",
+      "visible": [
+        {
+          "run": "first_unique('leetcode')",
+          "expect": "l"
+        },
+        {
+          "run": "first_unique('aabb')",
+          "expect": ""
+        }
+      ],
+      "hidden": [
+        {
+          "run": "first_unique('aabbc')",
+          "expect": "c"
+        },
+        {
+          "run": "first_unique('swiss')",
+          "expect": "w"
+        },
+        {
+          "run": "first_unique('')",
+          "expect": ""
+        }
+      ],
+      "solution": "def first_unique(s):\n    counts = {}\n    for ch in s:\n        counts[ch] = counts.get(ch, 0) + 1\n    for ch in s:\n        if counts[ch] == 1:\n            return ch\n    return ''\n",
+      "optimalTime": "O(n)",
+      "optimalSpace": "O(n)",
+      "ideaPoints": [
+        "count occurrences with a dictionary",
+        "second pass in original order to find the first with count 1",
+        "dictionary preserves insertion order"
+      ]
+    },
+    {
+      "id": "c5",
+      "title": "Reverse the Words",
+      "topic": "coding",
+      "skill": "Coding",
+      "tier": 1,
+      "minutes": 10,
+      "prompt": "Write reverse_words(sentence) that returns the sentence with its words in reverse order. Words are separated by single spaces, with no leading or trailing spaces.",
+      "starter": "def reverse_words(sentence):\n    # your code here\n    pass\n",
+      "visible": [
+        {
+          "run": "reverse_words('the sky is blue')",
+          "expect": "blue is sky the"
+        },
+        {
+          "run": "reverse_words('hello world')",
+          "expect": "world hello"
+        }
+      ],
+      "hidden": [
+        {
+          "run": "reverse_words('hello')",
+          "expect": "hello"
+        },
+        {
+          "run": "reverse_words('a b c')",
+          "expect": "c b a"
+        },
+        {
+          "run": "reverse_words('')",
+          "expect": ""
+        }
+      ],
+      "solution": "def reverse_words(sentence):\n    if not sentence:\n        return ''\n    return ' '.join(sentence.split(' ')[::-1])\n",
+      "optimalTime": "O(n)",
+      "optimalSpace": "O(n)",
+      "ideaPoints": [
+        "split into words",
+        "reverse the list of words (not the characters)",
+        "join with single spaces"
+      ]
+    },
+    {
+      "id": "c6",
+      "title": "Group Anagrams",
+      "topic": "coding",
+      "skill": "Coding",
+      "tier": 3,
+      "minutes": 18,
+      "prompt": "Write group_anagrams(words) that groups the words that are anagrams of each other. Return a list of lists; the order of groups and of words inside a group does not matter.",
+      "starter": "def group_anagrams(words):\n    # your code here\n    pass\n",
+      "visible": [
+        {
+          "run": "sorted([sorted(g) for g in group_anagrams(['eat', 'tea', 'tan', 'ate', 'nat', 'bat'])])",
+          "expect": "[['ate', 'eat', 'tea'], ['bat'], ['nat', 'tan']]"
+        },
+        {
+          "run": "sorted([sorted(g) for g in group_anagrams(['abc'])])",
+          "expect": "[['abc']]"
+        }
+      ],
+      "hidden": [
+        {
+          "run": "sorted([sorted(g) for g in group_anagrams(['', ''])])",
+          "expect": "[['', '']]"
+        },
+        {
+          "run": "sorted([sorted(g) for g in group_anagrams(['ab', 'ba', 'abc', 'cab', 'bca'])])",
+          "expect": "[['ab', 'ba'], ['abc', 'bca', 'cab']]"
+        }
+      ],
+      "solution": "def group_anagrams(words):\n    groups = {}\n    for w in words:\n        key = ''.join(sorted(w))\n        groups.setdefault(key, []).append(w)\n    return list(groups.values())\n",
+      "optimalTime": "O(n·k log k)",
+      "optimalSpace": "O(n·k)",
+      "ideaPoints": [
+        "anagrams share a canonical key — their sorted letters",
+        "group with a dictionary keyed by the sorted word",
+        "character-count tuple is an alternative key"
+      ]
+    },
+    {
+      "id": "c7",
+      "title": "Maximum Subarray Sum",
+      "topic": "coding",
+      "skill": "Coding",
+      "tier": 2,
+      "minutes": 15,
+      "prompt": "Write max_subarray(nums) that returns the largest sum of any contiguous subarray. The list has at least one number, and numbers may all be negative.",
+      "starter": "def max_subarray(nums):\n    # your code here\n    pass\n",
+      "visible": [
+        {
+          "run": "max_subarray([-2, 1, -3, 4, -1, 2, 1, -5, 4])",
+          "expect": "6"
+        },
+        {
+          "run": "max_subarray([1, 2, 3, 4])",
+          "expect": "10"
+        }
+      ],
+      "hidden": [
+        {
+          "run": "max_subarray([-3, -1])",
+          "expect": "-1"
+        },
+        {
+          "run": "max_subarray([5])",
+          "expect": "5"
+        },
+        {
+          "run": "max_subarray([-2, -5, -1, -4])",
+          "expect": "-1"
+        }
+      ],
+      "solution": "def max_subarray(nums):\n    best = cur = nums[0]\n    for n in nums[1:]:\n        cur = max(n, cur + n)\n        best = max(best, cur)\n    return best\n",
+      "optimalTime": "O(n)",
+      "optimalSpace": "O(1)",
+      "ideaPoints": [
+        "Kadane's algorithm — running best-ending-here",
+        "restart the current sum when extending hurts",
+        "track the global maximum; handle all-negative by seeding with the first element"
+      ]
+    },
+    {
+      "id": "c8",
+      "title": "Merge Two Sorted Lists",
+      "topic": "coding",
+      "skill": "Coding",
+      "tier": 2,
+      "minutes": 12,
+      "prompt": "Write merge_sorted(a, b) that merges two already-sorted lists of numbers into one new sorted list. Do not call sorted() or .sort() — merge them directly.",
+      "starter": "def merge_sorted(a, b):\n    # your code here\n    pass\n",
+      "visible": [
+        {
+          "run": "merge_sorted([1, 3, 5], [2, 4, 6])",
+          "expect": "[1, 2, 3, 4, 5, 6]"
+        },
+        {
+          "run": "merge_sorted([1, 2], [3, 4])",
+          "expect": "[1, 2, 3, 4]"
+        }
+      ],
+      "hidden": [
+        {
+          "run": "merge_sorted([], [1])",
+          "expect": "[1]"
+        },
+        {
+          "run": "merge_sorted([5, 6], [])",
+          "expect": "[5, 6]"
+        },
+        {
+          "run": "merge_sorted([1, 2, 2], [2, 3])",
+          "expect": "[1, 2, 2, 2, 3]"
+        }
+      ],
+      "solution": "def merge_sorted(a, b):\n    out = []\n    i = j = 0\n    while i < len(a) and j < len(b):\n        if a[i] <= b[j]:\n            out.append(a[i]); i += 1\n        else:\n            out.append(b[j]); j += 1\n    return out + a[i:] + b[j:]\n",
+      "optimalTime": "O(n + m)",
+      "optimalSpace": "O(n + m)",
+      "ideaPoints": [
+        "two pointers, one per list",
+        "append the smaller front element each step",
+        "append the remaining tail when one list is exhausted"
+      ]
+    }
+  ],
+  "roleTopics": {
+    "Python Developer": [
+      "fundamentals",
+      "oop",
+      "dsa",
+      "dbms",
+      "web",
+      "os"
+    ],
+    "Software Developer": [
+      "fundamentals",
+      "oop",
+      "dsa",
+      "dbms",
+      "os",
+      "cn",
+      "web"
+    ],
+    "Full Stack Developer": [
+      "fundamentals",
+      "oop",
+      "dsa",
+      "dbms",
+      "web",
+      "cn"
+    ],
+    "Frontend Developer": [
+      "fundamentals",
+      "oop",
+      "dsa",
+      "web",
+      "cn"
+    ],
+    "Backend Developer": [
+      "fundamentals",
+      "oop",
+      "dsa",
+      "dbms",
+      "web",
+      "os",
+      "cn"
+    ],
+    "Java Developer": [
+      "fundamentals",
+      "oop",
+      "dsa",
+      "dbms",
+      "os",
+      "cn"
+    ],
+    "Data Analyst": [
+      "fundamentals",
+      "dbms",
+      "data",
+      "dsa"
+    ],
+    "Data Scientist": [
+      "fundamentals",
+      "dbms",
+      "data",
+      "dsa",
+      "oop"
+    ],
+    "AI/ML Engineer": [
+      "fundamentals",
+      "data",
+      "dsa",
+      "oop",
+      "dbms"
+    ],
+    "DevOps Engineer": [
+      "fundamentals",
+      "os",
+      "cn",
+      "web",
+      "dbms"
+    ],
+    "Cybersecurity Analyst": [
+      "fundamentals",
+      "os",
+      "cn",
+      "web"
+    ],
+    "QA / Software Testing Engineer": [
+      "fundamentals",
+      "oop",
+      "dsa",
+      "dbms",
+      "web"
+    ]
+  },
+  "codingRubric": {
+    "correctness": 35,
+    "time": 20,
+    "space": 15,
+    "edge": 15,
+    "quality": 10,
+    "explanation": 5
+  },
+  "companies": [
+    {
+      "id": "tcs",
+      "name": "TCS",
+      "note": "Broad fundamentals, steady difficulty, strong HR emphasis (NQT-style pattern).",
+      "topics": [
+        "fundamentals",
+        "oop",
+        "dbms",
+        "os",
+        "cn"
+      ],
+      "tierBias": -1,
+      "hrBoost": true
+    },
+    {
+      "id": "infosys",
+      "name": "Infosys",
+      "note": "Core CS fundamentals with puzzle-style problem solving and training-readiness HR.",
+      "topics": [
+        "fundamentals",
+        "oop",
+        "dsa",
+        "dbms"
+      ],
+      "tierBias": 0,
+      "hrBoost": false
+    },
+    {
+      "id": "wipro",
+      "name": "Wipro",
+      "note": "Fundamentals and databases at a gentle ramp, with a real HR conversation.",
+      "topics": [
+        "fundamentals",
+        "oop",
+        "dbms",
+        "cn"
+      ],
+      "tierBias": -1,
+      "hrBoost": true
+    },
+    {
+      "id": "accenture",
+      "name": "Accenture",
+      "note": "Balanced technical + web/APIs, project talk, and situational HR.",
+      "topics": [
+        "fundamentals",
+        "oop",
+        "dsa",
+        "web",
+        "dbms"
+      ],
+      "tierBias": 0,
+      "hrBoost": false
+    },
+    {
+      "id": "cognizant",
+      "name": "Cognizant",
+      "note": "Fundamentals, SQL and web basics with an HR round that probes communication.",
+      "topics": [
+        "fundamentals",
+        "oop",
+        "dbms",
+        "web"
+      ],
+      "tierBias": 0,
+      "hrBoost": true
+    },
+    {
+      "id": "capgemini",
+      "name": "Capgemini",
+      "note": "Core CS breadth — OOP, DSA, DBMS, OS — at a steady intermediate level.",
+      "topics": [
+        "fundamentals",
+        "oop",
+        "dsa",
+        "dbms",
+        "os"
+      ],
+      "tierBias": 0,
+      "hrBoost": false
+    },
+    {
+      "id": "amazon",
+      "name": "Amazon",
+      "note": "DSA-heavy and deep, plus behavioural questions in the leadership-principles style (STAR evidence matters).",
+      "topics": [
+        "dsa",
+        "oop",
+        "fundamentals",
+        "dbms"
+      ],
+      "tierBias": 1,
+      "hrBoost": true
+    },
+    {
+      "id": "microsoft",
+      "name": "Microsoft",
+      "note": "Deep DSA and design-flavoured problem solving; precise, structured answers.",
+      "topics": [
+        "dsa",
+        "oop",
+        "fundamentals",
+        "os"
+      ],
+      "tierBias": 1,
+      "hrBoost": false
+    },
+    {
+      "id": "google",
+      "name": "Google",
+      "note": "The hardest ladder here: algorithms depth, complexity fluency, thinking out loud.",
+      "topics": [
+        "dsa",
+        "fundamentals",
+        "oop"
+      ],
+      "tierBias": 1,
+      "hrBoost": false
+    }
+  ],
+  "simDisclaimer": "Simulation based on publicly available recruitment information — not an official interview, and not this company's actual questions.",
+  "projectDeep": [
+    {
+      "topic": "project",
+      "q": "Walk me through \"{title}\" as if I'm a senior engineer reviewing it: what problem does it solve, who uses it, and how is it put together — the main components and how data flows between them?",
+      "points": [
+        "the problem and its users, stated crisply",
+        "the main components / architecture",
+        "how data flows through the system",
+        "their own role in building it"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "Which component of \"{title}\" would you redesign first if you started over, and why?"
+        }
+      ]
+    },
+    {
+      "topic": "project",
+      "q": "What were the two or three most important technical choices you made in \"{title}\" — and for the biggest one, what did you consider and reject, and why?",
+      "points": [
+        "named concrete technical choices",
+        "an alternative that was considered",
+        "reasoning / trade-offs behind the decision"
+      ],
+      "followups": [
+        {
+          "kind": "probe",
+          "point": 2,
+          "q": "What would have to change for the rejected option to become the right choice?"
+        }
+      ]
+    },
+    {
+      "topic": "project",
+      "q": "What was the hardest bug or problem you hit while building \"{title}\"? Take me through how you found the root cause — not just the fix.",
+      "points": [
+        "a specific, real problem (not a generic one)",
+        "a systematic debugging approach",
+        "the actual root cause",
+        "how they verified the fix"
+      ],
+      "followups": [
+        {
+          "kind": "deeper",
+          "q": "What would you put in place so that class of bug can't come back in \"{title}\"?"
+        }
+      ]
+    },
+    {
+      "topic": "project",
+      "q": "Last one on \"{title}\": if it suddenly had to serve 100× the users or data, what breaks first — and what's your plan for it?",
+      "points": [
+        "a plausible first bottleneck, correctly identified",
+        "a concrete scaling approach",
+        "the trade-offs or costs of that approach"
+      ],
+      "followups": []
+    }
+  ],
+  "aptitude": [
+    {
+      "id": "a1",
+      "area": "Quantitative",
+      "q": "A train travels 60 km in 45 minutes. What is its average speed?",
+      "options": [
+        "70 km/h",
+        "75 km/h",
+        "80 km/h",
+        "90 km/h"
+      ],
+      "answer": 2,
+      "why": "45 minutes is 0.75 hours; 60 / 0.75 = 80 km/h."
+    },
+    {
+      "id": "a2",
+      "area": "Quantitative",
+      "q": "What is 15% of 240?",
+      "options": [
+        "24",
+        "36",
+        "30",
+        "48"
+      ],
+      "answer": 1,
+      "why": "10% of 240 is 24 and 5% is 12; 24 + 12 = 36."
+    },
+    {
+      "id": "a3",
+      "area": "Quantitative",
+      "q": "A shopkeeper buys an item for ₹800 and sells it for ₹920. What is the profit percentage?",
+      "options": [
+        "10%",
+        "12%",
+        "20%",
+        "15%"
+      ],
+      "answer": 3,
+      "why": "Profit is ₹120 on a cost of ₹800: 120/800 = 15%."
+    },
+    {
+      "id": "a4",
+      "area": "Quantitative",
+      "q": "What is the average of 12, 18, 20, 22 and 28?",
+      "options": [
+        "18",
+        "20",
+        "22",
+        "24"
+      ],
+      "answer": 1,
+      "why": "The sum is 100; 100 / 5 = 20."
+    },
+    {
+      "id": "a5",
+      "area": "Quantitative",
+      "q": "5 workers can finish a job in 12 days. How long will 10 workers take, at the same rate?",
+      "options": [
+        "4 days",
+        "8 days",
+        "6 days",
+        "10 days"
+      ],
+      "answer": 2,
+      "why": "The job needs 5 × 12 = 60 worker-days; 60 / 10 = 6 days."
+    },
+    {
+      "id": "a6",
+      "area": "Quantitative",
+      "q": "What comes next in the series: 2, 6, 12, 20, 30, …?",
+      "options": [
+        "42",
+        "36",
+        "40",
+        "48"
+      ],
+      "answer": 0,
+      "why": "Each term is n × (n+1): 1×2, 2×3, 3×4, 4×5, 5×6, so next is 6×7 = 42."
+    },
+    {
+      "id": "a7",
+      "area": "Logical",
+      "q": "All cats are animals. Some animals are black. Which conclusion can be drawn for certain?",
+      "options": [
+        "All cats are black",
+        "Some cats are black",
+        "No cat is black",
+        "None of these can be concluded for certain"
+      ],
+      "answer": 3,
+      "why": "The black animals might not include any cats — nothing about cats' colour follows for certain."
+    },
+    {
+      "id": "a8",
+      "area": "Logical",
+      "q": "Find the odd one out: 3, 5, 11, 14, 17, 21",
+      "options": [
+        "3",
+        "14",
+        "17",
+        "21"
+      ],
+      "answer": 1,
+      "why": "14 is the only even number; the rest are odd."
+    },
+    {
+      "id": "a9",
+      "area": "Logical",
+      "q": "If BOOK is coded as 43 by adding the positions of its letters in the alphabet (A=1, B=2, …), what is PEN coded as?",
+      "options": [
+        "28",
+        "32",
+        "35",
+        "41"
+      ],
+      "answer": 2,
+      "why": "B+O+O+K = 2+15+15+11 = 43. P+E+N = 16+5+14 = 35."
+    },
+    {
+      "id": "a10",
+      "area": "Logical",
+      "q": "A is B's brother. B is C's mother. How is A related to C?",
+      "options": [
+        "Father",
+        "Brother",
+        "Uncle",
+        "Grandfather"
+      ],
+      "answer": 2,
+      "why": "A is the brother of C's mother — C's maternal uncle."
+    },
+    {
+      "id": "a11",
+      "area": "Logical",
+      "q": "What comes next in the series: 1, 1, 2, 3, 5, 8, …?",
+      "options": [
+        "10",
+        "13",
+        "12",
+        "16"
+      ],
+      "answer": 1,
+      "why": "Each term is the sum of the previous two (Fibonacci): 5 + 8 = 13."
+    },
+    {
+      "id": "a12",
+      "area": "Logical",
+      "q": "If yesterday was Friday, what day is the day after tomorrow?",
+      "options": [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Saturday"
+      ],
+      "answer": 1,
+      "why": "Yesterday Friday → today is Saturday → tomorrow Sunday → day after tomorrow is Monday."
+    },
+    {
+      "id": "a13",
+      "area": "Verbal",
+      "q": "Choose the word closest in meaning to CANDID.",
+      "options": [
+        "Shy",
+        "Rude",
+        "Proud",
+        "Frank"
+      ],
+      "answer": 3,
+      "why": "Candid means frank — honest and direct in speech."
+    },
+    {
+      "id": "a14",
+      "area": "Verbal",
+      "q": "Choose the word most opposite in meaning to SCARCE.",
+      "options": [
+        "Rare",
+        "Abundant",
+        "Costly",
+        "Limited"
+      ],
+      "answer": 1,
+      "why": "Scarce means in short supply; abundant means plentiful."
+    },
+    {
+      "id": "a15",
+      "area": "Verbal",
+      "q": "Which sentence is grammatically correct?",
+      "options": [
+        "She don't like coffee.",
+        "She doesn't likes coffee.",
+        "She doesn't like coffee.",
+        "She not like coffee."
+      ],
+      "answer": 2,
+      "why": "With doesn't, the main verb stays in its base form: doesn't like."
+    },
+    {
+      "id": "a16",
+      "area": "Verbal",
+      "q": "He has been working here ___ 2019.",
+      "options": [
+        "for",
+        "since",
+        "from",
+        "by"
+      ],
+      "answer": 1,
+      "why": "Since is used with a point in time (2019); for is used with a duration."
+    },
+    {
+      "id": "a17",
+      "area": "Verbal",
+      "q": "What does the idiom 'to bite the bullet' mean?",
+      "options": [
+        "To eat quickly",
+        "To face something unpleasant bravely",
+        "To waste money",
+        "To argue loudly"
+      ],
+      "answer": 1,
+      "why": "It means to endure a painful or difficult situation with courage."
+    },
+    {
+      "id": "a18",
+      "area": "Verbal",
+      "q": "What is one word for 'a person who speaks many languages'?",
+      "options": [
+        "Polyglot",
+        "Bilingual",
+        "Orator",
+        "Verbose"
+      ],
+      "answer": 0,
+      "why": "A polyglot knows or uses several languages (bilingual is exactly two)."
+    },
+    {
+      "id": "a19",
+      "area": "Quantitative",
+      "q": "A number is increased by 20% and then decreased by 20%. What is the net change?",
+      "options": [
+        "No change",
+        "4% increase",
+        "4% decrease",
+        "2% decrease"
+      ],
+      "answer": 2,
+      "why": "Start with 100: +20% makes 120, then −20% of 120 is 24, leaving 96 — a 4% decrease."
+    },
+    {
+      "id": "a20",
+      "area": "Quantitative",
+      "q": "Two numbers are in the ratio 3 : 5 and their sum is 72. What is the larger number?",
+      "options": [
+        "27",
+        "36",
+        "45",
+        "40"
+      ],
+      "answer": 2,
+      "why": "8 equal parts make 72, so one part is 9; the larger share is 5 × 9 = 45."
+    },
+    {
+      "id": "a21",
+      "area": "Quantitative",
+      "q": "A car covers 150 km in 2.5 hours. What is its average speed?",
+      "options": [
+        "50 km/h",
+        "55 km/h",
+        "60 km/h",
+        "65 km/h"
+      ],
+      "answer": 2,
+      "why": "150 / 2.5 = 60 km/h."
+    },
+    {
+      "id": "a22",
+      "area": "Quantitative",
+      "q": "What is the simple interest on ₹5,000 at 8% per year for 3 years?",
+      "options": [
+        "₹1,000",
+        "₹1,200",
+        "₹1,400",
+        "₹800"
+      ],
+      "answer": 1,
+      "why": "5000 × 8/100 × 3 = ₹1,200."
+    },
+    {
+      "id": "a23",
+      "area": "Quantitative",
+      "q": "What is the HCF (greatest common divisor) of 24 and 36?",
+      "options": [
+        "6",
+        "8",
+        "12",
+        "18"
+      ],
+      "answer": 2,
+      "why": "The common divisors are 1, 2, 3, 4, 6 and 12; the greatest is 12."
+    },
+    {
+      "id": "a24",
+      "area": "Quantitative",
+      "q": "If 3x + 7 = 25, what is x?",
+      "options": [
+        "5",
+        "6",
+        "7",
+        "8"
+      ],
+      "answer": 1,
+      "why": "3x = 25 − 7 = 18, so x = 6."
+    },
+    {
+      "id": "a25",
+      "area": "Quantitative",
+      "q": "A bag has 4 red and 6 blue balls. What is the probability of drawing a red ball?",
+      "options": [
+        "1/5",
+        "2/5",
+        "3/5",
+        "1/2"
+      ],
+      "answer": 1,
+      "why": "4 red out of 10 balls in total: 4/10 = 2/5."
+    },
+    {
+      "id": "a26",
+      "area": "Quantitative",
+      "q": "What is the perimeter of a square whose side is 9 cm?",
+      "options": [
+        "18 cm",
+        "27 cm",
+        "36 cm",
+        "81 cm"
+      ],
+      "answer": 2,
+      "why": "Perimeter is 4 × 9 = 36 cm (81 cm² would be the area)."
+    },
+    {
+      "id": "a27",
+      "area": "Quantitative",
+      "q": "What is 45% of 300?",
+      "options": [
+        "120",
+        "125",
+        "135",
+        "150"
+      ],
+      "answer": 2,
+      "why": "10% of 300 is 30, so 45% is 4.5 × 30 = 135."
+    },
+    {
+      "id": "a28",
+      "area": "Quantitative",
+      "q": "After a 10% discount, a product sells for ₹1,080. What was its original price?",
+      "options": [
+        "₹1,188",
+        "₹1,200",
+        "₹1,100",
+        "₹990"
+      ],
+      "answer": 1,
+      "why": "₹1,080 is 90% of the original; 1080 / 0.9 = ₹1,200."
+    },
+    {
+      "id": "a29",
+      "area": "Quantitative",
+      "q": "The average age of 4 people is 25 years. A fifth person, aged 30, joins them. What is the new average?",
+      "options": [
+        "25",
+        "26",
+        "27",
+        "28"
+      ],
+      "answer": 1,
+      "why": "Total age becomes 4 × 25 + 30 = 130; 130 / 5 = 26."
+    },
+    {
+      "id": "a30",
+      "area": "Quantitative",
+      "q": "If a : b = 2 : 3 and b : c = 4 : 5, what is a : c?",
+      "options": [
+        "8 : 15",
+        "2 : 5",
+        "8 : 9",
+        "4 : 5"
+      ],
+      "answer": 0,
+      "why": "Make b equal: a : b = 8 : 12 and b : c = 12 : 15, so a : c = 8 : 15."
+    },
+    {
+      "id": "a31",
+      "area": "Quantitative",
+      "q": "How many minutes are there in 2.5 days?",
+      "options": [
+        "3,000",
+        "3,600",
+        "2,400",
+        "4,320"
+      ],
+      "answer": 1,
+      "why": "2.5 days × 24 hours × 60 minutes = 3,600 minutes."
+    },
+    {
+      "id": "a32",
+      "area": "Quantitative",
+      "q": "Pipe A fills a tank in 4 hours and pipe B fills it in 6 hours. Working together, how long do they take?",
+      "options": [
+        "5 hours",
+        "2 hours 24 minutes",
+        "2 hours",
+        "3 hours"
+      ],
+      "answer": 1,
+      "why": "Together they fill 1/4 + 1/6 = 5/12 of the tank per hour, so the tank takes 12/5 = 2.4 hours = 2 h 24 min."
+    },
+    {
+      "id": "a33",
+      "area": "Logical",
+      "q": "What comes next in the series: 3, 9, 27, 81, …?",
+      "options": [
+        "162",
+        "243",
+        "108",
+        "324"
+      ],
+      "answer": 1,
+      "why": "Each term is the previous one multiplied by 3: 81 × 3 = 243."
+    },
+    {
+      "id": "a34",
+      "area": "Logical",
+      "q": "All pens are books. All books are chairs. The conclusion 'All pens are chairs' is…",
+      "options": [
+        "Valid",
+        "Invalid",
+        "Valid only sometimes",
+        "Impossible to judge"
+      ],
+      "answer": 0,
+      "why": "Pens sit inside books and books inside chairs, so every pen is necessarily a chair — the chain is valid."
+    },
+    {
+      "id": "a35",
+      "area": "Logical",
+      "q": "Find the odd one out: 121, 144, 169, 190, 196",
+      "options": [
+        "144",
+        "190",
+        "169",
+        "196"
+      ],
+      "answer": 1,
+      "why": "121, 144, 169 and 196 are perfect squares (11², 12², 13², 14²); 190 is not."
+    },
+    {
+      "id": "a36",
+      "area": "Logical",
+      "q": "If CAT is written as 3120 by joining the alphabet positions of its letters (C=3, A=1, T=20), how is DOG written?",
+      "options": [
+        "4157",
+        "4167",
+        "4158",
+        "3157"
+      ],
+      "answer": 0,
+      "why": "D=4, O=15, G=7, joined in order: 4157."
+    },
+    {
+      "id": "a37",
+      "area": "Logical",
+      "q": "Pointing to a photograph, Neha says: 'She is the daughter of my mother's only son.' Who is in the photograph?",
+      "options": [
+        "Neha herself",
+        "Neha's niece",
+        "Neha's sister",
+        "Neha's cousin"
+      ],
+      "answer": 1,
+      "why": "Neha's mother's only son is Neha's brother; his daughter is Neha's niece."
+    },
+    {
+      "id": "a38",
+      "area": "Logical",
+      "q": "What comes next in the series: 1, 4, 9, 16, 25, …?",
+      "options": [
+        "30",
+        "32",
+        "36",
+        "49"
+      ],
+      "answer": 2,
+      "why": "The terms are squares: 1², 2², 3², 4², 5², so next is 6² = 36."
+    },
+    {
+      "id": "a39",
+      "area": "Logical",
+      "q": "If 5 machines take 5 minutes to make 5 parts, how long do 100 machines take to make 100 parts?",
+      "options": [
+        "100 minutes",
+        "5 minutes",
+        "20 minutes",
+        "50 minutes"
+      ],
+      "answer": 1,
+      "why": "Each machine makes one part in 5 minutes; 100 machines working in parallel still take 5 minutes."
+    },
+    {
+      "id": "a40",
+      "area": "Logical",
+      "q": "A man walks 3 km north, then turns and walks 4 km east. How far is he from his starting point?",
+      "options": [
+        "5 km",
+        "6 km",
+        "7 km",
+        "8 km"
+      ],
+      "answer": 0,
+      "why": "The two legs form a right triangle: √(3² + 4²) = √25 = 5 km."
+    },
+    {
+      "id": "a41",
+      "area": "Logical",
+      "q": "Which word does not belong with the others?",
+      "options": [
+        "Apple",
+        "Mango",
+        "Potato",
+        "Banana"
+      ],
+      "answer": 2,
+      "why": "Apple, mango and banana are fruits; a potato is a vegetable (a tuber)."
+    },
+    {
+      "id": "a42",
+      "area": "Logical",
+      "q": "If the day before yesterday was Wednesday, what day is tomorrow?",
+      "options": [
+        "Friday",
+        "Saturday",
+        "Sunday",
+        "Thursday"
+      ],
+      "answer": 1,
+      "why": "Day before yesterday Wednesday → yesterday Thursday → today Friday → tomorrow is Saturday."
+    },
+    {
+      "id": "a43",
+      "area": "Logical",
+      "q": "Book is to Pages as Wall is to…",
+      "options": [
+        "Roof",
+        "Bricks",
+        "Door",
+        "Paint"
+      ],
+      "answer": 1,
+      "why": "A book is made up of pages; a wall is made up of bricks — part-to-whole in both pairs."
+    },
+    {
+      "id": "a44",
+      "area": "Logical",
+      "q": "In a row of 10 students, Asha is 4th from the left. What is her position from the right?",
+      "options": [
+        "6th",
+        "7th",
+        "5th",
+        "8th"
+      ],
+      "answer": 1,
+      "why": "Position from the right = 10 − 4 + 1 = 7th."
+    },
+    {
+      "id": "a45",
+      "area": "Logical",
+      "q": "If MANGO is coded as NZOHP by shifting each letter one step forward in the alphabet, how is APPLE coded?",
+      "options": [
+        "BQQMF",
+        "ZOOKD",
+        "BPPLE",
+        "AQQMF"
+      ],
+      "answer": 0,
+      "why": "Shift every letter by one: A→B, P→Q, P→Q, L→M, E→F gives BQQMF."
+    },
+    {
+      "id": "a46",
+      "area": "Logical",
+      "q": "Some doctors are teachers. All teachers are singers. The conclusion 'Some doctors are singers'…",
+      "options": [
+        "Follows",
+        "Does not follow",
+        "Follows only if all doctors are teachers",
+        "Cannot be judged"
+      ],
+      "answer": 0,
+      "why": "The doctors who are teachers are singers, because every teacher is a singer — so some doctors are certainly singers."
+    },
+    {
+      "id": "a47",
+      "area": "Verbal",
+      "q": "Choose the word closest in meaning to RAPID.",
+      "options": [
+        "Slow",
+        "Swift",
+        "Weak",
+        "Late"
+      ],
+      "answer": 1,
+      "why": "Rapid means very fast — swift."
+    },
+    {
+      "id": "a48",
+      "area": "Verbal",
+      "q": "Choose the word most opposite in meaning to ANCIENT.",
+      "options": [
+        "Old",
+        "Antique",
+        "Modern",
+        "Historic"
+      ],
+      "answer": 2,
+      "why": "Ancient means very old; its opposite here is modern."
+    },
+    {
+      "id": "a49",
+      "area": "Verbal",
+      "q": "Which sentence is grammatically correct?",
+      "options": [
+        "Neither of the answers are correct.",
+        "Neither of the answers is correct.",
+        "Neither of the answers be correct.",
+        "Neither of the answers were correct."
+      ],
+      "answer": 1,
+      "why": "'Neither' is singular, so it takes the singular verb 'is'."
+    },
+    {
+      "id": "a50",
+      "area": "Verbal",
+      "q": "She is very good ___ mathematics.",
+      "options": [
+        "in",
+        "at",
+        "on",
+        "for"
+      ],
+      "answer": 1,
+      "why": "The fixed phrase is 'good at' a subject or skill."
+    },
+    {
+      "id": "a51",
+      "area": "Verbal",
+      "q": "What does the idiom 'a blessing in disguise' mean?",
+      "options": [
+        "A religious ceremony",
+        "A hidden benefit",
+        "A costly gift",
+        "A visible loss"
+      ],
+      "answer": 1,
+      "why": "It is something that seems bad at first but turns out to be good — a hidden benefit."
+    },
+    {
+      "id": "a52",
+      "area": "Verbal",
+      "q": "What is one word for 'a place where birds are kept'?",
+      "options": [
+        "Apiary",
+        "Aviary",
+        "Aquarium",
+        "Stable"
+      ],
+      "answer": 1,
+      "why": "An aviary houses birds; an apiary keeps bees and an aquarium keeps fish."
+    },
+    {
+      "id": "a53",
+      "area": "Verbal",
+      "q": "Choose the word closest in meaning to BRIEF.",
+      "options": [
+        "Long",
+        "Short",
+        "Rude",
+        "Clear"
+      ],
+      "answer": 1,
+      "why": "Brief means short in duration or length."
+    },
+    {
+      "id": "a54",
+      "area": "Verbal",
+      "q": "Choose the word most opposite in meaning to EXPAND.",
+      "options": [
+        "Extend",
+        "Grow",
+        "Contract",
+        "Inflate"
+      ],
+      "answer": 2,
+      "why": "Expand means to become larger; contract means to become smaller."
+    },
+    {
+      "id": "a55",
+      "area": "Verbal",
+      "q": "Which word is spelt correctly?",
+      "options": [
+        "Occured",
+        "Occurred",
+        "Ocured",
+        "Occurrred"
+      ],
+      "answer": 1,
+      "why": "Occurred doubles both the c and the r: o-c-c-u-r-r-e-d."
+    },
+    {
+      "id": "a56",
+      "area": "Verbal",
+      "q": "By the time we reached the station, the train ___ already left.",
+      "options": [
+        "has",
+        "have",
+        "had",
+        "is"
+      ],
+      "answer": 2,
+      "why": "The leaving happened before another past event, so the past perfect 'had left' is used."
+    },
+    {
+      "id": "a57",
+      "area": "Verbal",
+      "q": "What does the idiom 'to hit the books' mean?",
+      "options": [
+        "To damage books",
+        "To start studying",
+        "To buy books",
+        "To write a book"
+      ],
+      "answer": 1,
+      "why": "To hit the books means to begin studying seriously."
+    },
+    {
+      "id": "a58",
+      "area": "Verbal",
+      "q": "What is one word for 'that which cannot be heard'?",
+      "options": [
+        "Invisible",
+        "Inaudible",
+        "Inedible",
+        "Illegible"
+      ],
+      "answer": 1,
+      "why": "Inaudible means impossible to hear; illegible means impossible to read."
+    },
+    {
+      "id": "a59",
+      "area": "Verbal",
+      "q": "Which sentence is punctuated correctly?",
+      "options": [
+        "Its a beautiful day.",
+        "It's a beautiful day.",
+        "Its' a beautiful day.",
+        "It s a beautiful day."
+      ],
+      "answer": 1,
+      "why": "'It's' with an apostrophe is the contraction of 'it is'; 'its' without one shows possession."
+    },
+    {
+      "id": "a60",
+      "area": "Verbal",
+      "q": "He apologised ___ his mistake.",
+      "options": [
+        "for",
+        "about",
+        "on",
+        "with"
+      ],
+      "answer": 0,
+      "why": "The fixed phrase is 'apologise for' something you did wrong."
+    }
+  ],
+  "panelPersonas": [
+    {
+      "key": "tech",
+      "name": "Ananya",
+      "role": "Technical Lead",
+      "style": "Challenging",
+      "intro": "I'm Ananya, the technical lead. I'll dig into your fundamentals and problem-solving — expect me to push on anything vague."
+    },
+    {
+      "key": "mgr",
+      "name": "Rohan",
+      "role": "Hiring Manager",
+      "style": "Professional",
+      "intro": "I'm Rohan, the hiring manager. I care about the work you've actually shipped — we'll go deep on one of your projects."
+    },
+    {
+      "key": "hr",
+      "name": "Priya",
+      "role": "HR Manager",
+      "style": "Friendly",
+      "intro": "And I'm Priya from HR. I'll ask about how you work with people, handle pressure, and what you're looking for next."
+    }
+  ],
+  "gdTopics": [
+    {
+      "id": "gd1",
+      "title": "Artificial intelligence in classrooms — a tool or a threat?",
+      "brief": "Schools and colleges are split on whether AI tools help students learn or simply do the learning for them.",
+      "voices": [
+        {
+          "name": "Aarav",
+          "stance": "Pro-tool",
+          "open": "I think AI in classrooms is clearly a tool. A student stuck at midnight gets an explanation instantly instead of waiting two days for a doubt session. Used well, it personalises learning the way no single teacher with sixty students can.",
+          "follow": "I'd add that the threat framing assumes students only copy. The same was said about calculators — the answer was to change what we test, not ban the tool."
+        },
+        {
+          "name": "Meera",
+          "stance": "Cautious",
+          "open": "I'm cautious. If the AI writes the essay and solves the problem set, the student practises nothing. Learning is the struggle itself — remove it and you get graduates who can prompt but cannot think.",
+          "follow": "And there's an honesty problem too. Teachers can't tell genuine work from generated work anymore, so assessment itself is breaking down."
+        },
+        {
+          "name": "Kabir",
+          "stance": "Middle path",
+          "open": "I sit in the middle: it depends entirely on how it's deployed. AI as a tutor that asks questions is very different from AI as an answer machine. The institution's rules decide which one shows up.",
+          "follow": "Exactly — policy is the real topic here. Allow it for drafting and doubts, ban it in exams, and teach students to verify what it says."
+        }
+      ],
+      "close": "We've heard the main positions — tool, threat, and 'it depends on the rules'. Final thoughts are welcome before we wrap up."
+    },
+    {
+      "id": "gd2",
+      "title": "Should freshers prefer startups or large companies?",
+      "brief": "A classic fresher dilemma: the learning speed and ownership of a startup versus the structure and brand of a large company.",
+      "voices": [
+        {
+          "name": "Meera",
+          "stance": "Startups",
+          "open": "For a fresher, a startup is a fast-forward button. You ship real code in week one, sit with founders, and learn in one year what takes three in a large company. Early career is for learning speed, not comfort.",
+          "follow": "Brand names matter less than people think — recruiters ask what you built, and at a startup you actually built things."
+        },
+        {
+          "name": "Kabir",
+          "stance": "Large companies",
+          "open": "I'd argue the opposite. A fresher doesn't know what good engineering looks like yet. Large companies teach process, code review, scale — the discipline that makes the startup chaos survivable later.",
+          "follow": "And let's be honest about risk: most startups fail or pay late. A first job also has to pay the rent reliably."
+        },
+        {
+          "name": "Aarav",
+          "stance": "It depends",
+          "open": "Both of you assume the company type decides everything. The team and the manager matter more. A great mentor at a boring company beats a chaotic startup with no guidance, every time.",
+          "follow": "I'd judge the offer by one question: who will review my work and teach me in the first six months? Everything else is secondary."
+        }
+      ],
+      "close": "Startups for speed, large companies for structure, and the mentor question cutting across both — a good place to land your final view."
+    },
+    {
+      "id": "gd3",
+      "title": "Remote work or office work for early-career engineers?",
+      "brief": "Many companies now hire freshers into hybrid or fully remote roles. Is that a gift or a handicap at the start of a career?",
+      "voices": [
+        {
+          "name": "Kabir",
+          "stance": "Remote",
+          "open": "Remote is a gift. A fresher from a small town gets a metro salary without metro rent, and deep-work hours at home beat an open-plan office for actual coding. The savings in year one are life-changing.",
+          "follow": "The mentorship argument is real but solvable — pair programming over a call and good written culture teach plenty, if the team bothers."
+        },
+        {
+          "name": "Aarav",
+          "stance": "Office",
+          "open": "For the first two years, office wins and it's not close. You learn by overhearing seniors debug, by the corridor question that saves you a day. Remote freshers often stay invisible and plateau quietly.",
+          "follow": "Visibility matters for growth too — promotions go to people the leads actually know and trust."
+        },
+        {
+          "name": "Meera",
+          "stance": "Hybrid",
+          "open": "This is why hybrid exists. Two or three office days for mentorship and bonding, remote days for focus and savings. The mistake is treating it as all-or-nothing.",
+          "follow": "Though I'd say the fresher shouldn't choose by policy alone — a fully remote team with strong rituals can out-teach a lazy office."
+        }
+      ],
+      "close": "Savings and focus on one side, mentorship and visibility on the other, hybrid in between — final positions, please."
+    },
+    {
+      "id": "gd4",
+      "title": "Social media does more harm than good for students.",
+      "brief": "Attention, comparison, misinformation on one side; community, learning and opportunity on the other.",
+      "voices": [
+        {
+          "name": "Aarav",
+          "stance": "Agree",
+          "open": "I agree with the statement. The platforms are engineered to steal attention — the average student loses hours daily to feeds designed against their interests. Add comparison anxiety and misinformation, and the harm ledger is longer.",
+          "follow": "The learning argument is weak too — for every good tutorial there are fifty distractions one swipe away, and the algorithm promotes the distractions."
+        },
+        {
+          "name": "Kabir",
+          "stance": "Disagree",
+          "open": "I disagree. The same platforms run the study communities, internship alerts and open-source showcases that got half my class placed. The tool isn't the harm — unregulated use is, and that's teachable.",
+          "follow": "Also, for students outside big cities, social media IS the network. It levels access to mentors and opportunities that used to need connections."
+        },
+        {
+          "name": "Meera",
+          "stance": "Balanced",
+          "open": "The statement is too sweeping. Harm and good run on the same rails; what differs is the student's intent — consumption versus creation. A student posting projects gains; a student only scrolling pays.",
+          "follow": "I'd put responsibility on design too — if a platform profits from addiction, self-control alone is an unfair ask of a sixteen-year-old."
+        }
+      ],
+      "close": "Harm, good, and the intent question — we've circled the statement well. Your closing take?"
+    },
+    {
+      "id": "gd5",
+      "title": "Degrees vs skills — what should hiring value more?",
+      "brief": "Employers increasingly list 'skills-based hiring' while still filtering by degree. Which signal deserves more weight?",
+      "voices": [
+        {
+          "name": "Meera",
+          "stance": "Skills",
+          "open": "Skills, plainly. A degree certifies attendance across four years; a portfolio demonstrates the actual job. When a candidate shows real projects and passes a work-sample test, the degree adds almost no information.",
+          "follow": "Degrees also filter out late bloomers and self-taught talent — exactly the hungry candidates companies claim to want."
+        },
+        {
+          "name": "Aarav",
+          "stance": "Degrees still matter",
+          "open": "I'll defend the degree a little. It signals sustained effort, foundational theory, and the ability to finish something hard over years. Skills tests can be gamed in a weekend; four years of coursework is harder to fake.",
+          "follow": "And in fields like core engineering or research, the theory IS the skill — you can't portfolio your way past thermodynamics."
+        },
+        {
+          "name": "Kabir",
+          "stance": "Sequence matters",
+          "open": "I think the honest answer is: degree as a floor for some roles, skills as the decider for all. Use the degree to check foundations if you must, but let the work sample make the final call.",
+          "follow": "Companies say skills-first but filter degree-first because it's cheap. The ones who actually test skills get the better hires — the data from their own funnels shows it."
+        }
+      ],
+      "close": "Skills as proof, degrees as signal, and the funnel argument on the table — last word to you."
+    },
+    {
+      "id": "gd6",
+      "title": "Electric vehicles are the future of Indian roads.",
+      "brief": "EV sales are rising, charging infrastructure is thin, and petrol is familiar. Is the transition inevitable?",
+      "voices": [
+        {
+          "name": "Kabir",
+          "stance": "Inevitable",
+          "open": "The transition is inevitable. Running costs are a fifth of petrol, city pollution is a public-health emergency, and every major manufacturer has committed. Two-wheelers alone — most of India's vehicles — are already flipping fast.",
+          "follow": "Charging anxiety shrinks every year; battery swapping for two-wheelers is already working in several cities."
+        },
+        {
+          "name": "Meera",
+          "stance": "Not so fast",
+          "open": "I'd slow down. Our electricity is still largely coal-generated, batteries are imported, and a family in a small town can't charge on a highway trip today. 'Future' yes — but the timeline being sold is fantasy.",
+          "follow": "There's also the disposal question nobody answers: millions of dead batteries need a recycling system that doesn't exist yet at scale."
+        },
+        {
+          "name": "Aarav",
+          "stance": "Segment-wise",
+          "open": "Both are right by segment. City two-wheelers and fleet cars: electric wins today. Long-haul trucks and rural use: not yet. India's EV story will be won segment by segment, not in one wave.",
+          "follow": "Policy should match that — subsidise where the economics already work instead of spreading thin everywhere."
+        }
+      ],
+      "close": "Inevitable, premature, or segment-by-segment — bring us home with your final position."
+    }
+  ]
+}

@@ -40,15 +40,26 @@ import kotlinx.coroutines.tasks.await
  *   this field survives every web push untouched and the web simply
  *   ignores it.
  *
+ * - activityDays (App 2.0 A4): {yyyy-MM-dd: count} on the main doc —
+ *   per-day MAX of the cloud counts and the local active days (the app
+ *   does not count activities per day, so a local day contributes 1),
+ *   floored by the days on which merged lessons were completed (the
+ *   web's mergeActivityDays + doneAt history floor).
+ * - workspace (App 2.0 A4): synced via its OWN document,
+ *   users/{uid}/syncData/workspace, with the web's mergeWorkspace
+ *   rules (per-file LWW by mtime, deletion tombstones); the main doc's
+ *   legacy inline `workspace` field is folded in on read and never
+ *   written by the app. See the workspace section below.
+ *
  * NEVER CLOBBER: every write is read-merge-write and uses
  * SetOptions.merge() with ONLY the top-level fields this app owns
  * (profile, progress, exercises, paths, placement, counters,
- * achievements). Web-only fields on the same doc (workspace, reviews,
- * customPaths, projects) are never named in a payload and therefore
- * survive every app push byte-for-byte. customPaths in particular: the app holds no local
- * custom-path definitions, so — exactly like web mergeCustomPaths
- * treats a side with "no information" — the cloud copy always wins by
- * preservation.
+ * achievements, activityDays). Web-only fields on the same doc
+ * (reviews, customPaths, projects) are never named in a payload and
+ * therefore survive every app push byte-for-byte. customPaths in
+ * particular: the app holds no local custom-path definitions, so —
+ * exactly like web mergeCustomPaths treats a side with "no
+ * information" — the cloud copy always wins by preservation.
  */
 class SyncRepository(private val store: Store) {
     private val db: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
@@ -340,7 +351,9 @@ class SyncRepository(private val store: Store) {
         val paths: Map<String, Pair<Boolean, Long>>,
         val placement: PlacementRecord?,
         val counters: Counters,
-        val unlocked: Set<String>
+        val unlocked: Set<String>,
+        val activityDays: Map<String, Long>,
+        val reviews: Map<String, ReviewEntry>
     )
 
     /** Merges one cloud snapshot against the local Store (no writes). */
@@ -373,6 +386,50 @@ class SyncRepository(private val store: Store) {
         // Unlock record: UNION — an unlock known on either side is
         // unlocked, forever (badges never re-lock).
         val unlocked = store.getUnlockedAchievements() + cloudUnlocked(data)
+        // activityDays (A4): per-day MAX — cloud counts, local active
+        // days as 1 (the app keeps no per-day count), floored by the
+        // completion days of the merged lessons (web history floor).
+        @Suppress("UNCHECKED_CAST")
+        val cloudDays = (data?.get("activityDays") as? Map<String, Any?>) ?: emptyMap()
+        val actDays = LinkedHashMap<String, Long>()
+        for ((d, v) in cloudDays) {
+            val c = (v as? Number)?.toLong() ?: 0
+            if (c > 0) actDays[d] = c
+        }
+        for (d in store.activeDays()) actDays[d] = maxOf(actDays[d] ?: 0, 1)
+        val dayFmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        for ((_, ts) in progress.doneAt) {
+            if (ts > 0) {
+                val d = dayFmt.format(java.util.Date(ts))
+                actDays[d] = maxOf(actDays[d] ?: 0, 1)
+            }
+        }
+        // reviews (App 2.0 Phase B): per-lesson last-write-wins by
+        // updatedAt, tie -> local (web mergeReviews). Cloud shape:
+        // {items: {id: {interval, due, updatedAt}}, updatedAt}.
+        val cloudReviewsRaw = (data?.get("reviews") as? Map<*, *>)?.get("items") as? Map<*, *>
+        val cloudReviews = mutableMapOf<String, ReviewEntry>()
+        if (cloudReviewsRaw != null) {
+            for ((k, v) in cloudReviewsRaw) {
+                val id = k as? String ?: continue
+                val e = v as? Map<*, *> ?: continue
+                val interval = (e["interval"] as? Number)?.toInt() ?: 0
+                val due = (e["due"] as? Number)?.toLong() ?: 0L
+                val upd = (e["updatedAt"] as? Number)?.toLong() ?: 0L
+                if (interval > 0 && due > 0 && upd > 0) {
+                    cloudReviews[id] = ReviewEntry(interval, due, upd)
+                }
+            }
+        }
+        val localReviews = store.reviews()
+        val reviews = (localReviews.keys + cloudReviews.keys).associateWith { id ->
+            val le = localReviews[id]
+            val ce = cloudReviews[id]
+            when {
+                le != null && ce != null -> if (ce.updatedAt > le.updatedAt) ce else le
+                else -> le ?: ce!!
+            }
+        }
         return MergedState(
             progress = progress,
             attempts = attempts,
@@ -383,7 +440,9 @@ class SyncRepository(private val store: Store) {
             paths = paths,
             placement = placement,
             counters = counters,
-            unlocked = unlocked
+            unlocked = unlocked,
+            activityDays = actDays,
+            reviews = reviews
         )
     }
 
@@ -402,6 +461,9 @@ class SyncRepository(private val store: Store) {
         if (m.placement != null) store.setPlacement(m.placement)
         store.applySyncedCounters(m.counters)
         store.applySyncedUnlocked(m.unlocked)
+        store.applySyncedActiveDays(m.activityDays.keys)
+        store.applySyncedActivityCounts(m.activityDays)
+        store.applySyncedReviews(m.reviews)
     }
 
     /** Push payload: ONLY the top-level fields the app owns. Placement
@@ -435,7 +497,160 @@ class SyncRepository(private val store: Store) {
         if (m.unlocked.isNotEmpty()) {
             payload["achievements"] = m.unlocked.associateWith { true }
         }
+        // activityDays (A4): written only when non-empty (same
+        // no-information rule as the unlock record).
+        if (m.activityDays.isNotEmpty()) {
+            payload["activityDays"] = m.activityDays
+        }
+        // reviews (Phase B): the web's {items, updatedAt} shape,
+        // written only when non-empty.
+        if (m.reviews.isNotEmpty()) {
+            payload["reviews"] = mapOf(
+                "items" to m.reviews.mapValues { (_, e) ->
+                    mapOf(
+                        "interval" to e.interval,
+                        "due" to e.due,
+                        "updatedAt" to e.updatedAt
+                    )
+                },
+                "updatedAt" to (m.reviews.values.maxOfOrNull { it.updatedAt } ?: 0L)
+            )
+        }
         return payload
+    }
+
+    /* ---------------- workspace (App 2.0 A4) ----------------
+       Port of the web's mergeWorkspace (sync.js v23). The workspace
+       lives in its OWN document, users/{uid}/syncData/workspace, in
+       the cloud shape {files, tabs, active, mtimes, deleted,
+       updatedAt}; the main doc's legacy inline `workspace` field is
+       folded into the cloud side on read. Rules (web comment, abridged):
+       per-file last-write-wins by mtime; a deletion is a tombstone —
+       a file survives only when some side holds a copy edited AFTER
+       its tombstone, so a stale device can never resurrect a deleted
+       file; tabs/active are whole-doc LWW by updatedAt, filtered to
+       surviving files; a side with no files AND no tombstones carries
+       no information. The doc is written back only when the merge is
+       newer than the stored doc and fits the web's 700 KB budget. */
+
+    private data class WorkspaceDoc(
+        val files: Map<String, String> = emptyMap(),
+        val mtimes: Map<String, Long> = emptyMap(),
+        val deleted: Map<String, Long> = emptyMap(),
+        val tabs: List<String> = emptyList(),
+        val active: String? = null,
+        val updatedAt: Long = 0
+    )
+
+    private val wsSyncMaxBytes = 700 * 1024
+
+    private fun workspaceDocRef(uid: String) =
+        db.collection("users").document(uid).collection("syncData").document("workspace")
+
+    /** Normalises a raw cloud map (either doc shape) into a WorkspaceDoc. */
+    private fun cloudWorkspace(data: Map<String, Any?>?): WorkspaceDoc {
+        if (data == null) return WorkspaceDoc()
+        val filesRaw = data["files"] as? Map<*, *> ?: emptyMap<Any?, Any?>()
+        val files = LinkedHashMap<String, String>()
+        for ((k, v) in filesRaw) {
+            val name = k as? String ?: continue
+            val code = v as? String ?: continue
+            files[name] = code
+        }
+        fun tsMap(key: String): Map<String, Long> {
+            val raw = data[key] as? Map<*, *> ?: return emptyMap()
+            val out = LinkedHashMap<String, Long>()
+            for ((k, v) in raw) {
+                val name = k as? String ?: continue
+                val ts = (v as? Number)?.toLong() ?: 0
+                if (ts > 0) out[name] = ts
+            }
+            return out
+        }
+        val tabsRaw = (data["tabs"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+        val tabs = tabsRaw.filter { it in files }.ifEmpty { files.keys.toList() }
+        val activeRaw = data["active"] as? String
+        val active = if (activeRaw != null && activeRaw in files) activeRaw else tabs.firstOrNull()
+        val updatedAt = (data["updatedAt"] as? Number)?.toLong()?.takeIf { it > 0 } ?: 0
+        return WorkspaceDoc(files, tsMap("mtimes"), tsMap("deleted"), tabs, active, updatedAt)
+    }
+
+    private fun localWorkspace(): WorkspaceDoc {
+        val files = store.workspaceFiles()
+        val meta = store.workspaceMeta()
+        return WorkspaceDoc(
+            files = files,
+            mtimes = meta.mtimes,
+            deleted = meta.deleted,
+            tabs = files.keys.toList(),
+            active = files.keys.firstOrNull(),
+            updatedAt = meta.updatedAt
+        )
+    }
+
+    private fun mergeWorkspace(l: WorkspaceDoc, c: WorkspaceDoc): WorkspaceDoc {
+        val names = l.files.keys + c.files.keys + l.deleted.keys + c.deleted.keys
+        val files = LinkedHashMap<String, String>()
+        val mtimes = LinkedHashMap<String, Long>()
+        val deleted = LinkedHashMap<String, Long>()
+        for (name in names) {
+            val d = maxOf(l.deleted[name] ?: 0, c.deleted[name] ?: 0)
+            val lm = if (name in l.files) (l.mtimes[name] ?: 0) else -1
+            val cm = if (name in c.files) (c.mtimes[name] ?: 0) else -1
+            val bestM = maxOf(lm, cm)
+            if (if (d == 0L) bestM >= 0 else bestM > d) {
+                if (lm >= cm) {
+                    files[name] = l.files.getValue(name); mtimes[name] = lm
+                } else {
+                    files[name] = c.files.getValue(name); mtimes[name] = cm
+                }
+            } else if (d > 0) {
+                deleted[name] = d
+            }
+        }
+        val w = if (l.updatedAt >= c.updatedAt) l else c
+        val tabs = w.tabs.filter { it in files }.toMutableList()
+        for (n in files.keys.sorted()) if (n !in tabs) tabs.add(n)
+        val active = if (w.active != null && w.active in files) w.active else tabs.firstOrNull()
+        return WorkspaceDoc(files, mtimes, deleted, tabs, active, maxOf(l.updatedAt, c.updatedAt))
+    }
+
+    /**
+     * One workspace sync cycle: read the workspace doc, fold the legacy
+     * inline field in, merge with local, apply locally, and write back
+     * only when the merge advanced the doc. Fail-soft: returns false on
+     * any error and never disturbs the main sync result.
+     */
+    suspend fun syncWorkspace(uid: String, legacyInline: Map<String, Any?>?): Boolean {
+        return try {
+            val ref = workspaceDocRef(uid)
+            val snap = ref.get().await()
+            val wsData = if (snap.exists()) snap.data else null
+            val stored = cloudWorkspace(wsData)
+            val cloud = mergeWorkspace(cloudWorkspace(legacyInline), stored)
+            val merged = mergeWorkspace(localWorkspace(), cloud)
+            store.applySyncedWorkspace(
+                merged.files,
+                Store.WorkspaceMeta(merged.mtimes, merged.deleted, merged.updatedAt)
+            )
+            val hasInfo = merged.files.isNotEmpty() || merged.deleted.isNotEmpty()
+            val bytes = merged.files.values.sumOf { it.toByteArray(Charsets.UTF_8).size }
+            if (hasInfo && merged.updatedAt > stored.updatedAt && bytes <= wsSyncMaxBytes) {
+                ref.set(
+                    mapOf(
+                        "files" to merged.files,
+                        "tabs" to merged.tabs,
+                        "active" to merged.active,
+                        "mtimes" to merged.mtimes,
+                        "deleted" to merged.deleted,
+                        "updatedAt" to merged.updatedAt
+                    )
+                ).await()
+            }
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /* ---------------- sync ---------------- */
@@ -458,6 +673,10 @@ class SyncRepository(private val store: Store) {
             // (same discipline as web buildMerged/applyMerged), so a
             // failed push never leaves local pretending to be synced.
             applyMerged(merged)
+            // A4: workspace doc cycle (fail-soft by design; the legacy
+            // inline workspace field is folded in on read).
+            val legacyWs: Map<String, Any?>? = data?.get("workspace") as? Map<String, Any?>
+            syncWorkspace(uid, legacyWs)
             lastSyncAt = now
             lastStatus = "Synced"
             true
@@ -481,6 +700,9 @@ class SyncRepository(private val store: Store) {
             val merged = mergeAll(data)
             userDoc(uid).set(payloadOf(merged, now, includeProfile = true), SetOptions.merge()).await()
             applyMerged(merged)
+            // A4: workspace doc cycle (fail-soft, as in syncNow).
+            val legacyWs: Map<String, Any?>? = data?.get("workspace") as? Map<String, Any?>
+            syncWorkspace(uid, legacyWs)
             lastSyncAt = now
             lastStatus = "Synced"
             true

@@ -117,6 +117,72 @@ object AiRepository {
         explainWithRetry(payload, attempt = 0)
     }
 
+    /**
+     * App 2.0 Phase B — JSON-mode ask (the interview modes). Same
+     * payload and retry discipline as ask(), but returns the server's
+     * parsed `json` object (ai.js's res.data). If a server build
+     * returns the JSON only as explanation text, that text is parsed
+     * instead. Interview modes have no per-user cap server-side (pool
+     * only); cap errors surface as AiError.Provider and are never
+     * retried, exactly like ask().
+     */
+    suspend fun askJson(
+        code: String, error: String = "", mode: String, context: String = ""
+    ): Result<JSONObject> = withContext(Dispatchers.IO) {
+        val user = currentUser()
+        val payload = JSONObject().apply {
+            put("mode", mode)
+            put("stage", "")
+            put("code", code.take(16000))
+            put("error", error.take(2000))
+            put("context", context.take(2000))
+            put("uid", user?.uid ?: "")
+            put("email", user?.email ?: "")
+            put("token", freshIdToken())
+            put("json", true)
+        }
+        explainJsonWithRetry(payload, attempt = 0)
+    }
+
+    private suspend fun explainJsonWithRetry(payload: JSONObject, attempt: Int): Result<JSONObject> {
+        val timeout = if (attempt == 0) TIMEOUT_FIRST_MS else TIMEOUT_RETRY_MS
+        val res = try {
+            postExplain(payload, timeout)
+        } catch (e: SocketTimeoutException) {
+            return Result.failure(AiError.Network())
+        } catch (e: IOException) {
+            if (attempt < 1) {
+                delay(1500)
+                return explainJsonWithRetry(payload, attempt + 1)
+            }
+            return Result.failure(AiError.Network())
+        } catch (e: Exception) {
+            return Result.failure(AiError.Network())
+        }
+        val body = res.json
+        if (res.status in 200..299 && body != null) {
+            body.optJSONObject("json")?.let { return Result.success(it) }
+            val explanation = body.optString("explanation", "")
+            if (explanation.isNotEmpty()) {
+                try {
+                    return Result.success(JSONObject(explanation))
+                } catch (e: Exception) { /* fall through to error mapping */ }
+            }
+        }
+        val errCode = body?.optString("code", "")?.ifEmpty { "HTTP_${res.status}" } ?: "HTTP_${res.status}"
+        if (attempt < 1 && ((res.status == 503 && errCode != "NOT_CONFIGURED") || (res.status == 429 && errCode == "QUOTA"))) {
+            delay(2000)
+            return explainJsonWithRetry(payload, attempt + 1)
+        }
+        val serverMsg = body?.optString("error", "") ?: ""
+        return when {
+            errCode == "NOT_CONFIGURED" -> Result.failure(AiError.NotConfigured())
+            serverMsg.isNotEmpty() -> Result.failure(AiError.Provider(serverMsg, errCode))
+            res.status == 503 -> Result.failure(AiError.NotConfigured())
+            else -> Result.failure(AiError.Provider("Unexpected AI response.", errCode))
+        }
+    }
+
     /** ai.js backendAsk, ported: one retry, only where a retry can help. */
     private suspend fun explainWithRetry(payload: JSONObject, attempt: Int): Result<String> {
         val timeout = if (attempt == 0) TIMEOUT_FIRST_MS else TIMEOUT_RETRY_MS

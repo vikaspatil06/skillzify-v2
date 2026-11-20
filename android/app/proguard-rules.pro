@@ -36,6 +36,14 @@
 -keep class androidx.compose.runtime.** { *; }
 -dontwarn androidx.compose.**
 
+# ---- Room (App 2.0) ----
+# Room's generated implementations are referenced reflectively by the
+# runtime. Minify is ON in build.gradle (the effective build file), so
+# these keeps are load-bearing, not preparatory.
+-keep class * extends androidx.room.RoomDatabase { *; }
+-keep @androidx.room.Entity class * { *; }
+-dontwarn androidx.room.**
+
 # ---- Generic safety ----
 # Keep line numbers + source files so any release-build crash report from
 # a device stays debuggable.
