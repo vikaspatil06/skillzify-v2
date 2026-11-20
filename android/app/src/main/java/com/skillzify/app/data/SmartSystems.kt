@@ -13,7 +13,9 @@ import kotlin.random.Random
  */
 
 const val RUST_DAYS: Long = 21
-private const val DAY_MS: Long = 86400000L
+// DAY_MS is the shared package-level constant in Store.kt (86_400_000L);
+// a private namesake here CONFLICTS with it (same package) — do not
+// redeclare it.
 
 /** Band thresholds (task spec; web band() in mastery.js agrees for
     tried topics: 85+ Mastered, 60+ Solid, 30+ Building, else Starting out). */
