@@ -64,17 +64,16 @@ android {
 chaquopy {
     defaultConfig {
         version '3.11'
-        // Bundled third-party packages (App 2.0.2). Chaquopy cannot
-        // pip-install on the device, so anything importable must be
-        // declared here at build time — until this block existed the app
-        // shipped with the bare standard library and every third-party
-        // import died with ModuleNotFoundError (Vikas hit it with
-        // tabulate, 20 Nov 2026). Keep this list small and pure-Python;
-        // native packages (numpy/pandas) cost megabytes each.
-        pip {
-            install 'tabulate==0.9.0'
-            install 'requests==2.32.3'
-        }
+        // Third-party packages (App 2.0.2): Chaquopy cannot pip-install
+        // on the device, and its build-time pip step is broken on the
+        // current CI runners (their Python 3.14 removed the stdlib 'cgi'
+        // module that Chaquopy 15's bundled pip imports — the 2.0.2
+        // pip-block attempt died with exactly that). So packages are
+        // VENDORED as pure-Python sources under src/main/python instead:
+        // tabulate 0.9.0, requests 2.32.3 + urllib3/idna/certifi/
+        // charset_normalizer (pure-Python fallback, no native parts).
+        // Verified importable + his tabulate grid renders (20 Nov 2026).
+        // To add a package: vendor its pure-Python sources the same way.
         // Build machine has Python 3.12; skip .pyc pre-compilation of our tiny
         // runner module rather than fight the version check (warns otherwise).
         pyc { src false }
