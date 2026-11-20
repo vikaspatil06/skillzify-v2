@@ -44,7 +44,12 @@ import java.net.URLEncoder
  * call here degrades gracefully against it.
  */
 object AiRepository {
-    private const val BASE = "https://skillzify-v2.onrender.com"
+    // App 2.0.1 (20 Nov 2026, Vikas's call): staging is the live AI
+    // backend — production's frozen build has a dead provider chain
+    // (verified 502 "AI provider error (HTTP 503)" warm and cold).
+    // Flip back to skillzify-v2.onrender.com at the 1 Jan 2027 launch,
+    // when production unfreezes onto the current server code.
+    private const val BASE = "https://skillzify-v2-staging.onrender.com"
     private const val TIMEOUT_FIRST_MS = 60000
     private const val TIMEOUT_RETRY_MS = 10000
     private const val TIMEOUT_USAGE_MS = 30000

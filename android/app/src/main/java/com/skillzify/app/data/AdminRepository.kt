@@ -22,7 +22,8 @@ import java.net.URLEncoder
  * can surface fields this layer doesn't model yet.
  */
 object AdminRepository {
-    private const val BASE = "https://skillzify-v2.onrender.com"
+    // Matches AiRepository.BASE (staging until the 1 Jan 2027 launch).
+    private const val BASE = "https://skillzify-v2-staging.onrender.com"
     private const val TIMEOUT_MS = 30000
 
     data class AdminServer(
