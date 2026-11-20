@@ -57,6 +57,7 @@ import com.skillzify.app.ui.theme.BgSoft
 import com.skillzify.app.ui.theme.Card
 import com.skillzify.app.ui.theme.CodeBg
 import com.skillzify.app.ui.theme.Danger
+import com.skillzify.app.ui.theme.ErrorText
 import com.skillzify.app.ui.theme.Success
 import com.skillzify.app.ui.theme.TextMuted
 import kotlinx.coroutines.Dispatchers
@@ -721,7 +722,7 @@ private fun BottomPanel(
                         Text(
                             if (r.ok) "✅ Done in ${r.ms} ms" else "❌ Error after ${r.ms} ms",
                             fontSize = 12.sp,
-                            color = if (r.ok) Success else Danger,
+                            color = if (r.ok) Success else ErrorText,
                             modifier = Modifier.padding(top = 6.dp)
                         )
                     }
@@ -732,7 +733,7 @@ private fun BottomPanel(
                     Text(
                         if (r.ok) "✅ Done in ${r.ms} ms" else "❌ ${r.error}",
                         fontSize = 12.sp,
-                        color = if (r.ok) Success else Danger
+                        color = if (r.ok) Success else ErrorText
                     )
                 }
                 else -> Text(
@@ -747,7 +748,22 @@ private fun BottomPanel(
                 } else if (r == null || r.ok) {
                     Text("✅ No problems — last run succeeded.", fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = Success)
                 } else {
-                    Text(r.error, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Danger)
+                    // A missing third-party package gets a plain-language
+                    // note first: on Android the package must be bundled
+                    // with the app (no on-device pip), which the raw
+                    // traceback cannot explain to a learner.
+                    val missingPkg = Regex("No module named '([^']+)'").find(r.error)
+                        ?.groupValues?.get(1)?.substringBefore('.')
+                    if (missingPkg != null) {
+                        Text(
+                            "📦 The '$missingPkg' package isn't bundled with the app yet, " +
+                                "so this code can't run here yet. Packages can't be downloaded " +
+                                "on the phone — they're added in app updates.",
+                            fontSize = 13.sp, lineHeight = 19.sp,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                    Text(r.error, fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 19.sp, color = ErrorText)
                 }
             }
             2 -> {

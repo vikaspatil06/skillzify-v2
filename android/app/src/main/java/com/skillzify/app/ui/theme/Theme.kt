@@ -74,6 +74,10 @@ val CodeBg: Color get() = if (isDark) Color(0xFF0B1128) else Color(0xFF101737)
 val Success: Color get() = Color(0xFF34D399)
 val Warning: Color get() = Color(0xFFFBBF24)
 val Danger: Color get() = Color(0xFFF87171)
+/** High-contrast error TEXT on the dark code background (Problems panel,
+    run status). Danger at 12sp read as dim salmon on CodeBg — Vikas
+    reported the traceback as "not visible" (20 Nov 2026). */
+val ErrorText: Color get() = Color(0xFFFFA8A3)
 
 /** Website --gradient: linear-gradient(135deg, primary, primary-2 55%, accent 130%).
     PERFORMANCE PASS: this used to build a brand-new Brush on EVERY access
