@@ -17,6 +17,7 @@ import com.skillzify.app.data.Exercise
 import com.skillzify.app.data.ExerciseAttempt
 import com.skillzify.app.data.LearnPath
 import com.skillzify.app.data.LeaderboardRepository
+import com.skillzify.app.data.Lesson
 import com.skillzify.app.data.LessonNode
 import com.skillzify.app.data.PassportEntry
 import com.skillzify.app.data.PlacementRecord
