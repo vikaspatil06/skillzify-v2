@@ -1402,3 +1402,93 @@ p.fail { color: #e74c3c; font-weight: 600; }
 @media (prefers-reduced-motion: reduce) {
   .so-dot, .so-spinner { animation: none; }
 }
+
+/* ============================================================
+   Visual Upgrade + Performance Layer v3 (24 Nov 2026)
+   Appended, override-only: richer graphics and depth on the
+   existing hooks, zero layout/behaviour changes. Card grids
+   keep the equal-height rule; every animation is disabled
+   under prefers-reduced-motion (see the block at the end).
+   ============================================================ */
+
+/* --- Richer page atmosphere: layered aurora + fine grid --- */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(900px 480px at 88% -80px, color-mix(in srgb, var(--primary-2) 16%, transparent), transparent 62%),
+    radial-gradient(760px 420px at -100px 22%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 60%),
+    radial-gradient(640px 380px at 55% 108%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 62%);
+}
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .5;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--text) 3.5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--text) 3.5%, transparent) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 55% at 50% 0%, #000 30%, transparent 75%);
+          mask-image: radial-gradient(ellipse 90% 55% at 50% 0%, #000 30%, transparent 75%);
+}
+
+/* --- Headings & gradient text --- */
+.grad, .section-title .grad {
+  background: var(--gradient); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+.eyebrow { letter-spacing: .14em; font-weight: 700; }
+.section-title { letter-spacing: -0.02em; }
+
+/* --- Cards: glass depth + hover lift (transform only = cheap) --- */
+.card, .hero-card {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--text) 4%, var(--card)), var(--card));
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow);
+  transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+}
+a.card:hover, .card-link:hover .card, .home-grid .card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--card-border));
+  box-shadow: 0 2px 0 rgba(255,255,255,.05) inset, 0 22px 44px -18px rgba(2,4,12,.75);
+}
+
+/* --- Buttons: gradient sheen sweep on primary --- */
+.btn-primary, .chip-grad {
+  background: var(--gradient); position: relative; overflow: hidden; isolation: isolate;
+}
+.btn-primary::after {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.35) 50%, transparent 60%);
+  transform: translateX(-120%); transition: transform .6s ease;
+}
+.btn-primary:hover::after { transform: translateX(120%); }
+.btn { transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
+.btn:active { transform: translateY(1px) scale(.99); }
+
+/* --- Hero & code window: framed glow --- */
+.hero .code-window, .code-window {
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--card-border));
+  box-shadow: 0 30px 60px -24px rgba(2,4,12,.8), 0 0 0 1px rgba(255,255,255,.03) inset,
+              0 0 64px -18px color-mix(in srgb, var(--primary-2) 45%, transparent);
+}
+.cta-banner {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 16%, var(--card)), color-mix(in srgb, var(--primary-2) 12%, var(--card)));
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--card-border));
+}
+.stat .num {
+  background: var(--gradient); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+
+/* --- Polish: selection, scrollbar, focus --- */
+::selection { background: color-mix(in srgb, var(--primary) 55%, transparent); color: var(--text); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+html { scrollbar-color: color-mix(in srgb, var(--primary) 55%, var(--bg-soft)) var(--bg); }
+
+/* --- Performance: skip off-screen rendering work --- */
+.section, .home-grid, .faq { content-visibility: auto; contain-intrinsic-size: auto 600px; }
+img { content-visibility: auto; }
+
+/* --- Reduced motion: kill the new motion too --- */
+@media (prefers-reduced-motion: reduce) {
+  .card, .hero-card, .btn, .btn-primary::after { transition: none !important; }
+  a.card:hover, .card-link:hover .card, .home-grid .card:hover { transform: none; }
+}

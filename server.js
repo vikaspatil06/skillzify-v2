@@ -1541,7 +1541,7 @@ app.use(express.static(path.join(__dirname), {
     if (/\.webmanifest$/.test(filePath)) res.setHeader("Content-Type", "application/manifest+json");
     var versioned = /[?&]v=/.test(url);
     if (/\.html?$/.test(filePath) || !versioned) res.setHeader("Cache-Control", "no-cache");
-    else res.setHeader("Cache-Control", "public, max-age=86400");
+    else res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
   }
 }));
 
