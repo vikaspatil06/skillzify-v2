@@ -187,7 +187,11 @@
     }).join("");
   }
   function field(label, inner, hint) {
-    return '<div class="field"><label>' + esc(label) + "</label>" + inner + (hint ? '<p class="hint">' + esc(hint) + "</p>" : "") + "</div>";
+    /* Associate the visible label with its control: every field() inner
+       carries an id, so emit for="id" (the label was a bare sibling). */
+    var m = inner.match(/id="([^"]+)"/);
+    var lab = "<label" + (m ? ' for="' + esc(m[1]) + '"' : "") + ">" + esc(label) + "</label>";
+    return '<div class="field">' + lab + inner + (hint ? '<p class="hint">' + esc(hint) + "</p>" : "") + "</div>";
   }
 
   /* ================= Phase 2: readiness / JD match / communication ================= */
@@ -424,14 +428,14 @@
             field("Answer mode", '<select class="input" id="iv-mode">' + ["Text", "Voice"].map(function (m) { return '<option value="' + m + '"' + (c.mode === m ? " selected" : "") + (m === "Voice" && !recogSupported() ? " disabled" : "") + ">" + m + (m === "Voice" ? " 🎤" : "") + "</option>"; }).join("") + "</select>", recogSupported() ? "Voice: the interviewer reads questions aloud and you can answer by speaking (transcript stays editable). Text is always available." : "Voice answers need Chrome or Edge — speech recognition isn't available in this browser. Text mode works everywhere.") +
             field("Full Drive pass mark", '<select class="input" id="iv-threshold">' + [30, 40, 50].map(function (t) { return '<option value="' + t + '"' + ((c.driveThreshold || 40) === t ? " selected" : "") + ">" + t + " / 100</option>"; }).join("") + "</select>", "Full Drive only: score below this in any round and the drive ends, like a real elimination round.") +
           "</div>" +
-          '<div class="field" style="margin-top:6px"><label>📄 Resume (optional — unlocks resume-based questions)</label>' +
+          '<div class="field" style="margin-top:6px"><label for="iv-file">📄 Resume (optional — unlocks resume-based questions)</label>' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="input" id="iv-file" type="file" accept=".pdf,.docx,.txt" style="max-width:320px">' +
             '<button class="btn btn-ghost btn-sm" id="iv-file-btn" type="button">Extract &amp; parse</button>' +
             '<button class="btn btn-ghost btn-sm" id="iv-projects-btn" type="button">Use my Skillzify projects</button></div>' +
-            '<textarea class="input" id="iv-resume-text" rows="4" placeholder="…or paste your resume text here, then press Parse resume" style="margin-top:8px"></textarea>' +
+            '<textarea class="input" id="iv-resume-text" rows="4" aria-label="Paste your resume text here" placeholder="…or paste your resume text here, then press Parse resume" style="margin-top:8px"></textarea>' +
             '<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="iv-paste-btn" type="button">Parse resume</button> <span class="hint" id="iv-resume-hint">Your resume is parsed once by the AI; only the extracted skills, projects and questions are kept — the raw text is never stored.</span></div>' +
             resumeStatus +
-            '<div style="margin-top:14px"><label>🎯 Target job description (optional — unlocks JD matching)</label>' +
+            '<div style="margin-top:14px"><label for="iv-jd">🎯 Target job description (optional — unlocks JD matching)</label>' +
             '<textarea class="input" id="iv-jd" rows="3" placeholder="Paste a job description here. With a resume parsed above, you will see a skill match, the gaps mapped to Skillzify lessons, and interview questions drawn from what the JD asks for.">' + esc(S.jd || "") + "</textarea>" +
             '<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="iv-jd-btn" type="button">Save JD &amp; match</button> <span class="hint">Keyword match against your resume/profile skills — a preparation guide, not an ATS verdict. Stored only in this browser.</span></div>' +
             jdMatchHtml +
@@ -605,7 +609,7 @@
       '<div style="max-width:920px;margin:0 auto;display:grid;gap:16px">' +
         '<div class="card"><h3 style="margin-top:0">🏫 Institution dashboard</h3>' +
           '<p class="hint" style="margin-top:0">Aggregates of interview summaries that students <strong>chose to share</strong> under an institution code. No names, no individual reports, no answers — and students can unshare at any time, which removes their summary from these numbers.</p>' +
-          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="input" id="iv-inst-code" type="text" value="' + esc(code || "") + '" placeholder="Institution code, e.g. SIT-PUNE" style="max-width:280px">' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="input" id="iv-inst-code" type="text" aria-label="Institution code" value="' + esc(code || "") + '" placeholder="Institution code, e.g. SIT-PUNE" style="max-width:280px">' +
           '<button class="btn btn-primary btn-sm" id="iv-inst-load" type="button">Load dashboard</button>' +
           '<button class="btn btn-ghost btn-sm" id="iv-inst-back" type="button">Back to setup</button></div>' +
           '<div id="iv-inst-body" style="margin-top:14px"><p class="hint">Enter a code and load to see its shared summaries.</p></div>' +
@@ -1136,7 +1140,7 @@
       var round = currentRound();
       var contributions = round ? round.items.length : 0;
       el.innerHTML =
-        '<div class="iv-composer"><textarea class="input" id="iv-answer" placeholder="Add your view to the discussion… take a position, give a reason or an example, build on what others said."></textarea>' +
+        '<div class="iv-composer"><textarea class="input" id="iv-answer" aria-label="Your answer" placeholder="Add your view to the discussion… take a position, give a reason or an example, build on what others said."></textarea>' +
         '<div class="iv-actions"><button class="btn btn-primary" id="iv-send" type="button">Contribute →</button>' +
         (recogSupported() ? '<button class="btn btn-ghost" id="iv-mic" type="button">🎤 Answer by voice</button>' : "") +
         (contributions >= 2 ? '<button class="btn btn-ghost" id="iv-gd-wrap" type="button">Wrap up the GD</button>' : "") +
@@ -1157,7 +1161,7 @@
       : sess.phase === "complexity" ? "What is the time and space complexity of your solution? (e.g. time O(n), space O(1))"
       : "Type your answer… (no hints in a scored interview — answer as you would in the real room)";
     el.innerHTML =
-      '<div class="iv-composer"><textarea class="input" id="iv-answer" placeholder="' + esc(placeholder) + '"></textarea>' +
+      '<div class="iv-composer"><textarea class="input" id="iv-answer" aria-label="Your answer" placeholder="' + esc(placeholder) + '"></textarea>' +
       '<div class="iv-actions"><button class="btn btn-primary" id="iv-send" type="button">' + (sess.phase === "main" ? "Answer →" : "Continue →") + "</button>" +
       (recogSupported() ? '<button class="btn btn-ghost" id="iv-mic" type="button">🎤 Answer by voice</button>' : "") +
       (sess.phase === "main" ? '<button class="btn btn-ghost" id="iv-skip" type="button">Skip question</button>' : "") +
@@ -1689,7 +1693,7 @@
       '<span class="iv-chip">Hidden tests: <strong>' + item.hidden.length + "</strong> (run at submission)</span>" +
       '<span class="hint" id="iv-py-status"></span></div>' +
       '<div class="iv-editor-wrap" style="margin-top:8px"><div class="iv-gutter" id="iv-gutter">1</div>' +
-      '<textarea class="iv-editor" id="iv-code" spellcheck="false">' + esc(item.code) + "</textarea></div>" +
+      '<textarea class="iv-editor" id="iv-code" spellcheck="false" aria-label="Code editor — write your solution here">' + esc(item.code) + "</textarea></div>" +
       '<div class="iv-actions"><button class="btn btn-ghost" id="iv-run" type="button">▶ Run visible tests</button>' +
       '<button class="btn btn-primary" id="iv-submit-code" type="button">Submit problem →</button>' +
       '<span class="hint" id="iv-code-busy"></span></div>' +

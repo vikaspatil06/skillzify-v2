@@ -58,7 +58,7 @@
     backdrop = document.createElement("div");
     backdrop.className = "palette-backdrop";
     backdrop.innerHTML = '<div class="palette" role="dialog" aria-label="Command palette">' +
-      '<input id="palette-input" placeholder="Type a command or search lessons…" autocomplete="off">' +
+      '<input id="palette-input" placeholder="Type a command or search lessons…" aria-label="Type a command or search lessons" autocomplete="off">' +
       '<div class="palette-list" id="palette-list"></div></div>';
     document.body.appendChild(backdrop);
     input = backdrop.querySelector("#palette-input");

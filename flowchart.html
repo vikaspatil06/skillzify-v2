@@ -1,6 +1,8 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!-- Google Analytics 4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-YYR4JD16G8"></script>
 <script>
@@ -9,8 +11,6 @@
   gtag('js', new Date());
   gtag('config', 'G-YYR4JD16G8');
 </script>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Flowchart Lab — Skillzify</title>
   <link rel="canonical" href="https://vikaspatil06.github.io/skillzify-v2/flowchart.html">
   <meta name="theme-color" content="#070b1a">
@@ -24,6 +24,8 @@
   <meta property="og:image" content="https://vikaspatil06.github.io/skillzify-v2/assets/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image:alt" content="Skillzify — Learn Python by doing: 250 interactive lessons, an AI tutor, a live code studio and AI mock interviews.">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Flowchart Lab — Skillzify">
   <meta name="twitter:description" content="Turn Python code into a precise flowchart, watch it run step by step, and export a print-ready lab sheet.">
@@ -35,7 +37,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css"/>
-  <link rel="stylesheet" href="assets/css/style.css?v=43"/>
+  <link rel="stylesheet" href="assets/css/style.css?v=45"/>
   <link rel="stylesheet" href="assets/css/flowchart.css?v=14"/>
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
   <script src="assets/js/site-gate.js?v=1"></script>
@@ -201,7 +203,7 @@
             </select>
           </div>
           <div class="fc-export-row">
-            <input class="fc-textinput" id="sheetTitle" type="text"
+            <input class="fc-textinput" id="sheetTitle" type="text" aria-label="Lab sheet title"
               placeholder="Lab sheet title (e.g. Practical 4 — Loops)"/>
           </div>
           <div class="fc-export-row">

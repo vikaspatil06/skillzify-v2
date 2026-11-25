@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!-- Google Analytics 4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-YYR4JD16G8"></script>
 <script>
@@ -9,8 +11,6 @@
   gtag('js', new Date());
   gtag('config', 'G-YYR4JD16G8');
 </script>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Your Skillzify learning dashboard — progress, streaks and run history.">
   <title>Dashboard — Skillzify</title>
   <link rel="canonical" href="https://vikaspatil06.github.io/skillzify-v2/dashboard.html">
@@ -26,12 +26,14 @@
   <meta property="og:image" content="https://vikaspatil06.github.io/skillzify-v2/assets/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image:alt" content="Skillzify — Learn Python by doing: 250 interactive lessons, an AI tutor, a live code studio and AI mock interviews.">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Dashboard — Skillzify">
   <meta name="twitter:description" content="Your Skillzify learning dashboard — progress, streaks and run history.">
   <meta name="twitter:image" content="https://vikaspatil06.github.io/skillzify-v2/assets/og-image.png">
   <link rel="icon" href="assets/logo-light-small.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=43">
+  <link rel="stylesheet" href="assets/css/style.css?v=45">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('skillzify_theme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
@@ -72,7 +74,7 @@
     </div>
   </section>
 
-  <section class="section" style="padding-top:24px">
+  <section class="section pt-24">
     <div class="container" id="dash-root">
       <div class="next-card">
         <div>
@@ -97,7 +99,7 @@
           <div class="dash-card" id="dash-plan-card">
             <h2>📋 Today's plan</h2>
             <p class="hint" id="dash-plan-sub" style="margin:4px 0 0">About 15 minutes.</p>
-            <div id="dash-plan" style="margin-top:8px"></div>
+            <div id="dash-plan" class="mt-8"></div>
           </div>
           <div class="dash-card">
             <h2>🎙️ AI Interview Studio</h2>
@@ -108,11 +110,11 @@
             <div class="dash-card">
               <h2>🎯 Weak spots</h2>
               <p class="muted small">Exercise accuracy by topic — low scores need a revisit.</p>
-              <div id="dash-topic-acc" style="margin-top:8px"></div>
+              <div id="dash-topic-acc" class="mt-8"></div>
             </div>
             <div class="dash-card" id="dash-tracks-card">
               <h2>Progress by section</h2>
-              <div id="dash-tracks" style="margin-top:8px"></div>
+              <div id="dash-tracks" class="mt-8"></div>
             </div>
           </div>
           <div class="dash-card">
@@ -127,7 +129,7 @@
               <span class="coll-caret">▾</span>
             </button>
             <div class="coll-body">
-              <div id="dash-runs" style="margin-top:8px"></div>
+              <div id="dash-runs" class="mt-8"></div>
             </div>
           </div>
           <div class="dash-card">
@@ -182,7 +184,7 @@
           <div class="dash-card">
             <h2>🏅 Your rank</h2>
             <div data-leaderboard="rank"><p class="lb-empty">Loading your rank…</p></div>
-            <p class="hint" style="margin-top:8px">Full board on the <a href="community.html">Community page</a> →</p>
+            <p class="hint">Full board on the <a href="community.html">Community page</a> →</p>
           </div>
           <div class="dash-card">
             <h2>🗺️ Concept map</h2>

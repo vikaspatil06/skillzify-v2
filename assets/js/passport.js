@@ -370,12 +370,13 @@
         : '<p class="hint">Every topic has at least one solve. 🎉</p>';
       return html;
     }
-    html += '<table class="passport-table"><thead><tr><th>Topic</th><th>Solved</th><th>First solve</th><th>Last solve</th></tr></thead><tbody>' +
+    html += '<div style="overflow-x:auto" tabindex="0" role="region" aria-label="Solved exercises by topic">' +
+      '<table class="passport-table"><thead><tr><th>Topic</th><th>Solved</th><th>First solve</th><th>Last solve</th></tr></thead><tbody>' +
       rows.map(function (t) {
         var row = ex.byTopic[t];
         return "<tr><td>" + esc(t) + "</td><td>" + num(row.solved) + "/" + num(row.total) +
           "</td><td>" + esc(fmtDate(row.first)) + "</td><td>" + esc(fmtDate(row.last)) + "</td></tr>";
-      }).join("") + "</tbody></table>";
+      }).join("") + "</tbody></table></div>";
     return html;
   }
   function paintProofFilter(f) {

@@ -218,8 +218,8 @@
         '<span class="fglyph">🐍</span><span class="fname">' + esc(n) + '</span>' +
         '<span class="fdirty" title="Unsaved changes"></span>' +
         '<span class="frow-acts">' +
-        '<button class="fact" data-ren="' + esc(n) + '" title="Rename">✎</button>' +
-        '<button class="fact fdel" data-del="' + esc(n) + '" title="Delete">✕</button></span></div>';
+        '<button class="fact" data-ren="' + esc(n) + '" title="Rename" aria-label="Rename file ' + esc(n) + '">✎</button>' +
+        '<button class="fact fdel" data-del="' + esc(n) + '" title="Delete" aria-label="Delete file ' + esc(n) + '">✕</button></span></div>';
     }).join("");
     host.querySelectorAll(".file-item").forEach(function (el) {
       el.addEventListener("click", function (e) {
@@ -314,7 +314,7 @@
       var dirty = editor && n === ws.active && editor.getValue() !== ws.files[n];
       return '<div class="tab' + (n === ws.active ? " active" : "") + (dirty ? " dirty" : "") + '" data-tab="' + esc(n) + '">' +
         '<span class="dot"></span><span>🐍 ' + esc(n) + '</span>' +
-        '<button class="x" data-close="' + esc(n) + '">✕</button></div>';
+        '<button class="x" data-close="' + esc(n) + '" aria-label="Close ' + esc(n) + ' tab">✕</button></div>';
     }).join("");
     host.querySelectorAll(".tab").forEach(function (el) {
       el.addEventListener("click", function (e) {
@@ -2768,7 +2768,7 @@
     }
     host.innerHTML = list.map(function (s) {
       return '<div class="snip-item" data-snip="' + esc(s.id) + '"><span class="sname">' + esc(s.title || "Untitled") + '</span>' +
-        '<span class="srow-acts"><button class="fact fdel" data-sdel="' + esc(s.id) + '" title="Delete snippet">✕</button></span></div>';
+        '<span class="srow-acts"><button class="fact fdel" data-sdel="' + esc(s.id) + '" title="Delete snippet" aria-label="Delete snippet ' + esc(s.title || "Untitled") + '">✕</button></span></div>';
     }).join("");
     host.querySelectorAll("[data-snip]").forEach(function (el) {
       el.addEventListener("click", function (e) {

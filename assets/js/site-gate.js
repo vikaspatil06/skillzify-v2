@@ -164,6 +164,8 @@
     img.className = "so-logo";
     img.src = "assets/logo-light-small.png";
     img.alt = "Skillzify";
+    img.width = 96;
+    img.height = 96;
     card.appendChild(img);
     var pill = document.createElement("div");
     pill.className = "so-pill";

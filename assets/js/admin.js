@@ -152,7 +152,8 @@
           '<td style="min-width:90px"><div class="share"><div style="width:' + share + '%"></div></div></td></tr>';
       }).join("");
       el("admin-today-table").innerHTML =
-        '<table class="admin-table" style="margin-top:14px"><thead><tr><th>#</th><th>Type</th><th>Identity</th><th class="num">Answers</th><th></th></tr></thead><tbody>' + rows + "</tbody></table>";
+        '<div style="overflow-x:auto" tabindex="0" role="region" aria-label="Today\'s answers by learner">' +
+        '<table class="admin-table" style="margin-top:14px"><thead><tr><th>#</th><th>Type</th><th>Identity</th><th class="num">Answers</th><th></th></tr></thead><tbody>' + rows + "</tbody></table></div>";
     }
 
     /* days */
@@ -171,7 +172,8 @@
     }).join("");
     el("admin-days").innerHTML =
       '<div class="days-chart">' + cols + "</div>" +
-      '<table class="admin-table" style="margin-top:10px"><thead><tr><th>Day</th><th class="num">Total</th><th class="num">Signed-in</th><th class="num">Anon</th><th class="num">Learners</th></tr></thead><tbody>' + drows + "</tbody></table>";
+      '<div style="overflow-x:auto" tabindex="0" role="region" aria-label="Answers per day">' +
+      '<table class="admin-table" style="margin-top:10px"><thead><tr><th>Day</th><th class="num">Total</th><th class="num">Signed-in</th><th class="num">Anon</th><th class="num">Learners</th></tr></thead><tbody>' + drows + "</tbody></table></div>";
 
     /* config */
     var models = (sv.models || []).map(function (m) { return "<li>" + esc(m) + "</li>"; }).join("");
@@ -302,8 +304,8 @@
       return '<div class="sc-page">' +
         '<div class="sc-page-top"><b>' + esc(p[1]) + "</b>" +
         '<span class="chip ' + (on ? "ok" : "bad") + '">' + (on ? "Live" : "Offline") + "</span>" +
-        '<label class="sc-switch"><input type="checkbox" class="sc-page-toggle" data-page="' + f + '"' + (on ? " checked" : "") + '><span class="track"></span></label></div>' +
-        '<div class="sc-msgedit"><input class="sc-input sc-page-msg" type="text" data-page="' + f + '" maxlength="300" placeholder="Default message" value="' + esc(msg) + '">' +
+        '<label class="sc-switch"><input type="checkbox" class="sc-page-toggle" data-page="' + f + '"' + (on ? " checked" : "") + ' aria-label="Toggle offline mode for ' + esc(p[1]) + '"><span class="track"></span></label></div>' +
+        '<div class="sc-msgedit"><input class="sc-input sc-page-msg" type="text" data-page="' + f + '" maxlength="300" aria-label="Offline message for ' + esc(p[1]) + '" placeholder="Default message" value="' + esc(msg) + '">' +
         '<button class="btn btn-sm btn-ghost sc-page-msg-save" type="button" data-page="' + f + '">Save</button></div>' +
         "</div>";
     }).join("");
