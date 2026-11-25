@@ -78,7 +78,7 @@
     return true;
   }
 
-  var SECTION_CONTENT_VERSION = 1;
+  var SECTION_CONTENT_VERSION = 2;
   var _sectionPromises = {};
   function ensureSection(sectionId) {
     if (!sectionId) return Promise.resolve(false);
