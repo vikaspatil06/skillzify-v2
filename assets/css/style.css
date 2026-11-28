@@ -505,12 +505,6 @@ label.field-lbl { display: block; font-size: 0.82rem; font-weight: 600; color: v
 }
 .console .err { color: var(--danger); }
 .console .ok-meta { color: var(--success); }
-/* The console sits on dark --code-bg in BOTH themes, so the darkened
-   light-theme --success/--danger above would fail here (3.25/2.71:1 on
-   #101737). Restore the bright values for light theme only. */
-[data-theme="light"] .console .err { color: #f87171; }
-[data-theme="light"] .console .ok-meta { color: #34d399; }
-.console .dim { color: #5b648c; }
 .ai-box { background: var(--bg-soft); border: 1px solid var(--card-border); border-radius: 8px; padding: 12px; margin-top: 10px; font-size: 0.88rem; max-height: 380px; overflow-y: auto; }
 .ai-box h4 { margin-bottom: 6px; color: var(--accent); }
 .ai-box ul { padding-left: 18px; }
@@ -1595,3 +1589,10 @@ a.chip:hover, button.chip:hover {
 .mt-8 { margin-top: 8px; }
 .m-0 { margin: 0; }
 .c-text { color: var(--text); }
+
+/* --- Session 2, Wave 1 (28 Nov 2026): light-theme badge contrast.
+   .badge-done #2ecc71 / .badge-try #f1c40f pass on dark (8.1/10.2:1)
+   but fail on light surfaces (2.1/1.7:1). Light theme reuses the
+   Wave-2 success/warning tokens (>=4.9:1 on bg and card). --- */
+[data-theme="light"] .badge-done { color: #0f7a44; border-color: rgba(15, 122, 68, .45); }
+[data-theme="light"] .badge-try { color: #8a5c00; border-color: rgba(138, 92, 0, .45); }
